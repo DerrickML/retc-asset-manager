@@ -164,16 +164,20 @@ export default function Sidebar() {
   return (
     <div className="flex h-screen w-64 flex-col bg-gray-900 text-white">
       {/* Header */}
-      <div className="flex items-center px-6 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded bg-blue-600">
-          <span className="text-sm font-bold">RETC</span>
+        <div className="flex items-center px-6 py-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full overflow-hidden bg-blue-600">
+            <img
+          src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
+          alt="Logo"
+          className="h-full w-full object-cover"
+            />
+          </div>
+          <div className="ml-3">
+            <h1 className="text-lg font-semibold">Asset Manager</h1>
+          </div>
         </div>
-        <div className="ml-3">
-          <h1 className="text-lg font-semibold">Asset Manager</h1>
-        </div>
-      </div>
 
-      {/* User Info & Role Switch */}
+        {/* User Info & Role Switch */}
       <div className="border-b border-gray-700 px-6 py-4">
         <div className="flex items-center space-x-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-600">

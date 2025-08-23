@@ -114,13 +114,15 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50 p-4">
       <div className="w-full max-w-md">
-        {/* RETC Branding */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-xl">RETC</span>
+        {/* RETC Branding - Logo centered and circular */}
+        <div className="flex flex-col items-center justify-center mb-8">
+          <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center overflow-hidden shadow-lg">
+            <img
+              src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
+              alt="RETC Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Asset Management</h1>
-          <p className="text-gray-600">Renewable Energy Training Center</p>
         </div>
 
         <Card>
