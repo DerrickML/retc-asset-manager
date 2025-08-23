@@ -211,7 +211,6 @@ coverage/
 # Build artifacts
 dist/
 build/
-lib/
 
 # Lock files (uncomment if using npm instead of yarn)
 # package-lock.json
