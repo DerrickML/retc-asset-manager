@@ -25,20 +25,27 @@ export default function AppLayout({ children }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-gray-400 text-sm">Loading...</p>
+        </div>
       </div>
     )
   }
 
   // Don't show sidebar for unauthenticated users, login, or setup pages
-  const showSidebar = staff && !window.location.pathname.includes('/login') && !window.location.pathname.includes('/setup')
+  const showSidebar = staff && typeof window !== 'undefined' && 
+    !window.location.pathname.includes('/login') && 
+    !window.location.pathname.includes('/setup')
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-50">
       {showSidebar && <Sidebar />}
-      <div className={`flex-1 ${showSidebar ? 'ml-0' : ''} overflow-auto`}>
-        {children}
+      <div className="flex-1 overflow-auto">
+        <div className="min-h-full">
+          {children}
+        </div>
       </div>
     </div>
   )
