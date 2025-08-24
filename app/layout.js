@@ -1,6 +1,7 @@
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import LayoutProvider from "../components/layout/layout-provider"
+import QueryProvider from "../lib/providers/query-provider"
 import "./globals.css"
 
 export const metadata = {
@@ -75,9 +76,11 @@ html {
         `}</style>
       </head>
       <body>
-        <LayoutProvider>
-          {children}
-        </LayoutProvider>
+        <QueryProvider>
+          <LayoutProvider>
+            {children}
+          </LayoutProvider>
+        </QueryProvider>
       </body>
     </html>
   )
