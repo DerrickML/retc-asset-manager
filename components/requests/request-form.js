@@ -194,45 +194,47 @@ export function RequestForm() {
             </div>
           )}
 
-          {Object.keys(assetsByCategory).length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No available assets found.</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {Object.entries(assetsByCategory).map(([category, assets]) => (
-                <div key={category}>
-                  <h4 className="font-medium text-gray-900 mb-3">{formatCategory(category)}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {assets.map((asset) => (
-                      <div
-                        key={asset.$id}
-                        className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                          selectedAssets.includes(asset.$id)
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                        onClick={() => toggleAssetSelection(asset.$id)}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <Checkbox
-                            checked={selectedAssets.includes(asset.$id)}
-                            onChange={() => toggleAssetSelection(asset.$id)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <h5 className="font-medium text-gray-900 truncate">{asset.name}</h5>
-                            <p className="text-sm text-gray-600">Tag: {asset.assetTag}</p>
-                            <p className="text-sm text-gray-600">Location: {asset.locationName}</p>
-                            <Badge className="mt-1 text-xs bg-green-100 text-green-800">Available</Badge>
+          {Object.keys(assetsByCategory).length === 0 ?
+            (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No available assets found.</p>
+              </div>
+            )
+            :
+            (
+              <div className="space-y-6">
+                {Object.entries(assetsByCategory).map(([category, assets]) => (
+                  <div key={category}>
+                    <h4 className="font-medium text-gray-900 mb-3">{formatCategory(category)}</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {assets.map((asset) => (
+                        <div
+                          key={asset.$id}
+                          className={`border rounded-lg p-3 cursor-pointer transition-colors ${selectedAssets.includes(asset.$id)
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          onClick={() => toggleAssetSelection(asset.$id)}
+                        >
+                          <div className="flex items-start space-x-3">
+                            <Checkbox
+                              checked={selectedAssets.includes(asset.$id)}
+                              onChange={() => toggleAssetSelection(asset.$id)}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <h5 className="font-medium text-gray-900 truncate">{asset.name}</h5>
+                              <p className="text-sm text-gray-600">Tag: {asset.assetTag}</p>
+                              <p className="text-sm text-gray-600">Location: {asset.locationName}</p>
+                              <Badge className="mt-1 text-xs bg-green-100 text-green-800">Available</Badge>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
         </CardContent>
       </Card>
 

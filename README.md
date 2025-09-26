@@ -549,10 +549,4 @@ Comprehensive audit trail.
 ## License
 This project is proprietary software developed for the Renewable Energy Training Center (RETC).
 
-## Version History
-- **v1.0.0**: Initial release with core asset management
-- **v1.1.0**: Added guest portal and public APIs
-- **v1.2.0**: Enhanced request workflows and approvals
-- **v1.3.0**: Improved mobile responsiveness and performance
-
 For technical support or feature requests, contact the development team.
