@@ -1,15 +1,39 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"
-import { Button } from "../../../components/ui/button"
-import { Input } from "../../../components/ui/input"
-import { Label } from "../../../components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table"
-import { Badge } from "../../../components/ui/badge"
-import { 
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../../components/ui/card";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Label } from "../../../components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../../../components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../../components/ui/table";
+import { Badge } from "../../../components/ui/badge";
+import {
   BarChart3,
   FileText,
   Download,
@@ -24,21 +48,29 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
-  Filter
-} from "lucide-react"
-import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js"
-import { assetsService, assetRequestsService, staffService } from "../../../lib/appwrite/provider.js"
-import { ENUMS } from "../../../lib/appwrite/config.js"
-import { formatCategory, getStatusBadgeColor, getConditionBadgeColor } from "../../../lib/utils/mappings.js"
+  Filter,
+} from "lucide-react";
+import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
+import {
+  assetsService,
+  assetRequestsService,
+  staffService,
+} from "../../../lib/appwrite/provider.js";
+import { ENUMS } from "../../../lib/appwrite/config.js";
+import {
+  formatCategory,
+  getStatusBadgeColor,
+  getConditionBadgeColor,
+} from "../../../lib/utils/mappings.js";
 
 export default function AdminReports() {
-  const [staff, setStaff] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [staff, setStaff] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState({
     assets: [],
     requests: [],
-    users: []
-  })
+    users: [],
+  });
   const [analytics, setAnalytics] = useState({
     totalAssets: 0,
     totalRequests: 0,
@@ -51,179 +83,189 @@ export default function AdminReports() {
     topRequesters: [],
     mostRequestedAssets: [],
     totalAssetValue: 0,
-    avgRequestDuration: 0
-  })
+    avgRequestDuration: 0,
+  });
 
   // Filters
-  const [dateRange, setDateRange] = useState("last30")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [dateRange, setDateRange] = useState("last30");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
-    checkPermissionsAndLoadData()
-  }, [])
+    checkPermissionsAndLoadData();
+  }, []);
 
   useEffect(() => {
     if (reportData.assets.length > 0 || reportData.requests.length > 0) {
-      calculateAnalytics()
+      calculateAnalytics();
     }
-  }, [reportData, dateRange, categoryFilter, statusFilter])
+  }, [reportData, dateRange, categoryFilter, statusFilter]);
 
   const checkPermissionsAndLoadData = async () => {
     try {
-      const currentStaff = await getCurrentStaff()
+      const currentStaff = await getCurrentStaff();
       if (!currentStaff || !permissions.canViewReports(currentStaff)) {
-        window.location.href = "/unauthorized"
-        return
+        window.location.href = "/unauthorized";
+        return;
       }
-      setStaff(currentStaff)
-      await loadReportData()
+      setStaff(currentStaff);
+      await loadReportData();
     } catch (error) {
-      console.error("Failed to load data:", error)
+      console.error("Failed to load data:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadReportData = async () => {
     try {
       const [assetsResult, requestsResult, usersResult] = await Promise.all([
         assetsService.list(),
         assetRequestsService.list(),
-        staffService.list()
-      ])
+        staffService.list(),
+      ]);
 
       setReportData({
         assets: assetsResult.documents || [],
         requests: requestsResult.documents || [],
-        users: usersResult.documents || []
-      })
+        users: usersResult.documents || [],
+      });
     } catch (error) {
-      console.error("Failed to load report data:", error)
+      console.error("Failed to load report data:", error);
     }
-  }
+  };
 
   const calculateAnalytics = () => {
-    const { assets, requests, users } = reportData
-    
+    const { assets, requests, users } = reportData;
+
     // Filter data based on selected filters
-    let filteredAssets = assets
-    let filteredRequests = requests
+    let filteredAssets = assets;
+    let filteredRequests = requests;
 
     if (categoryFilter !== "all") {
-      filteredAssets = assets.filter(asset => asset.category === categoryFilter)
+      filteredAssets = assets.filter(
+        (asset) => asset.category === categoryFilter
+      );
     }
 
     if (statusFilter !== "all") {
-      filteredAssets = assets.filter(asset => asset.availableStatus === statusFilter)
+      filteredAssets = assets.filter(
+        (asset) => asset.availableStatus === statusFilter
+      );
     }
 
     // Date range filtering for requests
-    const now = new Date()
-    let dateThreshold
+    const now = new Date();
+    let dateThreshold;
     switch (dateRange) {
       case "last7":
-        dateThreshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-        break
+        dateThreshold = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
       case "last30":
-        dateThreshold = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-        break
+        dateThreshold = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
       case "last90":
-        dateThreshold = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-        break
+        dateThreshold = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
       case "last365":
-        dateThreshold = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-        break
+        dateThreshold = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
       default:
-        dateThreshold = new Date(0)
+        dateThreshold = new Date(0);
     }
 
     if (dateRange !== "all") {
-      filteredRequests = requests.filter(request => 
-        new Date(request.$createdAt) >= dateThreshold
-      )
+      filteredRequests = requests.filter(
+        (request) => new Date(request.$createdAt) >= dateThreshold
+      );
     }
 
     // Calculate metrics
-    const assetsByCategory = {}
-    const assetsByCondition = {}
-    const assetsByStatus = {}
-    let totalValue = 0
+    const assetsByCategory = {};
+    const assetsByCondition = {};
+    const assetsByStatus = {};
+    let totalValue = 0;
 
-    filteredAssets.forEach(asset => {
+    filteredAssets.forEach((asset) => {
       // Category distribution
-      assetsByCategory[asset.category] = (assetsByCategory[asset.category] || 0) + 1
-      
+      assetsByCategory[asset.category] =
+        (assetsByCategory[asset.category] || 0) + 1;
+
       // Condition distribution
-      assetsByCondition[asset.currentCondition] = (assetsByCondition[asset.currentCondition] || 0) + 1
-      
+      assetsByCondition[asset.currentCondition] =
+        (assetsByCondition[asset.currentCondition] || 0) + 1;
+
       // Status distribution
-      assetsByStatus[asset.availableStatus] = (assetsByStatus[asset.availableStatus] || 0) + 1
-      
+      assetsByStatus[asset.availableStatus] =
+        (assetsByStatus[asset.availableStatus] || 0) + 1;
+
       // Total value
-      totalValue += asset.currentValue || 0
-    })
+      totalValue += asset.currentValue || 0;
+    });
 
     // Request analytics
-    const requestsByStatus = {}
-    const requestsByMonth = {}
-    const requesterCounts = {}
-    const assetRequestCounts = {}
-    let totalDuration = 0
-    let requestsWithDuration = 0
+    const requestsByStatus = {};
+    const requestsByMonth = {};
+    const requesterCounts = {};
+    const assetRequestCounts = {};
+    let totalDuration = 0;
+    let requestsWithDuration = 0;
 
-    filteredRequests.forEach(request => {
+    filteredRequests.forEach((request) => {
       // Status distribution
-      requestsByStatus[request.status] = (requestsByStatus[request.status] || 0) + 1
-      
+      requestsByStatus[request.status] =
+        (requestsByStatus[request.status] || 0) + 1;
+
       // Monthly distribution
-      const month = new Date(request.$createdAt).toISOString().slice(0, 7)
-      requestsByMonth[month] = (requestsByMonth[month] || 0) + 1
-      
+      const month = new Date(request.$createdAt).toISOString().slice(0, 7);
+      requestsByMonth[month] = (requestsByMonth[month] || 0) + 1;
+
       // Top requesters
-      const requesterId = request.requesterStaffId
-      requesterCounts[requesterId] = (requesterCounts[requesterId] || 0) + 1
-      
+      const requesterId = request.requesterStaffId;
+      requesterCounts[requesterId] = (requesterCounts[requesterId] || 0) + 1;
+
       // Most requested assets
       if (request.requestedItems && Array.isArray(request.requestedItems)) {
-        request.requestedItems.forEach(assetId => {
-          assetRequestCounts[assetId] = (assetRequestCounts[assetId] || 0) + 1
-        })
+        request.requestedItems.forEach((assetId) => {
+          assetRequestCounts[assetId] = (assetRequestCounts[assetId] || 0) + 1;
+        });
       }
-      
+
       // Average duration
       if (request.issueDate && request.expectedReturnDate) {
-        const duration = (new Date(request.expectedReturnDate) - new Date(request.issueDate)) / (1000 * 60 * 60 * 24)
-        totalDuration += duration
-        requestsWithDuration++
+        const duration =
+          (new Date(request.expectedReturnDate) - new Date(request.issueDate)) /
+          (1000 * 60 * 60 * 24);
+        totalDuration += duration;
+        requestsWithDuration++;
       }
-    })
+    });
 
     // Top requesters (need to map to user names)
     const topRequesters = Object.entries(requesterCounts)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
       .map(([userId, count]) => {
-        const user = users.find(u => u.$id === userId)
+        const user = users.find((u) => u.$id === userId);
         return {
           name: user?.name || "Unknown User",
           count,
-          email: user?.email || ""
-        }
-      })
+          email: user?.email || "",
+        };
+      });
 
     // Most requested assets
     const mostRequestedAssets = Object.entries(assetRequestCounts)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
       .map(([assetId, count]) => {
-        const asset = assets.find(a => a.$id === assetId)
+        const asset = assets.find((a) => a.$id === assetId);
         return {
           name: asset?.name || "Unknown Asset",
           count,
-          category: asset?.category || ""
-        }
-      })
+          category: asset?.category || "",
+        };
+      });
 
     setAnalytics({
       totalAssets: filteredAssets.length,
@@ -237,83 +279,132 @@ export default function AdminReports() {
       topRequesters,
       mostRequestedAssets,
       totalAssetValue: totalValue,
-      avgRequestDuration: requestsWithDuration > 0 ? Math.round(totalDuration / requestsWithDuration) : 0
-    })
-  }
+      avgRequestDuration:
+        requestsWithDuration > 0
+          ? Math.round(totalDuration / requestsWithDuration)
+          : 0,
+    });
+  };
 
   const exportToCSV = (data, filename) => {
-    if (!data || data.length === 0) return
-    
-    const headers = Object.keys(data[0]).join(',')
-    const csvContent = [headers, ...data.map(row => Object.values(row).join(','))].join('\n')
-    
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
+    if (!data || data.length === 0) return;
+
+    const headers = Object.keys(data[0]).join(",");
+    const csvContent = [
+      headers,
+      ...data.map((row) => Object.values(row).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount)
-  }
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(amount);
+  };
 
   const getDateRangeText = () => {
     switch (dateRange) {
-      case "last7": return "Last 7 days"
-      case "last30": return "Last 30 days"
-      case "last90": return "Last 90 days"
-      case "last365": return "Last year"
-      default: return "All time"
+      case "last7":
+        return "Last 7 days";
+      case "last30":
+        return "Last 30 days";
+      case "last90":
+        return "Last 90 days";
+      case "last365":
+        return "Last year";
+      default:
+        return "All time";
     }
-  }
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="flex flex-col items-center space-y-6">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200"></div>
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-500 border-t-transparent absolute top-0 left-0"></div>
+            </div>
+            <div className="text-center">
+              <p className="text-slate-700 font-medium">Loading Reports</p>
+              <p className="text-slate-500 text-sm">
+                Preparing analytics data...
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="container mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-          <p className="text-gray-600">System insights and data analysis</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+      <div className="container mx-auto space-y-8 p-6">
+        {/* Header */}
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-lg">
+                <BarChart3 className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
+                  Reports & Analytics
+                </h1>
+                <p className="text-slate-600 font-medium">
+                  System insights and data analysis
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button
+                onClick={() => loadReportData()}
+                className="relative bg-gradient-to-r from-sidebar-500 to-sidebar-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 group rounded-xl px-6 py-3 border-0"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-700 ease-in-out" />
+                    <div className="absolute inset-0 bg-white/20 rounded-full scale-0 group-hover:scale-150 transition-transform duration-500 origin-center" />
+                  </div>
+                  <span className="group-hover:translate-x-1 transition-transform duration-300 font-semibold">
+                    Refresh Data
+                  </span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                <div className="absolute inset-0 bg-gradient-to-r from-sidebar-400/20 to-sidebar-500/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button onClick={() => loadReportData()} variant="outline">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh Data
-          </Button>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>Filters</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Date Range</Label>
+        {/* Filters */}
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+              <Filter className="h-6 w-6 text-white" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">Filters</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold text-slate-700">
+                Date Range
+              </Label>
               <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50">
                   <SelectItem value="last7">Last 7 days</SelectItem>
                   <SelectItem value="last30">Last 30 days</SelectItem>
                   <SelectItem value="last90">Last 90 days</SelectItem>
@@ -323,15 +414,17 @@ export default function AdminReports() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Asset Category</Label>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold text-slate-700">
+                Asset Category
+              </Label>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50">
                   <SelectItem value="all">All Categories</SelectItem>
-                  {Object.values(ENUMS.CATEGORY).map(category => (
+                  {Object.values(ENUMS.CATEGORY).map((category) => (
                     <SelectItem key={category} value={category}>
                       {formatCategory(category)}
                     </SelectItem>
@@ -340,359 +433,686 @@ export default function AdminReports() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Asset Status</Label>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold text-slate-700">
+                Asset Status
+              </Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50">
                   <SelectItem value="all">All Statuses</SelectItem>
-                  {Object.values(ENUMS.AVAILABLE_STATUS).map(status => (
+                  {Object.values(ENUMS.AVAILABLE_STATUS).map((status) => (
                     <SelectItem key={status} value={status}>
-                      {status.replace(/_/g, ' ')}
+                      {status.replace(/_/g, " ")}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Analytics Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analytics.totalAssets}</div>
-            <p className="text-xs text-muted-foreground">Active inventory items</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(analytics.totalAssetValue)}</div>
-            <p className="text-xs text-muted-foreground">Current asset value</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Requests</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analytics.totalRequests}</div>
-            <p className="text-xs text-muted-foreground">{getDateRangeText()}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analytics.avgRequestDuration}</div>
-            <p className="text-xs text-muted-foreground">Days per request</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="assets">Asset Reports</TabsTrigger>
-          <TabsTrigger value="requests">Request Reports</TabsTrigger>
-          <TabsTrigger value="users">User Reports</TabsTrigger>
-        </TabsList>
-
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Asset Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Assets by Category</CardTitle>
-                <CardDescription>Distribution of assets across categories</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(analytics.assetsByCategory).map(([category, count]) => (
-                    <div key={category} className="flex items-center justify-between">
-                      <span className="text-sm">{formatCategory(category)}</span>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-20 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
-                            style={{ width: `${(count / analytics.totalAssets) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-medium">{count}</span>
-                      </div>
-                    </div>
-                  ))}
+        {/* Analytics Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Total Assets Card */}
+          <div className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 rounded-2xl p-6 border border-sidebar-200/30 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300">
+                <Package className="h-6 w-6 text-white" />
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-slate-900">
+                  {analytics.totalAssets}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Request Status Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Requests by Status</CardTitle>
-                <CardDescription>Current status of asset requests</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(analytics.requestsByStatus).map(([status, count]) => (
-                    <div key={status} className="flex items-center justify-between">
-                      <Badge className={getStatusBadgeColor(status)}>
-                        {status.replace(/_/g, ' ')}
-                      </Badge>
-                      <span className="text-sm font-medium">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                <p className="text-sm font-semibold text-slate-600">
+                  Active inventory items
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700">
+                Total Assets
+              </span>
+              <div className="px-3 py-1 bg-sidebar-500/20 text-sidebar-600 rounded-lg text-sm font-semibold">
+                Inventory
+              </div>
+            </div>
           </div>
 
-          {/* Top Lists */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top Requesters */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Requesters</CardTitle>
-                <CardDescription>Most active users ({getDateRangeText()})</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {analytics.topRequesters.map((requester, index) => (
-                    <div key={requester.name} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium">#{index + 1}</span>
-                        <div>
-                          <p className="text-sm font-medium">{requester.name}</p>
-                          <p className="text-xs text-gray-500">{requester.email}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-medium">{requester.count} requests</span>
-                    </div>
-                  ))}
+          {/* Total Value Card */}
+          <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl p-6 border border-primary-200/30 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300">
+                <DollarSign className="h-6 w-6 text-white" />
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-slate-900">
+                  {formatCurrency(analytics.totalAssetValue)}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Most Requested Assets */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Most Requested Assets</CardTitle>
-                <CardDescription>Popular assets ({getDateRangeText()})</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {analytics.mostRequestedAssets.map((asset, index) => (
-                    <div key={asset.name} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium">#{index + 1}</span>
-                        <div>
-                          <p className="text-sm font-medium">{asset.name}</p>
-                          <p className="text-xs text-gray-500">{formatCategory(asset.category)}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-medium">{asset.count} requests</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                <p className="text-sm font-semibold text-slate-600">
+                  Current asset value
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700">
+                Total Value
+              </span>
+              <div className="px-3 py-1 bg-primary-500/20 text-primary-600 rounded-lg text-sm font-semibold">
+                Value
+              </div>
+            </div>
           </div>
-        </TabsContent>
 
-        {/* Asset Reports Tab */}
-        <TabsContent value="assets">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Asset Inventory Report</CardTitle>
-                  <CardDescription>Detailed asset information and status</CardDescription>
+          {/* Requests Card */}
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl p-6 border border-orange-200/30 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300">
+                <FileText className="h-6 w-6 text-white" />
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-slate-900">
+                  {analytics.totalRequests}
                 </div>
-                <Button onClick={() => exportToCSV(reportData.assets, 'assets-report.csv')}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export CSV
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Asset Name</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Condition</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead>Location</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportData.assets.slice(0, 50).map((asset) => (
-                      <TableRow key={asset.$id}>
-                        <TableCell className="font-medium">{asset.name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{formatCategory(asset.category)}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getStatusBadgeColor(asset.availableStatus)}>
-                            {asset.availableStatus.replace(/_/g, ' ')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getConditionBadgeColor(asset.currentCondition)}>
-                            {asset.currentCondition.replace(/_/g, ' ')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatCurrency(asset.currentValue || 0)}</TableCell>
-                        <TableCell>{asset.location || 'Not specified'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {reportData.assets.length > 50 && (
-                <p className="text-sm text-gray-500 mt-2">
-                  Showing first 50 of {reportData.assets.length} assets. Export for full report.
+                <p className="text-sm font-semibold text-slate-600">
+                  {getDateRangeText()}
                 </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700">
+                Requests
+              </span>
+              <div className="px-3 py-1 bg-orange-500/20 text-orange-600 rounded-lg text-sm font-semibold">
+                Activity
+              </div>
+            </div>
+          </div>
 
-        {/* Request Reports Tab */}
-        <TabsContent value="requests">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Request Activity Report</CardTitle>
-                  <CardDescription>Asset request history and analytics</CardDescription>
+          {/* Avg Duration Card */}
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border border-purple-200/30 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300">
+                <Clock className="h-6 w-6 text-white" />
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-slate-900">
+                  {analytics.avgRequestDuration}
                 </div>
-                <Button onClick={() => exportToCSV(reportData.requests, 'requests-report.csv')}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export CSV
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Request ID</TableHead>
-                      <TableHead>Requester</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Purpose</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Duration</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportData.requests.slice(0, 50).map((request) => (
-                      <TableRow key={request.$id}>
-                        <TableCell className="font-mono">#{request.$id.slice(-8)}</TableCell>
-                        <TableCell>{request.requesterStaffId}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusBadgeColor(request.status)}>
-                            {request.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">{request.purpose}</TableCell>
-                        <TableCell>{new Date(request.$createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          {request.issueDate && request.expectedReturnDate ? 
-                            `${Math.ceil((new Date(request.expectedReturnDate) - new Date(request.issueDate)) / (1000 * 60 * 60 * 24))} days` : 
-                            'N/A'
-                          }
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {reportData.requests.length > 50 && (
-                <p className="text-sm text-gray-500 mt-2">
-                  Showing first 50 of {reportData.requests.length} requests. Export for full report.
+                <p className="text-sm font-semibold text-slate-600">
+                  Days per request
                 </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* User Reports Tab */}
-        <TabsContent value="users">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>User Activity Report</CardTitle>
-                  <CardDescription>System users and their activity levels</CardDescription>
-                </div>
-                <Button onClick={() => exportToCSV(reportData.users, 'users-report.csv')}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export CSV
-                </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Requests</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportData.users.map((user) => {
-                      const userRequests = reportData.requests.filter(r => r.requesterStaffId === user.$id).length
-                      return (
-                        <TableRow key={user.$id}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{user.role}</Badge>
-                          </TableCell>
-                          <TableCell>{user.department_id || 'Unassigned'}</TableCell>
-                          <TableCell>
-                            <Badge variant={user.active ? "default" : "secondary"}>
-                              {user.active ? "Active" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{userRequests}</TableCell>
-                        </TableRow>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700">
+                Avg Duration
+              </span>
+              <div className="px-3 py-1 bg-purple-500/20 text-purple-600 rounded-lg text-sm font-semibold">
+                Time
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
+          <Tabs defaultValue="overview" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-gray-50 to-gray-100 p-2 rounded-2xl shadow-inner border border-gray-200/50">
+              <TabsTrigger
+                value="overview"
+                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary-500 data-[state=active]:to-primary-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 font-semibold transition-all duration-300 rounded-xl py-3 px-4 group hover:bg-primary-50 hover:text-primary-700 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:text-slate-800"
+              >
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+                  <span>Overview</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-primary-500/20 to-primary-600/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+              </TabsTrigger>
+              <TabsTrigger
+                value="assets"
+                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-sidebar-500 data-[state=active]:to-sidebar-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 font-semibold transition-all duration-300 rounded-xl py-3 px-4 group hover:bg-sidebar-50 hover:text-sidebar-700 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:text-slate-800"
+              >
+                <div className="flex items-center space-x-2">
+                  <Package className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+                  <span>Asset Reports</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-sidebar-500/20 to-sidebar-600/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+              </TabsTrigger>
+              <TabsTrigger
+                value="requests"
+                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 font-semibold transition-all duration-300 rounded-xl py-3 px-4 group hover:bg-orange-50 hover:text-orange-700 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:text-slate-800"
+              >
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+                  <span>Request Reports</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-orange-600/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+              </TabsTrigger>
+              <TabsTrigger
+                value="users"
+                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 font-semibold transition-all duration-300 rounded-xl py-3 px-4 group hover:bg-purple-50 hover:text-purple-700 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:text-slate-800"
+              >
+                <div className="flex items-center space-x-2">
+                  <Users className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+                  <span>User Reports</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-purple-600/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Asset Distribution */}
+                <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-6 border border-gray-200/30 shadow-lg">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-2 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-lg shadow-md">
+                      <Package className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">
+                        Assets by Category
+                      </h3>
+                      <p className="text-slate-600 font-medium">
+                        Distribution of assets across categories
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {Object.entries(analytics.assetsByCategory).map(
+                      ([category, count]) => (
+                        <div
+                          key={category}
+                          className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200 hover:border-sidebar-300 transition-colors"
+                        >
+                          <span className="text-sm font-semibold text-slate-700">
+                            {formatCategory(category)}
+                          </span>
+                          <div className="flex items-center space-x-3">
+                            <div className="w-24 bg-gray-200 rounded-full h-3 shadow-inner">
+                              <div
+                                className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 h-3 rounded-full shadow-lg transition-all duration-500"
+                                style={{
+                                  width: `${
+                                    (count / analytics.totalAssets) * 100
+                                  }%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm font-bold text-slate-900 min-w-[2rem] text-right">
+                              {count}
+                            </span>
+                          </div>
+                        </div>
                       )
-                    })}
-                  </TableBody>
-                </Table>
+                    )}
+                  </div>
+                </div>
+
+                {/* Request Status Distribution */}
+                <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-6 border border-gray-200/30 shadow-lg">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md">
+                      <FileText className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">
+                        Requests by Status
+                      </h3>
+                      <p className="text-slate-600 font-medium">
+                        Current status of asset requests
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {Object.entries(analytics.requestsByStatus).map(
+                      ([status, count]) => (
+                        <div
+                          key={status}
+                          className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200 hover:border-orange-300 transition-colors"
+                        >
+                          <Badge
+                            className={`${getStatusBadgeColor(
+                              status
+                            )} font-semibold px-3 py-1`}
+                          >
+                            {status.replace(/_/g, " ")}
+                          </Badge>
+                          <span className="text-sm font-bold text-slate-900">
+                            {count}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+
+              {/* Top Lists */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Top Requesters */}
+                <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl p-6 border border-primary-200/30 shadow-lg">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg shadow-md">
+                      <Users className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">
+                        Top Requesters
+                      </h3>
+                      <p className="text-slate-600 font-medium">
+                        Most active users ({getDateRangeText()})
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {analytics.topRequesters.map((requester, index) => (
+                      <div
+                        key={requester.name}
+                        className="flex items-center justify-between p-4 bg-white rounded-xl border border-primary-200 hover:border-primary-300 transition-colors group"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {requester.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {requester.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="px-3 py-1 bg-primary-500/20 text-primary-600 rounded-lg text-sm font-semibold">
+                          {requester.count} requests
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Most Requested Assets */}
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl p-6 border border-orange-200/30 shadow-lg">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md">
+                      <Package className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">
+                        Most Requested Assets
+                      </h3>
+                      <p className="text-slate-600 font-medium">
+                        Popular assets ({getDateRangeText()})
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {analytics.mostRequestedAssets.map((asset, index) => (
+                      <div
+                        key={asset.name}
+                        className="flex items-center justify-between p-4 bg-white rounded-xl border border-orange-200 hover:border-orange-300 transition-colors group"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {asset.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {formatCategory(asset.category)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="px-3 py-1 bg-orange-500/20 text-orange-600 rounded-lg text-sm font-semibold">
+                          {asset.count} requests
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Asset Reports Tab */}
+            <TabsContent value="assets">
+              <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden">
+                <div className="p-6 border-b border-gray-200/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-lg shadow-md">
+                        <Package className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-slate-900">
+                          Asset Inventory Report
+                        </h3>
+                        <p className="text-slate-600 font-medium">
+                          Detailed asset information and status
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() =>
+                        exportToCSV(reportData.assets, "assets-report.csv")
+                      }
+                      className="relative bg-gradient-to-r from-sidebar-500 to-sidebar-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 group"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Download className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                          Export CSV
+                        </span>
+                      </div>
+                      <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-6">
+                  <div className="rounded-xl border border-gray-200 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                          <TableHead className="font-semibold text-slate-700">
+                            Asset Name
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Category
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Status
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Condition
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Value
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Location
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.assets.slice(0, 50).map((asset) => (
+                          <TableRow
+                            key={asset.$id}
+                            className="hover:bg-gray-50/50 transition-colors duration-200 group border-b border-gray-100/50"
+                          >
+                            <TableCell className="font-medium text-slate-900 group-hover:text-sidebar-700">
+                              {asset.name}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100">
+                                {formatCategory(asset.category)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={getStatusBadgeColor(
+                                  asset.availableStatus
+                                )}
+                              >
+                                {asset.availableStatus.replace(/_/g, " ")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={getConditionBadgeColor(
+                                  asset.currentCondition
+                                )}
+                              >
+                                {asset.currentCondition.replace(/_/g, " ")}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-semibold text-slate-900">
+                              {formatCurrency(asset.currentValue || 0)}
+                            </TableCell>
+                            <TableCell className="text-slate-600">
+                              {asset.location || "Not specified"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {reportData.assets.length > 50 && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-sidebar-50 to-sidebar-100 rounded-xl border border-sidebar-200">
+                      <p className="text-sm font-semibold text-slate-700 text-center">
+                        Showing first 50 of {reportData.assets.length} assets.
+                        Export for full report.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Request Reports Tab */}
+            <TabsContent value="requests">
+              <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden">
+                <div className="p-6 border-b border-gray-200/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md">
+                        <FileText className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-slate-900">
+                          Request Activity Report
+                        </h3>
+                        <p className="text-slate-600 font-medium">
+                          Asset request history and analytics
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() =>
+                        exportToCSV(reportData.requests, "requests-report.csv")
+                      }
+                      className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 group"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Download className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                          Export CSV
+                        </span>
+                      </div>
+                      <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-6">
+                  <div className="rounded-xl border border-gray-200 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                          <TableHead className="font-semibold text-slate-700">
+                            Request ID
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Requester
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Status
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Purpose
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Created
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Duration
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.requests.slice(0, 50).map((request) => (
+                          <TableRow
+                            key={request.$id}
+                            className="hover:bg-gray-50/50 transition-colors duration-200 group border-b border-gray-100/50"
+                          >
+                            <TableCell className="font-mono text-slate-900 group-hover:text-orange-700">
+                              #{request.$id.slice(-8)}
+                            </TableCell>
+                            <TableCell className="text-slate-600">
+                              {request.requesterStaffId}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={getStatusBadgeColor(request.status)}
+                              >
+                                {request.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate text-slate-600">
+                              {request.purpose}
+                            </TableCell>
+                            <TableCell className="text-slate-600">
+                              {new Date(
+                                request.$createdAt
+                              ).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="font-semibold text-slate-900">
+                              {request.issueDate && request.expectedReturnDate
+                                ? `${Math.ceil(
+                                    (new Date(request.expectedReturnDate) -
+                                      new Date(request.issueDate)) /
+                                      (1000 * 60 * 60 * 24)
+                                  )} days`
+                                : "N/A"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {reportData.requests.length > 50 && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl border border-orange-200">
+                      <p className="text-sm font-semibold text-slate-700 text-center">
+                        Showing first 50 of {reportData.requests.length}{" "}
+                        requests. Export for full report.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* User Reports Tab */}
+            <TabsContent value="users">
+              <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden">
+                <div className="p-6 border-b border-gray-200/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-md">
+                        <Users className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-slate-900">
+                          User Activity Report
+                        </h3>
+                        <p className="text-slate-600 font-medium">
+                          System users and their activity levels
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() =>
+                        exportToCSV(reportData.users, "users-report.csv")
+                      }
+                      className="relative bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 group"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Download className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                        <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                          Export CSV
+                        </span>
+                      </div>
+                      <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-6">
+                  <div className="rounded-xl border border-gray-200 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                          <TableHead className="font-semibold text-slate-700">
+                            Name
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Email
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Role
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Department
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Status
+                          </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Requests
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reportData.users.map((user) => {
+                          const userRequests = reportData.requests.filter(
+                            (r) => r.requesterStaffId === user.$id
+                          ).length;
+                          return (
+                            <TableRow
+                              key={user.$id}
+                              className="hover:bg-gray-50/50 transition-colors duration-200 group border-b border-gray-100/50"
+                            >
+                              <TableCell className="font-medium text-slate-900 group-hover:text-purple-700">
+                                {user.name}
+                              </TableCell>
+                              <TableCell className="text-slate-600">
+                                {user.email}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100">
+                                  {user.role}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-slate-600">
+                                {user.department_id || "Unassigned"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  className={
+                                    user.active
+                                      ? "bg-green-50 text-green-700 border-green-200"
+                                      : "bg-gray-50 text-gray-700 border-gray-200"
+                                  }
+                                >
+                                  {user.active ? "Active" : "Inactive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-semibold text-slate-900">
+                                {userRequests}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
     </div>
-  )
+  );
 }
