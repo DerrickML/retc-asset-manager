@@ -73,25 +73,26 @@ export default function NotificationSettings() {
 
   const loadNotificationHistory = async () => {
     try {
-      // Load recent notification logs from activity logs
+      // Load recent notification logs from asset events (which track notifications)
       const response = await databases.listDocuments(
         DATABASE_ID,
-        COLLECTIONS.ACTIVITY_LOGS,
+        COLLECTIONS.ASSET_EVENTS,
         [
-          Query.equal("action", [
+          Query.equal("eventType", [
             "email_sent",
-            "return_reminder_sent",
+            "return_reminder_sent", 
             "overdue_notification_sent",
             "maintenance_reminder_sent",
           ]),
-          Query.orderDesc("created_at"),
+          Query.orderDesc("$createdAt"),
           Query.limit(50),
         ]
       );
 
-      setNotificationHistory(response.documents);
+      setNotificationHistory(response.documents || []);
     } catch (error) {
-      console.error("Error loading notification history:", error);
+      // Silent fail for notification history loading
+      setNotificationHistory([]);
     }
   };
 
