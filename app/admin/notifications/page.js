@@ -80,7 +80,7 @@ export default function NotificationSettings() {
         [
           Query.equal("eventType", [
             "email_sent",
-            "return_reminder_sent", 
+            "return_reminder_sent",
             "overdue_notification_sent",
             "maintenance_reminder_sent",
           ]),
@@ -125,7 +125,7 @@ export default function NotificationSettings() {
 
       alert("Test email sent successfully!");
     } catch (error) {
-      console.error("Error sending test email:", error);
+      // Silent fail for test email
       alert("Error sending test email");
     } finally {
       setLoading(false);

@@ -477,7 +477,7 @@ export default function LoginPage() {
                     {loading ? "Signing in..." : "Sign In"}
                   </button>
 
-                  {/* Success Message with Super Catchy Slide-in Animation */}
+                  {/* Success Message*/}
                   {showSuccessMessage && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
                       <div className="bg-gradient-to-br from-white via-green-50 to-primary-50 rounded-3xl p-8 max-w-md mx-4 shadow-2xl border-2 border-green-200 animate-slide-in-left">
