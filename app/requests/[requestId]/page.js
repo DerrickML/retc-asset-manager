@@ -133,7 +133,6 @@ export default function RequestDetailsPage() {
     try {
       // Get related asset events for this request
       const eventsResult = await assetEventsService.list([
-        Query.search("notes", `#${requestData.$id.slice(-8)}`),
         Query.orderDesc("at"),
       ]);
 
