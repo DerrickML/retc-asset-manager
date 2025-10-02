@@ -197,21 +197,23 @@ export default function MyRequestsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Simple Header */}
+        {/* Enhanced Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">My Requests</h1>
-              <p className="text-gray-600 text-lg mt-2">
+        <div className="flex items-center justify-between">
+          <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent">
+                My Requests
+              </h1>
+              <p className="text-gray-700 text-lg mt-2 font-medium">
                 Track your asset requests and their status
               </p>
-            </div>
+          </div>
             <Button
               asChild
-              className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+              className="bg-gradient-to-r from-primary-600 via-primary-700 to-sidebar-600 hover:from-primary-700 hover:via-sidebar-600 hover:to-primary-800 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
             >
               <Link
                 href="/requests/new"
@@ -220,29 +222,29 @@ export default function MyRequestsPage() {
                 <Plus className="w-5 h-5" />
                 <span>New Request</span>
               </Link>
-            </Button>
+          </Button>
           </div>
         </div>
-        {/* Simple Filter Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+        {/* Enhanced Filter Section */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/60 p-6 mb-8">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Search Bar */}
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <div className="relative group">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-hover:text-primary-500 w-5 h-5 transition-colors duration-300" />
                 <Input
                   placeholder="Search requests..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border-gray-300 focus:border-primary-500 focus:ring-primary-500"
+                  className="pl-10 pr-4 py-3 border-2 border-gray-300 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
                 />
               </div>
-            </div>
+        </div>
 
             {/* Status Filter */}
             <div className="lg:w-48">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="border-gray-300 focus:border-primary-500 focus:ring-primary-500">
+                <SelectTrigger className="border-2 border-gray-300 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -259,7 +261,7 @@ export default function MyRequestsPage() {
             {/* Date Filter */}
             <div className="lg:w-48">
               <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger className="border-gray-300 focus:border-primary-500 focus:ring-primary-500">
+                <SelectTrigger className="border-2 border-gray-300 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
                   <SelectValue placeholder="All Time" />
                 </SelectTrigger>
                 <SelectContent>
@@ -275,7 +277,7 @@ export default function MyRequestsPage() {
             <Button
               variant="outline"
               onClick={clearFilters}
-              className="text-gray-600 border-gray-300 hover:bg-gray-50"
+              className="text-gray-600 border-2 border-gray-300 hover:bg-gradient-to-r hover:from-gray-50 hover:to-primary-50 hover:border-primary-300 hover:text-primary-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Clear
@@ -289,16 +291,16 @@ export default function MyRequestsPage() {
             {Array.from({ length: 3 }).map((_, i) => (
               <Card
                 key={i}
-                className="animate-pulse bg-white/80 backdrop-blur-sm border-0 shadow-lg"
+                className="animate-pulse bg-white/90 backdrop-blur-sm border-0 shadow-xl rounded-2xl"
               >
                 <CardContent className="p-8">
                   <div className="flex items-start justify-between mb-6">
                     <div className="flex-1">
-                      <div className="h-6 bg-gradient-to-r from-gray-200 to-gray-300 rounded-lg mb-3 w-1/3"></div>
-                      <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded mb-4 w-2/3"></div>
+                      <div className="h-6 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded-lg mb-3 w-1/3"></div>
+                      <div className="h-4 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded mb-4 w-2/3"></div>
                       <div className="flex gap-3">
-                        <div className="h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full w-24"></div>
-                        <div className="h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full w-32"></div>
+                        <div className="h-8 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded-full w-24"></div>
+                        <div className="h-8 bg-gradient-to-r from-primary-200 to-sidebar-200 rounded-full w-32"></div>
                       </div>
                     </div>
                   </div>
@@ -307,23 +309,23 @@ export default function MyRequestsPage() {
             ))}
           </div>
         ) : requests.length === 0 ? (
-          <Card className="bg-white border border-gray-200">
-            <CardContent className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-8 h-8 text-gray-400" />
+          <Card className="bg-white/90 backdrop-blur-sm border border-gray-200/60 shadow-xl rounded-2xl">
+            <CardContent className="text-center py-16">
+              <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-sidebar-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <FileText className="w-10 h-10 text-primary-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent mb-3">
                 No requests found
               </h3>
-              <p className="text-gray-600 mb-6">
+              <p className="text-gray-600 mb-8 text-lg">
                 {statusFilter !== "all" || searchTerm || dateFilter !== "all"
                   ? "No requests match your current filters."
                   : "You haven't made any asset requests yet."}
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button
                   asChild
-                  className="bg-primary-600 hover:bg-primary-700 text-white"
+                  className="bg-gradient-to-r from-primary-600 via-primary-700 to-sidebar-600 hover:from-primary-700 hover:via-sidebar-600 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                 >
                   <Link
                     href="/requests/new"
@@ -339,111 +341,132 @@ export default function MyRequestsPage() {
                   <Button
                     variant="outline"
                     onClick={clearFilters}
-                    className="text-gray-600 border-gray-300 hover:bg-gray-50"
+                    className="text-gray-600 border-2 border-gray-300 hover:bg-gradient-to-r hover:from-gray-50 hover:to-primary-50 hover:border-primary-300 hover:text-primary-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
                   >
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Clear Filters
-                  </Button>
+              </Button>
                 )}
               </div>
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {requests.map((request) => {
               const StatusIcon = getStatusIcon(request.status);
               return (
                 <Card
                   key={request.$id}
-                  className="bg-white border border-gray-200 hover:shadow-md transition-shadow duration-200"
+                  className="bg-white/90 backdrop-blur-sm border border-gray-200/60 hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4 rounded-2xl"
                 >
-                  <CardContent className="p-6">
+                  <CardContent className="p-8">
                     <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">
+                    <div className="flex-1">
+                        <div className="flex items-center gap-4 mb-3">
+                          <h3 className="text-xl font-bold text-gray-900 group-hover:text-primary-700 transition-colors duration-300">
                             Request #{request.$id.slice(-8)}
                           </h3>
                           <Badge
-                            className={getStatusBadgeColor(request.status)}
+                            className={`${getStatusBadgeColor(
+                              request.status
+                            )} shadow-md`}
                           >
                             <StatusIcon className="w-3 h-3 mr-1" />
                             {request.status.replace(/_/g, " ")}
                           </Badge>
-                        </div>
+                      </div>
 
-                        <p className="text-gray-700 mb-3">{request.purpose}</p>
+                        <p className="text-gray-700 mb-4 text-lg font-medium">
+                          {request.purpose}
+                        </p>
 
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
-                          <span>Created: {formatDate(request.$createdAt)}</span>
-                          <span>•</span>
-                          <span>Issue: {formatDate(request.issueDate)}</span>
-                          <span>•</span>
-                          <span>
-                            Return: {formatDate(request.expectedReturnDate)}
-                          </span>
-                        </div>
+                        <div className="flex items-center gap-6 text-sm text-gray-600 mb-4 bg-gray-50/50 rounded-xl p-3">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-primary-600" />
+                            <span>
+                              <strong>Created:</strong>{" "}
+                              {formatDate(request.$createdAt)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-sidebar-600" />
+                            <span>
+                              <strong>Issue:</strong>{" "}
+                              {formatDate(request.issueDate)}
+                            </span>
+                      </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-600" />
+                            <span>
+                              <strong>Return:</strong>{" "}
+                              {formatDate(request.expectedReturnDate)}
+                            </span>
+                    </div>
+                  </div>
 
-                        {/* Requested Assets */}
-                        <div className="mb-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Package className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm font-medium text-gray-700">
+                  {/* Requested Assets */}
+                        <div className="mb-6">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Package className="w-5 h-5 text-primary-600" />
+                            <span className="text-base font-semibold text-gray-700">
                               Requested Assets ({request.assets.length})
                             </span>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {request.assets.map((asset) => (
+                    <div className="flex flex-wrap gap-2">
+                      {request.assets.map((asset) => (
                               <Badge
                                 key={asset.$id}
                                 variant="outline"
-                                className="text-xs"
+                                className="text-sm bg-gradient-to-r from-primary-50 to-sidebar-50 border-primary-200 text-primary-800 hover:from-primary-100 hover:to-sidebar-100 transition-all duration-300"
                               >
-                                {asset.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
+                          {asset.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
 
-                        {/* Decision Notes */}
-                        {request.decisionNotes && (
-                          <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                  {/* Decision Notes */}
+                  {request.decisionNotes && (
+                          <div className="bg-gradient-to-r from-gray-50 to-primary-50/30 rounded-xl p-4 mb-4 border border-gray-200/60">
                             <p className="text-sm text-gray-700">
-                              <strong>Notes:</strong> {request.decisionNotes}
+                              <strong className="text-primary-700">
+                                Notes:
+                              </strong>{" "}
+                              {request.decisionNotes}
                             </p>
-                          </div>
-                        )}
+                    </div>
+                  )}
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex flex-col gap-2 ml-4">
+                  {/* Actions */}
+                      <div className="flex flex-col gap-3 ml-6">
                         <Button
                           asChild
                           size="sm"
-                          className="bg-primary-600 hover:bg-primary-700 text-white"
+                          className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                         >
                           <Link
                             href={`/requests/${request.$id}`}
-                            className="flex items-center gap-1"
+                            className="flex items-center gap-2"
                           >
-                            <Eye className="w-3 h-3" />
+                            <Eye className="w-4 h-4" />
                             View
                           </Link>
-                        </Button>
-                        {request.status === ENUMS.REQUEST_STATUS.PENDING && (
+                    </Button>
+                    {request.status === ENUMS.REQUEST_STATUS.PENDING && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-red-600 border-red-300 hover:bg-red-50"
+                            className="text-red-600 border-2 border-red-300 hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 hover:border-red-400 shadow-sm hover:shadow-md transition-all duration-300"
                           >
-                            <X className="w-3 h-3 mr-1" />
+                            <X className="w-4 h-4 mr-1" />
                             Cancel
-                          </Button>
-                        )}
+                      </Button>
+                    )}
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </CardContent>
+              </Card>
               );
             })}
           </div>

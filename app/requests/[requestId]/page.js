@@ -20,24 +20,24 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "../../../components/ui/avatar";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger, 
-  DialogClose, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
   DialogFooter,
   DialogDescription,
 } from "../../../components/ui/dialog";
-import { 
-  Calendar, 
-  Clock, 
-  User, 
-  FileText, 
-  Package, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Calendar,
+  Clock,
+  User,
+  FileText,
+  Package,
+  CheckCircle,
+  XCircle,
   AlertTriangle,
   Edit3,
   Trash2,
@@ -51,6 +51,7 @@ import {
   staffService,
   assetEventsService,
 } from "../../../lib/appwrite/provider.js";
+import { assetImageService } from "../../../lib/appwrite/image-service.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
@@ -67,7 +68,7 @@ export default function RequestDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   // Dialog states
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -338,55 +339,52 @@ export default function RequestDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-        <div className="max-w-6xl mx-auto p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-          <div className="h-64 bg-gray-200 rounded"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
-        </div>
-        </div>
+      <div className="animate-pulse space-y-6 p-6">
+        <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+        <div className="h-64 bg-gray-200 rounded"></div>
+        <div className="h-32 bg-gray-200 rounded"></div>
       </div>
     );
   }
 
   if (error || !request) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-        <div className="max-w-6xl mx-auto p-6">
+      <div className="p-6">
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>{error || "Request not found"}</AlertDescription>
         </Alert>
         <div className="mt-4">
           <Button asChild variant="outline">
-              <Link
-                href={
-                  currentStaff && permissions.canManageRequests(currentStaff)
-                    ? "/admin/requests"
-                    : "/requests"
-                }
-              >
-                Back to Requests
-              </Link>
+            <Link
+              href={
+                currentStaff && permissions.canManageRequests(currentStaff)
+                  ? "/admin/requests"
+                  : "/requests"
+              }
+            >
+              Back to Requests
+            </Link>
           </Button>
-        </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+    <div
+      className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40 relative"
+      style={{ zIndex: 1 }}
+    >
       {/* Background Pattern */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMwNTk2NjkiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40"></div>
 
-      <div className="relative max-w-6xl mx-auto p-6 space-y-8">
+      <div className="relative max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
                 <Button
                   asChild
                   variant="ghost"
@@ -403,197 +401,235 @@ export default function RequestDetailsPage() {
                   >
                     ← Back to Requests
                   </Link>
-              </Button>
-            </div>
-            <div className="flex items-center gap-3 mb-2">
+                </Button>
+              </div>
+              <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
-                Request #{request.$id.slice(-8)}
-              </h1>
+                  Request #{request.$id.slice(-8)}
+                </h1>
                 <Badge
                   className={`${getStatusBadgeColor(
                     request.status
                   )} flex items-center gap-1 px-3 py-1`}
                 >
-                {getStatusIcon(request.status)}
-                {request.status.replace(/_/g, " ")}
-              </Badge>
-            </div>
+                  {getStatusIcon(request.status)}
+                  {request.status.replace(/_/g, " ")}
+                </Badge>
+              </div>
               <p className="text-slate-600 text-lg">{request.purpose}</p>
-          </div>
+            </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            {canEditRequest && (
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {canEditRequest && (
                 <Button
                   asChild
                   variant="outline"
                   size="sm"
                   className="hover:bg-primary-100 hover:text-primary-700 hover:border-primary-300"
                 >
-                <Link href={`/requests/${request.$id}/edit`}>
-                  <Edit3 className="w-4 h-4 mr-2" />
-                  Edit
-                </Link>
-              </Button>
-            )}
-            
-            {canCancelRequest && (
+                  <Link href={`/requests/${request.$id}/edit`}>
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    Edit
+                  </Link>
+                </Button>
+              )}
+
+              {canCancelRequest && (
                 <Dialog
                   open={cancelDialogOpen}
                   onOpenChange={setCancelDialogOpen}
                 >
-                <DialogTrigger asChild>
+                  <DialogTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 hover:border-orange-300"
                     >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Cancel Request</DialogTitle>
-                    <DialogDescription>
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="z-[99999]">
+                    <DialogHeader>
+                      <DialogTitle>Cancel Request</DialogTitle>
+                      <DialogDescription>
                         Are you sure you want to cancel this request? This
                         action cannot be undone.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
                         <Label htmlFor="cancelReason">
                           Cancellation Reason
                         </Label>
-                      <Textarea
-                        id="cancelReason"
-                        value={cancelReason}
-                        onChange={(e) => setCancelReason(e.target.value)}
-                        placeholder="Please provide a reason for cancellation..."
-                        rows={3}
-                      />
+                        <Textarea
+                          id="cancelReason"
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                          placeholder="Please provide a reason for cancellation..."
+                          rows={3}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="outline">Cancel</Button>
-                    </DialogClose>
-                    <Button
-                      onClick={handleCancelRequest}
-                      disabled={actionLoading || !cancelReason.trim()}
-                      className="bg-orange-600 hover:bg-orange-700"
-                    >
-                      {actionLoading ? "Cancelling..." : "Cancel Request"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                      </DialogClose>
+                      <Button
+                        onClick={handleCancelRequest}
+                        disabled={actionLoading || !cancelReason.trim()}
+                        className="bg-orange-600 hover:bg-orange-700"
+                      >
+                        {actionLoading ? "Cancelling..." : "Cancel Request"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
 
-            {canDeleteRequest && (
+              {canDeleteRequest && (
                 <Dialog
                   open={deleteDialogOpen}
                   onOpenChange={setDeleteDialogOpen}
                 >
-                <DialogTrigger asChild>
+                  <DialogTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-300"
                     >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Delete Request</DialogTitle>
-                    <DialogDescription>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="z-[99999]">
+                    <DialogHeader>
+                      <DialogTitle>Delete Request</DialogTitle>
+                      <DialogDescription>
                         Are you sure you want to permanently delete this
                         request? This action cannot be undone.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="outline">Cancel</Button>
-                    </DialogClose>
-                    <Button
-                      onClick={handleDeleteRequest}
-                      disabled={actionLoading}
-                      variant="destructive"
-                    >
-                      {actionLoading ? "Deleting..." : "Delete Request"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                      </DialogClose>
+                      <Button
+                        onClick={handleDeleteRequest}
+                        disabled={actionLoading}
+                        variant="destructive"
+                      >
+                        {actionLoading ? "Deleting..." : "Delete Request"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
 
-            {canResubmitRequest && (
+              {canResubmitRequest && (
                 <Dialog
                   open={resubmitDialogOpen}
                   onOpenChange={setResubmitDialogOpen}
                 >
-                <DialogTrigger asChild>
+                  <DialogTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-sidebar-600 hover:text-sidebar-700 hover:bg-sidebar-50 hover:border-sidebar-300"
                     >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Resubmit
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Resubmit Request</DialogTitle>
-                    <DialogDescription>
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Resubmit
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="z-[99999] max-w-lg w-full mx-4 border-0 shadow-2xl bg-gradient-to-br from-white via-primary-50/20 to-sidebar-50/30 ring-1 ring-primary-200/30">
+                    <DialogHeader className="text-center pb-6 border-b border-primary-200/30">
+                      <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg">
+                        <RotateCcw className="w-8 h-8 text-white" />
+                      </div>
+                      <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent mb-2">
+                        Resubmit Request
+                      </DialogTitle>
+                      <DialogDescription className="text-gray-600 text-base leading-relaxed">
                         This will create a new request with the same details.
-                        Please provide any additional context.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                        <Label htmlFor="resubmitReason">
+                        Please provide any additional context to address
+                        previous concerns.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-6 px-6">
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="resubmitReason"
+                          className="text-sm font-semibold text-gray-700 flex items-center gap-2"
+                        >
+                          <span className="w-2 h-2 bg-gradient-to-r from-primary-500 to-sidebar-500 rounded-full"></span>
                           Additional Context (Optional)
                         </Label>
-                      <Textarea
-                        id="resubmitReason"
-                        value={resubmitReason}
-                        onChange={(e) => setResubmitReason(e.target.value)}
-                        placeholder="Address any concerns from the previous denial..."
-                        rows={3}
-                      />
+                        <div className="relative">
+                          <Textarea
+                            id="resubmitReason"
+                            value={resubmitReason}
+                            onChange={(e) => {
+                              if (e.target.value.length <= 500) {
+                                setResubmitReason(e.target.value);
+                              }
+                            }}
+                            placeholder="Address any concerns from the previous denial or provide additional justification..."
+                            rows={4}
+                            maxLength={500}
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:ring-4 focus:ring-primary-100 transition-all duration-200 resize-none text-gray-700 placeholder-gray-400 bg-white/80 backdrop-blur-sm"
+                          />
+                          <div className="absolute bottom-3 right-3 text-xs text-gray-400">
+                            {resubmitReason.length}/500
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="outline">Cancel</Button>
-                    </DialogClose>
-                    <Button
-                      onClick={handleResubmitRequest}
-                      disabled={actionLoading}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      {actionLoading ? "Resubmitting..." : "Resubmit Request"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
 
-            {isAdmin && request.status === ENUMS.REQUEST_STATUS.APPROVED && (
+                    <DialogFooter className="flex gap-3 pt-6 px-6 pb-6 border-t border-primary-100/50">
+                      <DialogClose asChild>
+                        <Button
+                          variant="outline"
+                          className="flex-1 h-12 border-2 border-gray-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all duration-200 font-medium rounded-xl"
+                        >
+                          Cancel
+                        </Button>
+                      </DialogClose>
+                      <Button
+                        onClick={handleResubmitRequest}
+                        disabled={actionLoading}
+                        className="flex-1 h-12 bg-gradient-to-r from-primary-600 to-sidebar-600 hover:from-primary-700 hover:to-sidebar-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {actionLoading ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Resubmitting...
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <RotateCcw className="w-4 h-4" />
+                            Resubmit Request
+                          </div>
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+
+              {isAdmin && request.status === ENUMS.REQUEST_STATUS.APPROVED && (
                 <Button
                   asChild
                   size="sm"
                   className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
                 >
-                <Link href={`/admin/issue/${request.$id}`}>
-                  <Package className="w-4 h-4 mr-2" />
-                  Issue Assets
-                </Link>
-              </Button>
-            )}
+                  <Link href={`/admin/issue/${request.$id}`}>
+                    <Package className="w-4 h-4 mr-2" />
+                    Issue Assets
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -723,39 +759,70 @@ export default function RequestDetailsPage() {
                       key={asset.$id}
                       className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors duration-200"
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <h4 className="font-medium text-slate-900">
-                            {asset.name}
-                          </h4>
-                          {asset.assetTag && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs bg-sidebar-50 text-sidebar-700 border-sidebar-200"
-                            >
-                              {asset.assetTag}
-                            </Badge>
-                          )}
-                          {asset.notFound && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs text-red-600 border-red-200 bg-red-50"
-                            >
-                              Not Found
-                            </Badge>
+                      <div className="flex items-center gap-4 flex-1">
+                        {/* Asset Image */}
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {asset.assetImage ? (
+                            <img
+                              src={
+                                asset.assetImage.startsWith("http")
+                                  ? asset.assetImage
+                                  : assetImageService.getPublicImageUrl(
+                                      asset.assetImage
+                                    )
+                              }
+                              alt={asset.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = "none";
+                                e.target.nextSibling.style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className="w-full h-full flex items-center justify-center text-gray-400"
+                            style={{
+                              display: asset.assetImage ? "none" : "flex",
+                            }}
+                          >
+                            <Package className="w-6 h-6" />
+                          </div>
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <h4 className="font-medium text-slate-900">
+                              {asset.name}
+                            </h4>
+                            {asset.assetTag && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-sidebar-50 text-sidebar-700 border-sidebar-200"
+                              >
+                                {asset.assetTag}
+                              </Badge>
+                            )}
+                            {asset.notFound && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs text-red-600 border-red-200 bg-red-50"
+                              >
+                                Not Found
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-600 mt-2">
+                            {asset.category?.replace(/_/g, " ")} •{" "}
+                            {asset.locationName}
+                            {asset.roomOrArea && ` - ${asset.roomOrArea}`}
+                          </p>
+                          {asset.currentCondition && (
+                            <p className="text-xs text-slate-500 mt-1">
+                              Condition:{" "}
+                              {asset.currentCondition.replace(/_/g, " ")}
+                            </p>
                           )}
                         </div>
-                        <p className="text-sm text-slate-600 mt-2">
-                          {asset.category?.replace(/_/g, " ")} •{" "}
-                          {asset.locationName}
-                          {asset.roomOrArea && ` - ${asset.roomOrArea}`}
-                        </p>
-                        {asset.currentCondition && (
-                          <p className="text-xs text-slate-500 mt-1">
-                            Condition:{" "}
-                            {asset.currentCondition.replace(/_/g, " ")}
-                          </p>
-                        )}
                       </div>
                       {!asset.notFound && (
                         <Button

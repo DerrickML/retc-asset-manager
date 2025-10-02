@@ -7,6 +7,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import { settingsService, assetsService } from "../../lib/appwrite/provider.js";
+import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { formatCategory } from "../../lib/utils/mappings.js";
 import { Query } from "appwrite";
 import {
@@ -216,6 +217,33 @@ export default function GuestHomePage() {
                   className="bg-white/90 backdrop-blur-sm border-2 border-gray-200/60 hover:shadow-2xl transition-all duration-300 hover:scale-105 group"
                 >
                   <CardContent className="p-6">
+                    {/* Asset Image */}
+                    <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden mb-4">
+                      {asset.assetImage ? (
+                        <img
+                          src={
+                            asset.assetImage.startsWith("http")
+                              ? asset.assetImage
+                              : assetImageService.getPublicImageUrl(
+                                  asset.assetImage
+                                )
+                          }
+                          alt={asset.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="w-full h-full flex items-center justify-center text-gray-400"
+                        style={{ display: asset.assetImage ? "none" : "flex" }}
+                      >
+                        <Package className="w-12 h-12" />
+                      </div>
+                    </div>
+
                     <div className="flex items-start justify-between mb-4">
                       <h4 className="font-bold text-gray-900 flex-1 text-lg group-hover:text-primary-700 transition-colors duration-200">
                         {asset.name}
@@ -293,7 +321,7 @@ export default function GuestHomePage() {
                 <Users className="w-5 h-5 mr-2" />
                 Sign In to Request Assets
               </Link>
-            </Button>
+          </Button>
           </div>
         </div>
       </section>

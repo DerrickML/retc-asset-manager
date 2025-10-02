@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
+import { 
   Home,
   Package,
   FileText,
@@ -48,7 +48,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     loadStaffData();
-
+    
     // Check if should be collapsed on mobile by default
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
@@ -87,7 +87,7 @@ export default function Sidebar() {
         setStaff(currentStaff);
         const adminStatus = permissions.isAdmin(currentStaff);
         setIsAdmin(adminStatus);
-
+        
         // Auto-set view mode based on current path
         if (pathname.startsWith("/admin")) {
           setViewMode("admin");
@@ -262,12 +262,12 @@ export default function Sidebar() {
                 href={item.href}
                 className={`group flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? viewMode === "admin"
+                    ? viewMode === "admin" 
                       ? "bg-gradient-to-r from-sidebar-500 to-sidebar-600 text-white shadow-lg shadow-sidebar-500/25"
                       : "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25"
                     : viewMode === "admin"
                     ? "text-white hover:text-white hover:bg-sidebar-800/50"
-                    : "text-white hover:text-white hover:bg-primary-800/50"
+                    : "text-white hover:text-white hover:bg-blue-600/80 hover:shadow-lg hover:shadow-blue-500/25"
                 } ${level > 0 ? "ml-4" : ""}`}
               >
                 {ItemContent}
@@ -291,12 +291,12 @@ export default function Sidebar() {
         href={item.href}
         className={`group flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 ${
           isActive
-            ? viewMode === "admin"
+            ? viewMode === "admin" 
               ? "bg-gradient-to-r from-sidebar-500 to-sidebar-600 text-white shadow-lg shadow-sidebar-500/25"
               : "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25"
             : viewMode === "admin"
             ? "text-white hover:text-white hover:bg-sidebar-800/50"
-            : "text-white hover:text-white hover:bg-primary-800/50"
+            : "text-white hover:text-white hover:bg-blue-600/80 hover:shadow-lg hover:shadow-blue-500/25"
         } ${level > 0 ? "ml-6" : ""}`}
       >
         {ItemContent}
@@ -312,7 +312,7 @@ export default function Sidebar() {
     <>
       {/* Mobile overlay */}
       {isMobileOpen && (
-        <div
+        <div 
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
@@ -321,8 +321,8 @@ export default function Sidebar() {
       {/* Floating Menu Button - Bottom Left */}
       <button
         className={`fixed bottom-6 left-6 z-50 md:hidden w-14 h-14 rounded-full text-white shadow-2xl border-0 transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 flex items-center justify-center ${
-          isMobileOpen
-            ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/25"
+          isMobileOpen 
+            ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/25" 
             : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 shadow-primary-500/25"
         }`}
         onClick={() => {
@@ -335,12 +335,12 @@ export default function Sidebar() {
         ) : (
           <Menu className="w-6 h-6" />
         )}
-
+        
         {/* Subtle floating animation pulse */}
         {!isMobileOpen && (
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary-600 to-primary-700 opacity-20 animate-ping pointer-events-none"></div>
         )}
-
+        
         {/* Notification badge for mobile */}
         {!isMobileOpen && isAdmin && viewMode === "admin" && (
           <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white shadow-lg pointer-events-none">
@@ -383,7 +383,7 @@ export default function Sidebar() {
                 />
               </div>
             )}
-
+            
             <Button
               variant="ghost"
               size="sm"
@@ -449,7 +449,7 @@ export default function Sidebar() {
                         variant={viewMode === "user" ? "default" : "ghost"}
                         size="sm"
                         className={`flex-1 text-xs h-8 ${
-                          viewMode === "user"
+                          viewMode === "user" 
                             ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
                             : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
                         }`}
@@ -462,7 +462,7 @@ export default function Sidebar() {
                         variant={viewMode === "admin" ? "default" : "ghost"}
                         size="sm"
                         className={`flex-1 text-xs h-8 ${
-                          viewMode === "admin"
+                          viewMode === "admin" 
                             ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
                             : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
                         }`}
@@ -497,7 +497,7 @@ export default function Sidebar() {
                 <div className="px-3 py-2">
                   <Badge
                     className={`text-xs font-medium ${
-                      viewMode === "admin"
+                    viewMode === "admin" 
                         ? "bg-sidebar-500/20 text-sidebar-300 border-sidebar-500/30"
                         : "bg-primary-500/20 text-primary-300 border-primary-500/30"
                     }`}
@@ -604,7 +604,7 @@ export default function Sidebar() {
                 <p className="text-primary-300 text-xs">RETC Management</p>
               </div>
             </div>
-
+            
             <Button
               variant="ghost"
               size="sm"
@@ -645,7 +645,7 @@ export default function Sidebar() {
                       variant={viewMode === "user" ? "default" : "ghost"}
                       size="sm"
                       className={`flex-1 text-xs h-8 ${
-                        viewMode === "user"
+                        viewMode === "user" 
                           ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
                           : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
                       }`}
@@ -658,7 +658,7 @@ export default function Sidebar() {
                       variant={viewMode === "admin" ? "default" : "ghost"}
                       size="sm"
                       className={`flex-1 text-xs h-8 ${
-                        viewMode === "admin"
+                        viewMode === "admin" 
                           ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
                           : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
                       }`}
@@ -680,7 +680,7 @@ export default function Sidebar() {
               <div className="px-3 py-2">
                 <Badge
                   className={`text-xs font-medium ${
-                    viewMode === "admin"
+                  viewMode === "admin" 
                       ? "bg-sidebar-500/20 text-sidebar-300 border-sidebar-500/30"
                       : "bg-primary-500/20 text-primary-300 border-primary-500/30"
                   }`}
@@ -704,7 +704,7 @@ export default function Sidebar() {
                       className={`group flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 ${
                         isActivePath(item.href)
                           ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
-                          : "text-sidebar-300 hover:text-white hover:bg-sidebar-800/50"
+                          : "text-white hover:text-white hover:bg-blue-600/80 hover:shadow-lg hover:shadow-blue-500/25"
                       }`}
                       onClick={() => setIsMobileOpen(false)}
                     >

@@ -348,12 +348,12 @@ export default function RequestQueue() {
             </button>
           </div>
         </div>
-      </div>
+        </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div
@@ -363,34 +363,34 @@ export default function RequestQueue() {
             backgroundSize: "60px 60px",
           }}
         ></div>
-      </div>
+        </div>
 
       <div className="relative container mx-auto p-6 space-y-8 max-w-7xl">
-        {/* Modern Header */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
+        {/* Enhanced Header */}
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-8">
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-            <div className="space-y-1">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
-                  <Clock className="w-6 h-6 text-white" />
-                </div>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+                  <Clock className="w-7 h-7 text-white" />
+            </div>
                 <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent">
                     Request Queue
                   </h1>
-                  <p className="text-slate-600 font-medium">
+                  <p className="text-gray-700 font-medium text-lg">
                     Manage and process asset requests
-                  </p>
-                </div>
-              </div>
-            </div>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
             <div className="flex flex-wrap gap-3">
               <Button
                 onClick={() => loadRequests()}
                 variant="outline"
                 disabled={loading}
-                className="bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors duration-200 disabled:opacity-60"
+                className="bg-white/90 border-2 border-gray-300 hover:bg-gradient-to-r hover:from-gray-50 hover:to-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all duration-300 disabled:opacity-60 rounded-xl shadow-sm hover:shadow-md"
               >
                 <RefreshCw
                   className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
@@ -398,8 +398,8 @@ export default function RequestQueue() {
                 Refresh
               </Button>
             </div>
-          </div>
-        </div>
+                      </div>
+                    </div>
 
         {/* Enhanced Filters */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
@@ -416,8 +416,8 @@ export default function RequestQueue() {
                   Refine your search with advanced filters
                 </p>
               </div>
-            </div>
-            <Button
+                      </div>
+                              <Button
               onClick={() => {
                 setSearchTerm("");
                 setSelectedStatus("all");
@@ -428,8 +428,8 @@ export default function RequestQueue() {
             >
               <X className="w-4 h-4 mr-2" />
               Clear All
-            </Button>
-          </div>
+                                    </Button>
+                                </div>
 
           {/* Primary Filters Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -446,8 +446,8 @@ export default function RequestQueue() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm"
                 />
-              </div>
-            </div>
+                                  </div>
+                                </div>
 
             {/* Status Filter */}
             <div>
@@ -509,22 +509,22 @@ export default function RequestQueue() {
                     </div>
                   </SelectItem>
                   <SelectItem value="medium">
-                    <div className="flex items-center space-x-2">
+                                  <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
                       <span>Medium</span>
-                    </div>
+                                  </div>
                   </SelectItem>
                   <SelectItem value="low">
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span>Low</span>
-                    </div>
+                                  </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-
+                                </div>
+                              </div>
+                              
           {/* Active Filters Display */}
           {(searchTerm ||
             selectedStatus !== "all" ||
@@ -567,8 +567,8 @@ export default function RequestQueue() {
                     </button>
                   </Badge>
                 )}
-              </div>
-            </div>
+                                  </div>
+                                </div>
           )}
         </div>
 
@@ -596,8 +596,8 @@ export default function RequestQueue() {
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto mb-4"></div>
               <p className="text-slate-600">Loading staff data...</p>
-            </div>
-          </div>
+                                  </div>
+                                </div>
         )}
 
         {/* Empty State */}
@@ -660,9 +660,9 @@ export default function RequestQueue() {
                           <p className="text-sm text-slate-600">
                             {formatDate(request.issueDate)} -{" "}
                             {formatDate(request.expectedReturnDate)}
-                          </p>
-                        </div>
-                      </div>
+                                    </p>
+                                  </div>
+                                </div>
 
                       {/* Requested Assets */}
                       <div className="mb-4">
@@ -678,15 +678,15 @@ export default function RequestQueue() {
                               {asset.name}
                             </Badge>
                           ))}
-                        </div>
-                      </div>
-                    </div>
-
+                                  </div>
+                                </div>
+                              </div>
+                              
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <Button
+                                      <Button 
                         asChild
-                        variant="outline"
+                                        variant="outline" 
                         size="sm"
                         className="hover:bg-sidebar-100 hover:text-sidebar-700"
                       >
@@ -714,8 +714,8 @@ export default function RequestQueue() {
                               <CheckCircle className="w-4 h-4 mr-2" />
                             )}
                             Approve
-                          </Button>
-                          <Button
+                                      </Button>
+                                    <Button
                             size="sm"
                             disabled={decisionLoading}
                             onClick={() =>
@@ -732,7 +732,7 @@ export default function RequestQueue() {
                               <XCircle className="w-4 h-4 mr-2" />
                             )}
                             Deny
-                          </Button>
+                                    </Button>
                         </>
                       )}
 
@@ -749,9 +749,9 @@ export default function RequestQueue() {
                         </Button>
                       )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    </div>
+                  </CardContent>
+                </Card>
             ))}
           </div>
         )}
