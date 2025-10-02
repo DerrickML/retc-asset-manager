@@ -1,8 +1,8 @@
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
-import LayoutProvider from "../components/layout/layout-provider"
-import QueryProvider from "../lib/providers/query-provider"
-import "./globals.css"
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import LayoutProvider from "../components/layout/layout-provider";
+import QueryProvider from "../lib/providers/query-provider";
+import "./globals.css";
 
 export const metadata = {
   title: "RETC Asset Management",
@@ -57,16 +57,33 @@ export const metadata = {
       },
     ],
   },
-}
+};
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <link rel="icon" type="image/png" sizes="32x32" href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin" />
-        <link rel="icon" type="image/png" sizes="16x16" href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin" />
-        <link rel="apple-touch-icon" sizes="180x180" href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin" />
-        <link rel="shortcut icon" href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin" />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
+        />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="16x16"
+          href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
+        />
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
+        />
+        <link
+          rel="shortcut icon"
+          href="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
+        />
         <style>{`
 html {
   font-family: ${GeistSans.style.fontFamily};
@@ -77,11 +94,9 @@ html {
       </head>
       <body>
         <QueryProvider>
-          <LayoutProvider>
-            {children}
-          </LayoutProvider>
+          <LayoutProvider>{children}</LayoutProvider>
         </QueryProvider>
       </body>
     </html>
-  )
+  );
 }
