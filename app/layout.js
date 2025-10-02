@@ -36,27 +36,6 @@ export const metadata = {
       },
     ],
   },
-  manifest: {
-    name: "RETC Asset Management",
-    short_name: "RETC Assets",
-    description: "Renewable Energy Training Center Asset Management System",
-    start_url: "/",
-    display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#2563eb",
-    icons: [
-      {
-        src: "https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin",
-        sizes: "192x192",
-        type: "image/png",
-      },
-      {
-        src: "https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin",
-        sizes: "512x512",
-        type: "image/png",
-      },
-    ],
-  },
 };
 
 export default function RootLayout({ children }) {
