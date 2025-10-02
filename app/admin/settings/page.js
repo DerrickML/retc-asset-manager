@@ -26,12 +26,12 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../../components/ui/tabs";
-import { 
-  Settings, 
-  Building, 
-  Mail, 
-  Shield, 
-  Globe, 
+import {
+  Settings,
+  Building,
+  Mail,
+  Shield,
+  Globe,
   Clock,
   Save,
   RefreshCw,
@@ -171,7 +171,7 @@ export default function AdminSettings() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-screen">
           <div className="flex flex-col items-center space-y-6">
             <div className="relative">
               <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200"></div>
@@ -192,14 +192,14 @@ export default function AdminSettings() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
       <div className="container mx-auto p-6 space-y-8">
-      {/* Header */}
+        {/* Header */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
-      <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-lg">
                 <Settings className="h-8 w-8 text-white" />
               </div>
-        <div>
+              <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
                   System Settings
                 </h1>
@@ -207,20 +207,20 @@ export default function AdminSettings() {
                   Configure system-wide settings and preferences
                 </p>
               </div>
-        </div>
-        <div className="flex items-center space-x-3">
-          {saveSuccess && (
+            </div>
+            <div className="flex items-center space-x-3">
+              {saveSuccess && (
                 <div className="flex items-center space-x-2 text-primary-600 bg-primary-50 px-4 py-2 rounded-lg border border-primary-200">
                   <CheckCircle2 className="w-5 h-5" />
                   <span className="text-sm font-semibold">Settings saved!</span>
-            </div>
-          )}
+                </div>
+              )}
               <Button
                 onClick={handleSave}
                 disabled={saving}
                 className="relative bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 group rounded-xl px-6 py-3 border-0"
               >
-            {saving ? (
+                {saving ? (
                   <div className="flex items-center space-x-2">
                     <RefreshCw className="w-5 h-5 animate-spin" />
                     <span>Saving...</span>
@@ -229,18 +229,18 @@ export default function AdminSettings() {
                   <div className="flex items-center space-x-2">
                     <Save className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                     <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                Save Changes
+                      Save Changes
                     </span>
                   </div>
-            )}
+                )}
                 <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-          </Button>
+              </Button>
             </div>
+          </div>
         </div>
-      </div>
 
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
-      <Tabs defaultValue="organization" className="space-y-6">
+          <Tabs defaultValue="organization" className="space-y-6">
             <TabsList className="grid w-full grid-cols-5 bg-gradient-to-r from-gray-50 to-gray-100 p-2 rounded-xl shadow-inner border border-gray-200/50">
               <TabsTrigger
                 value="organization"
@@ -292,11 +292,11 @@ export default function AdminSettings() {
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-red-600/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </TabsTrigger>
-        </TabsList>
+            </TabsList>
 
-        {/* Organization Settings */}
+            {/* Organization Settings */}
             <TabsContent value="organization" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Organization Details Card */}
                 <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-6 border border-gray-200/30 shadow-lg">
                   <div className="flex items-center space-x-3 mb-6">
@@ -321,17 +321,17 @@ export default function AdminSettings() {
                       >
                         Organization Name *
                       </Label>
-                  <Input
-                    id="organizationName"
-                    value={formData.organizationName}
+                      <Input
+                        id="organizationName"
+                        value={formData.organizationName}
                         onChange={(e) =>
                           handleInputChange("organizationName", e.target.value)
                         }
-                    placeholder="Your Organization Name"
+                        placeholder="Your Organization Name"
                         className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm"
-                  />
-                </div>
-                
+                      />
+                    </div>
+
                     <div className="space-y-3">
                       <Label
                         htmlFor="organizationDescription"
@@ -339,20 +339,20 @@ export default function AdminSettings() {
                       >
                         Description
                       </Label>
-                  <Textarea
-                    id="organizationDescription"
-                    value={formData.organizationDescription}
+                      <Textarea
+                        id="organizationDescription"
+                        value={formData.organizationDescription}
                         onChange={(e) =>
                           handleInputChange(
                             "organizationDescription",
                             e.target.value
                           )
                         }
-                    placeholder="Brief description of your organization"
-                    rows={3}
+                        placeholder="Brief description of your organization"
+                        rows={3}
                         className="border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm"
-                  />
-                </div>
+                      />
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -361,16 +361,16 @@ export default function AdminSettings() {
                       >
                         Logo URL
                       </Label>
-                  <Input
-                    id="organizationLogo"
-                    value={formData.organizationLogo}
+                      <Input
+                        id="organizationLogo"
+                        value={formData.organizationLogo}
                         onChange={(e) =>
                           handleInputChange("organizationLogo", e.target.value)
                         }
-                    placeholder="https://example.com/logo.png"
+                        placeholder="https://example.com/logo.png"
                         className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm"
-                  />
-                </div>
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -398,18 +398,18 @@ export default function AdminSettings() {
                       >
                         Contact Email
                       </Label>
-                  <Input
-                    id="contactEmail"
-                    type="email"
-                    value={formData.contactEmail}
+                      <Input
+                        id="contactEmail"
+                        type="email"
+                        value={formData.contactEmail}
                         onChange={(e) =>
                           handleInputChange("contactEmail", e.target.value)
                         }
-                    placeholder="contact@organization.com"
+                        placeholder="contact@organization.com"
                         className="h-12 border-gray-300 focus:border-sidebar-500 focus:ring-sidebar-500/20 rounded-lg shadow-sm"
-                  />
-                </div>
-                
+                      />
+                    </div>
+
                     <div className="space-y-3">
                       <Label
                         htmlFor="contactPhone"
@@ -417,17 +417,17 @@ export default function AdminSettings() {
                       >
                         Contact Phone
                       </Label>
-                  <Input
-                    id="contactPhone"
-                    type="tel"
-                    value={formData.contactPhone}
+                      <Input
+                        id="contactPhone"
+                        type="tel"
+                        value={formData.contactPhone}
                         onChange={(e) =>
                           handleInputChange("contactPhone", e.target.value)
                         }
-                    placeholder="+1 (555) 123-4567"
+                        placeholder="+1 (555) 123-4567"
                         className="h-12 border-gray-300 focus:border-sidebar-500 focus:ring-sidebar-500/20 rounded-lg shadow-sm"
-                  />
-                </div>
+                      />
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -436,25 +436,25 @@ export default function AdminSettings() {
                       >
                         Address
                       </Label>
-                  <Textarea
-                    id="address"
-                    value={formData.address}
+                      <Textarea
+                        id="address"
+                        value={formData.address}
                         onChange={(e) =>
                           handleInputChange("address", e.target.value)
                         }
-                    placeholder="Organization address"
-                    rows={3}
+                        placeholder="Organization address"
+                        rows={3}
                         className="border-gray-300 focus:border-sidebar-500 focus:ring-sidebar-500/20 rounded-lg shadow-sm"
-                  />
-                </div>
+                      />
+                    </div>
                   </div>
                 </div>
-          </div>
-        </TabsContent>
+              </div>
+            </TabsContent>
 
-        {/* System Settings */}
+            {/* System Settings */}
             <TabsContent value="system" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Regional Settings Card */}
                 <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-6 border border-gray-200/30 shadow-lg">
                   <div className="flex items-center space-x-3 mb-6">
@@ -486,10 +486,10 @@ export default function AdminSettings() {
                         }
                       >
                         <SelectTrigger className="h-12 border-gray-300 focus:border-sidebar-500 focus:ring-sidebar-500/20 rounded-lg shadow-sm">
-                      <SelectValue />
-                    </SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent className="z-30">
-                      <SelectItem value="UTC">UTC</SelectItem>
+                          <SelectItem value="UTC">UTC</SelectItem>
                           <SelectItem value="America/New_York">
                             Eastern Time
                           </SelectItem>
@@ -502,15 +502,15 @@ export default function AdminSettings() {
                           <SelectItem value="America/Los_Angeles">
                             Pacific Time
                           </SelectItem>
-                      <SelectItem value="Europe/London">London</SelectItem>
-                      <SelectItem value="Europe/Paris">Paris</SelectItem>
-                      <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
+                          <SelectItem value="Europe/London">London</SelectItem>
+                          <SelectItem value="Europe/Paris">Paris</SelectItem>
+                          <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
                           <SelectItem value="Australia/Sydney">
                             Sydney
                           </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -526,18 +526,18 @@ export default function AdminSettings() {
                         }
                       >
                         <SelectTrigger className="h-12 border-gray-300 focus:border-sidebar-500 focus:ring-sidebar-500/20 rounded-lg shadow-sm">
-                      <SelectValue />
-                    </SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent className="z-30">
-                      <SelectItem value="MM/dd/yyyy">MM/DD/YYYY</SelectItem>
-                      <SelectItem value="dd/MM/yyyy">DD/MM/YYYY</SelectItem>
-                      <SelectItem value="yyyy-MM-dd">YYYY-MM-DD</SelectItem>
+                          <SelectItem value="MM/dd/yyyy">MM/DD/YYYY</SelectItem>
+                          <SelectItem value="dd/MM/yyyy">DD/MM/YYYY</SelectItem>
+                          <SelectItem value="yyyy-MM-dd">YYYY-MM-DD</SelectItem>
                           <SelectItem value="MMM dd, yyyy">
                             MMM DD, YYYY
                           </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -546,16 +546,16 @@ export default function AdminSettings() {
                       >
                         Currency Symbol
                       </Label>
-                  <Input
-                    id="currencySymbol"
-                    value={formData.currencySymbol}
+                      <Input
+                        id="currencySymbol"
+                        value={formData.currencySymbol}
                         onChange={(e) =>
                           handleInputChange("currencySymbol", e.target.value)
                         }
-                    placeholder="$"
+                        placeholder="$"
                         className="h-12 border-gray-300 focus:border-sidebar-500 focus:ring-sidebar-500/20 rounded-lg shadow-sm max-w-20"
-                  />
-                </div>
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -583,24 +583,24 @@ export default function AdminSettings() {
                       >
                         Auto-Approval Threshold ($)
                       </Label>
-                  <Input
-                    id="autoApprovalThreshold"
-                    type="number"
-                    value={formData.autoApprovalThreshold}
+                      <Input
+                        id="autoApprovalThreshold"
+                        type="number"
+                        value={formData.autoApprovalThreshold}
                         onChange={(e) =>
                           handleInputChange(
                             "autoApprovalThreshold",
                             parseInt(e.target.value) || 0
                           )
                         }
-                    placeholder="0"
+                        placeholder="0"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                  />
+                      />
                       <p className="text-xs text-slate-500">
                         Requests below this value are auto-approved (0 = manual
                         approval only)
                       </p>
-                </div>
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -609,28 +609,28 @@ export default function AdminSettings() {
                       >
                         Max Request Duration (days)
                       </Label>
-                  <Input
-                    id="maxRequestDuration"
-                    type="number"
-                    value={formData.maxRequestDuration}
+                      <Input
+                        id="maxRequestDuration"
+                        type="number"
+                        value={formData.maxRequestDuration}
                         onChange={(e) =>
                           handleInputChange(
                             "maxRequestDuration",
                             parseInt(e.target.value) || 30
                           )
                         }
-                    placeholder="30"
+                        placeholder="30"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                  />
+                      />
                       <p className="text-xs text-slate-500">
                         Maximum number of days assets can be requested
                       </p>
-                </div>
+                    </div>
 
                     <div className="flex items-center space-x-3 p-4 bg-white rounded-xl border border-gray-200">
-                  <Switch
-                    id="emailNotifications"
-                    checked={formData.emailNotifications}
+                      <Switch
+                        id="emailNotifications"
+                        checked={formData.emailNotifications}
                         onCheckedChange={(value) =>
                           handleInputChange("emailNotifications", value)
                         }
@@ -645,10 +645,10 @@ export default function AdminSettings() {
                     </div>
                   </div>
                 </div>
-          </div>
-        </TabsContent>
+              </div>
+            </TabsContent>
 
-        {/* Email Settings */}
+            {/* Email Settings */}
             <TabsContent value="email" className="space-y-6">
               <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-6 border border-gray-200/30 shadow-lg">
                 <div className="flex items-center space-x-3 mb-6">
@@ -665,7 +665,7 @@ export default function AdminSettings() {
                   </div>
                 </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <Label
@@ -674,16 +674,16 @@ export default function AdminSettings() {
                       >
                         SMTP Host
                       </Label>
-                    <Input
-                      id="smtpHost"
-                      value={formData.emailSettings.smtpHost}
+                      <Input
+                        id="smtpHost"
+                        value={formData.emailSettings.smtpHost}
                         onChange={(e) =>
                           handleEmailSettingsChange("smtpHost", e.target.value)
                         }
-                      placeholder="smtp.gmail.com"
+                        placeholder="smtp.gmail.com"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                    />
-                  </div>
+                      />
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -692,20 +692,20 @@ export default function AdminSettings() {
                       >
                         SMTP Port
                       </Label>
-                    <Input
-                      id="smtpPort"
-                      type="number"
-                      value={formData.emailSettings.smtpPort}
+                      <Input
+                        id="smtpPort"
+                        type="number"
+                        value={formData.emailSettings.smtpPort}
                         onChange={(e) =>
                           handleEmailSettingsChange(
                             "smtpPort",
                             parseInt(e.target.value) || 587
                           )
                         }
-                      placeholder="587"
+                        placeholder="587"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                    />
-                  </div>
+                      />
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -714,20 +714,20 @@ export default function AdminSettings() {
                       >
                         Username
                       </Label>
-                    <Input
-                      id="smtpUsername"
-                      value={formData.emailSettings.smtpUsername}
+                      <Input
+                        id="smtpUsername"
+                        value={formData.emailSettings.smtpUsername}
                         onChange={(e) =>
                           handleEmailSettingsChange(
                             "smtpUsername",
                             e.target.value
                           )
                         }
-                      placeholder="your-email@gmail.com"
+                        placeholder="your-email@gmail.com"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                    />
+                      />
+                    </div>
                   </div>
-                </div>
 
                   <div className="space-y-6">
                     <div className="space-y-3">
@@ -737,20 +737,20 @@ export default function AdminSettings() {
                       >
                         Password
                       </Label>
-                    <Input
-                      id="smtpPassword"
-                      type="password"
-                      value={formData.emailSettings.smtpPassword}
+                      <Input
+                        id="smtpPassword"
+                        type="password"
+                        value={formData.emailSettings.smtpPassword}
                         onChange={(e) =>
                           handleEmailSettingsChange(
                             "smtpPassword",
                             e.target.value
                           )
                         }
-                      placeholder="•••••••••"
+                        placeholder="•••••••••"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                    />
-                  </div>
+                      />
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -759,16 +759,16 @@ export default function AdminSettings() {
                       >
                         From Name
                       </Label>
-                    <Input
-                      id="fromName"
-                      value={formData.emailSettings.fromName}
+                      <Input
+                        id="fromName"
+                        value={formData.emailSettings.fromName}
                         onChange={(e) =>
                           handleEmailSettingsChange("fromName", e.target.value)
                         }
-                      placeholder="Asset Management System"
+                        placeholder="Asset Management System"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                    />
-                  </div>
+                      />
+                    </div>
 
                     <div className="space-y-3">
                       <Label
@@ -777,23 +777,23 @@ export default function AdminSettings() {
                       >
                         From Email
                       </Label>
-                    <Input
-                      id="fromEmail"
-                      type="email"
-                      value={formData.emailSettings.fromEmail}
+                      <Input
+                        id="fromEmail"
+                        type="email"
+                        value={formData.emailSettings.fromEmail}
                         onChange={(e) =>
                           handleEmailSettingsChange("fromEmail", e.target.value)
                         }
-                      placeholder="noreply@organization.com"
+                        placeholder="noreply@organization.com"
                         className="h-12 border-gray-300 focus:border-orange-500 focus:ring-orange-500/20 rounded-lg shadow-sm"
-                    />
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-              </div>
-        </TabsContent>
+            </TabsContent>
 
-        {/* Access Control */}
+            {/* Access Control */}
             <TabsContent value="access" className="space-y-6">
               <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-6 border border-gray-200/30 shadow-lg">
                 <div className="flex items-center space-x-3 mb-6">
@@ -812,7 +812,7 @@ export default function AdminSettings() {
 
                 <div className="space-y-6">
                   <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 hover:border-purple-300 transition-colors group">
-                <div className="space-y-1">
+                    <div className="space-y-1">
                       <Label
                         htmlFor="guestPortal"
                         className="text-sm font-semibold text-slate-700"
@@ -823,19 +823,19 @@ export default function AdminSettings() {
                         Allow guests to browse public assets without
                         authentication
                       </p>
-                </div>
-                <Switch
-                  id="guestPortal"
-                  checked={formData.guestPortal}
+                    </div>
+                    <Switch
+                      id="guestPortal"
+                      checked={formData.guestPortal}
                       onCheckedChange={(value) =>
                         handleInputChange("guestPortal", value)
                       }
                       className="data-[state=checked]:bg-purple-500"
-                />
-              </div>
+                    />
+                  </div>
 
                   <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 hover:border-purple-300 transition-colors group">
-                <div className="space-y-1">
+                    <div className="space-y-1">
                       <Label
                         htmlFor="publicAssetVisibility"
                         className="text-sm font-semibold text-slate-700"
@@ -845,22 +845,22 @@ export default function AdminSettings() {
                       <p className="text-sm text-slate-500">
                         Show asset details to guests (requires guest portal)
                       </p>
-                </div>
-                <Switch
-                  id="publicAssetVisibility"
-                  checked={formData.publicAssetVisibility}
+                    </div>
+                    <Switch
+                      id="publicAssetVisibility"
+                      checked={formData.publicAssetVisibility}
                       onCheckedChange={(value) =>
                         handleInputChange("publicAssetVisibility", value)
                       }
-                  disabled={!formData.guestPortal}
+                      disabled={!formData.guestPortal}
                       className="data-[state=checked]:bg-purple-500"
-                />
-              </div>
+                    />
+                  </div>
                 </div>
               </div>
-        </TabsContent>
+            </TabsContent>
 
-        {/* Maintenance */}
+            {/* Maintenance */}
             <TabsContent value="maintenance" className="space-y-6">
               <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-6 border border-gray-200/30 shadow-lg">
                 <div className="flex items-center space-x-3 mb-6">
@@ -879,7 +879,7 @@ export default function AdminSettings() {
 
                 <div className="space-y-6">
                   <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 hover:border-red-300 transition-colors group">
-                <div className="space-y-1">
+                    <div className="space-y-1">
                       <Label
                         htmlFor="maintenanceMode"
                         className="text-sm font-semibold text-slate-700"
@@ -889,16 +889,16 @@ export default function AdminSettings() {
                       <p className="text-sm text-slate-500">
                         Put the system in maintenance mode (staff only access)
                       </p>
-                </div>
-                <Switch
-                  id="maintenanceMode"
-                  checked={formData.maintenanceMode}
+                    </div>
+                    <Switch
+                      id="maintenanceMode"
+                      checked={formData.maintenanceMode}
                       onCheckedChange={(value) =>
                         handleInputChange("maintenanceMode", value)
                       }
                       className="data-[state=checked]:bg-red-500"
-                />
-              </div>
+                    />
+                  </div>
 
                   <div className="space-y-3">
                     <Label
@@ -907,14 +907,14 @@ export default function AdminSettings() {
                     >
                       System Notification
                     </Label>
-                <Textarea
-                  id="systemNotification"
-                  value={formData.systemNotification}
+                    <Textarea
+                      id="systemNotification"
+                      value={formData.systemNotification}
                       onChange={(e) =>
                         handleInputChange("systemNotification", e.target.value)
                       }
-                  placeholder="Display a system-wide notification to all users"
-                  rows={3}
+                      placeholder="Display a system-wide notification to all users"
+                      rows={3}
                       className="border-gray-300 focus:border-red-500 focus:ring-red-500/20 rounded-lg shadow-sm"
                     />
                     <p className="text-xs text-slate-500">
@@ -923,9 +923,9 @@ export default function AdminSettings() {
                   </div>
                 </div>
               </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );

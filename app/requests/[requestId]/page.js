@@ -20,24 +20,24 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "../../../components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger, 
+  DialogClose, 
   DialogFooter,
   DialogDescription,
 } from "../../../components/ui/dialog";
-import {
-  Calendar,
-  Clock,
-  User,
-  FileText,
-  Package,
-  CheckCircle,
-  XCircle,
+import { 
+  Calendar, 
+  Clock, 
+  User, 
+  FileText, 
+  Package, 
+  CheckCircle, 
+  XCircle, 
   AlertTriangle,
   Edit3,
   Trash2,
@@ -67,7 +67,7 @@ export default function RequestDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
-
+  
   // Dialog states
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -340,11 +340,11 @@ export default function RequestDetailsPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
         <div className="max-w-6xl mx-auto p-6">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
-            <div className="h-32 bg-gray-200 rounded"></div>
-          </div>
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+          <div className="h-32 bg-gray-200 rounded"></div>
+        </div>
         </div>
       </div>
     );
@@ -354,12 +354,12 @@ export default function RequestDetailsPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
         <div className="max-w-6xl mx-auto p-6">
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error || "Request not found"}</AlertDescription>
-          </Alert>
-          <div className="mt-4">
-            <Button asChild variant="outline">
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error || "Request not found"}</AlertDescription>
+        </Alert>
+        <div className="mt-4">
+          <Button asChild variant="outline">
               <Link
                 href={
                   currentStaff && permissions.canManageRequests(currentStaff)
@@ -369,8 +369,8 @@ export default function RequestDetailsPage() {
               >
                 Back to Requests
               </Link>
-            </Button>
-          </div>
+          </Button>
+        </div>
         </div>
       </div>
     );
@@ -384,9 +384,9 @@ export default function RequestDetailsPage() {
       <div className="relative max-w-6xl mx-auto p-6 space-y-8">
         {/* Header */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
                 <Button
                   asChild
                   variant="ghost"
@@ -403,197 +403,197 @@ export default function RequestDetailsPage() {
                   >
                     ← Back to Requests
                   </Link>
-                </Button>
-              </div>
-              <div className="flex items-center gap-3 mb-2">
+              </Button>
+            </div>
+            <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
-                  Request #{request.$id.slice(-8)}
-                </h1>
+                Request #{request.$id.slice(-8)}
+              </h1>
                 <Badge
                   className={`${getStatusBadgeColor(
                     request.status
                   )} flex items-center gap-1 px-3 py-1`}
                 >
-                  {getStatusIcon(request.status)}
-                  {request.status.replace(/_/g, " ")}
-                </Badge>
-              </div>
-              <p className="text-slate-600 text-lg">{request.purpose}</p>
+                {getStatusIcon(request.status)}
+                {request.status.replace(/_/g, " ")}
+              </Badge>
             </div>
+              <p className="text-slate-600 text-lg">{request.purpose}</p>
+          </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              {canEditRequest && (
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            {canEditRequest && (
                 <Button
                   asChild
                   variant="outline"
                   size="sm"
                   className="hover:bg-primary-100 hover:text-primary-700 hover:border-primary-300"
                 >
-                  <Link href={`/requests/${request.$id}/edit`}>
-                    <Edit3 className="w-4 h-4 mr-2" />
-                    Edit
-                  </Link>
-                </Button>
-              )}
-
-              {canCancelRequest && (
+                <Link href={`/requests/${request.$id}/edit`}>
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  Edit
+                </Link>
+              </Button>
+            )}
+            
+            {canCancelRequest && (
                 <Dialog
                   open={cancelDialogOpen}
                   onOpenChange={setCancelDialogOpen}
                 >
-                  <DialogTrigger asChild>
+                <DialogTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 hover:border-orange-300"
                     >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Cancel
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Cancel Request</DialogTitle>
-                      <DialogDescription>
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Cancel Request</DialogTitle>
+                    <DialogDescription>
                         Are you sure you want to cancel this request? This
                         action cannot be undone.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
                         <Label htmlFor="cancelReason">
                           Cancellation Reason
                         </Label>
-                        <Textarea
-                          id="cancelReason"
-                          value={cancelReason}
-                          onChange={(e) => setCancelReason(e.target.value)}
-                          placeholder="Please provide a reason for cancellation..."
-                          rows={3}
-                        />
-                      </div>
+                      <Textarea
+                        id="cancelReason"
+                        value={cancelReason}
+                        onChange={(e) => setCancelReason(e.target.value)}
+                        placeholder="Please provide a reason for cancellation..."
+                        rows={3}
+                      />
                     </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
-                      </DialogClose>
-                      <Button
-                        onClick={handleCancelRequest}
-                        disabled={actionLoading || !cancelReason.trim()}
-                        className="bg-orange-600 hover:bg-orange-700"
-                      >
-                        {actionLoading ? "Cancelling..." : "Cancel Request"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                      onClick={handleCancelRequest}
+                      disabled={actionLoading || !cancelReason.trim()}
+                      className="bg-orange-600 hover:bg-orange-700"
+                    >
+                      {actionLoading ? "Cancelling..." : "Cancel Request"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
 
-              {canDeleteRequest && (
+            {canDeleteRequest && (
                 <Dialog
                   open={deleteDialogOpen}
                   onOpenChange={setDeleteDialogOpen}
                 >
-                  <DialogTrigger asChild>
+                <DialogTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-300"
                     >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Delete Request</DialogTitle>
-                      <DialogDescription>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Delete Request</DialogTitle>
+                    <DialogDescription>
                         Are you sure you want to permanently delete this
                         request? This action cannot be undone.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
-                      </DialogClose>
-                      <Button
-                        onClick={handleDeleteRequest}
-                        disabled={actionLoading}
-                        variant="destructive"
-                      >
-                        {actionLoading ? "Deleting..." : "Delete Request"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                      onClick={handleDeleteRequest}
+                      disabled={actionLoading}
+                      variant="destructive"
+                    >
+                      {actionLoading ? "Deleting..." : "Delete Request"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
 
-              {canResubmitRequest && (
+            {canResubmitRequest && (
                 <Dialog
                   open={resubmitDialogOpen}
                   onOpenChange={setResubmitDialogOpen}
                 >
-                  <DialogTrigger asChild>
+                <DialogTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-sidebar-600 hover:text-sidebar-700 hover:bg-sidebar-50 hover:border-sidebar-300"
                     >
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      Resubmit
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Resubmit Request</DialogTitle>
-                      <DialogDescription>
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Resubmit
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Resubmit Request</DialogTitle>
+                    <DialogDescription>
                         This will create a new request with the same details.
                         Please provide any additional context.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
                         <Label htmlFor="resubmitReason">
                           Additional Context (Optional)
                         </Label>
-                        <Textarea
-                          id="resubmitReason"
-                          value={resubmitReason}
-                          onChange={(e) => setResubmitReason(e.target.value)}
-                          placeholder="Address any concerns from the previous denial..."
-                          rows={3}
-                        />
-                      </div>
+                      <Textarea
+                        id="resubmitReason"
+                        value={resubmitReason}
+                        onChange={(e) => setResubmitReason(e.target.value)}
+                        placeholder="Address any concerns from the previous denial..."
+                        rows={3}
+                      />
                     </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
-                      </DialogClose>
-                      <Button
-                        onClick={handleResubmitRequest}
-                        disabled={actionLoading}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        {actionLoading ? "Resubmitting..." : "Resubmit Request"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
+                  </div>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                      onClick={handleResubmitRequest}
+                      disabled={actionLoading}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {actionLoading ? "Resubmitting..." : "Resubmit Request"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
 
-              {isAdmin && request.status === ENUMS.REQUEST_STATUS.APPROVED && (
+            {isAdmin && request.status === ENUMS.REQUEST_STATUS.APPROVED && (
                 <Button
                   asChild
                   size="sm"
                   className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
                 >
-                  <Link href={`/admin/issue/${request.$id}`}>
-                    <Package className="w-4 h-4 mr-2" />
-                    Issue Assets
-                  </Link>
-                </Button>
-              )}
+                <Link href={`/admin/issue/${request.$id}`}>
+                  <Package className="w-4 h-4 mr-2" />
+                  Issue Assets
+                </Link>
+              </Button>
+            )}
             </div>
           </div>
         </div>
