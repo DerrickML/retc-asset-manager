@@ -31,12 +31,14 @@ import {
   X,
   ArrowLeft,
   Edit3,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   assetRequestsService,
   assetsService,
   staffService,
 } from "../../../../lib/appwrite/provider.js";
+import { assetImageService } from "../../../../lib/appwrite/image-service.js";
 import { getCurrentStaff } from "../../../../lib/utils/auth.js";
 import { ENUMS } from "../../../../lib/appwrite/config.js";
 import { validateRequestDates } from "../../../../lib/utils/validation.js";
@@ -71,10 +73,17 @@ export default function EditRequestPage() {
 
   const loadData = async () => {
     try {
+      console.log("Loading request with ID:", params.requestId);
       const [requestData, staff] = await Promise.all([
         assetRequestsService.get(params.requestId),
         getCurrentStaff(),
       ]);
+      console.log("Request data loaded:", requestData);
+
+      // Check if request has invalid image references
+      if (requestData.requestedItems && requestData.requestedItems.length > 0) {
+        console.log("Requested items:", requestData.requestedItems);
+      }
 
       // Check if user can edit this request
       if (requestData.requesterStaffId !== staff.$id) {
@@ -101,8 +110,24 @@ export default function EditRequestPage() {
       const currentAssets = await Promise.all(
         requestData.requestedItems.map(async (itemId) => {
           try {
-            return await assetsService.get(itemId);
-          } catch {
+            const asset = await assetsService.get(itemId);
+            // Clean up any invalid image references that might cause 404s
+            if (asset.assetImage && asset.assetImage.includes('appwrite.nrep.ug')) {
+              // Check if the image URL is valid by testing it
+              try {
+                const response = await fetch(asset.assetImage, { method: 'HEAD' });
+                if (!response.ok) {
+                  console.warn(`Invalid image URL for asset ${asset.name}:`, asset.assetImage);
+                  asset.assetImage = null; // Remove invalid image reference
+                }
+              } catch {
+                console.warn(`Failed to validate image URL for asset ${asset.name}:`, asset.assetImage);
+                asset.assetImage = null; // Remove invalid image reference
+              }
+            }
+            return asset;
+          } catch (error) {
+            console.warn(`Failed to load asset ${itemId}:`, error);
             return null;
           }
         })
@@ -198,7 +223,10 @@ export default function EditRequestPage() {
         requestedItems: selectedAssets.map((asset) => asset.$id),
       };
 
+      console.log("Updating request with ID:", request.$id);
+      console.log("Update data:", updateData);
       await assetRequestsService.update(request.$id, updateData);
+      console.log("Request updated successfully");
       router.push(`/requests/${request.$id}`);
     } catch (err) {
       setError(err.message || "Failed to update request");
@@ -375,21 +403,56 @@ export default function EditRequestPage() {
                 <Label className="text-sm font-semibold text-gray-700 mb-3 block">
                   Selected Assets:
                 </Label>
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {selectedAssets.map((asset) => (
-                    <Badge
+                    <div
                       key={asset.$id}
-                      className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white border-0 hover:from-green-600 hover:to-green-700 transition-all duration-200"
+                      className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow"
                     >
-                      {asset.name}
-                      <button
-                        type="button"
-                        onClick={() => handleAssetToggle(asset)}
-                        className="ml-2 text-white hover:text-red-200 transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </Badge>
+                      <div className="flex items-start gap-3">
+                        {/* Asset Image */}
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                          {asset.assetImage ? (
+                            <img
+                              src={assetImageService.getPublicImageUrl(asset.assetImage)}
+                              alt={asset.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className="w-full h-full flex items-center justify-center text-gray-400"
+                            style={{ display: asset.assetImage ? 'none' : 'flex' }}
+                          >
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                        </div>
+                        
+                        {/* Asset Info */}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 truncate">{asset.name}</h4>
+                          <p className="text-sm text-gray-600 truncate">
+                            {formatCategory(asset.category)}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {asset.locationName}
+                            {asset.roomOrArea && ` - ${asset.roomOrArea}`}
+                          </p>
+                        </div>
+                        
+                        {/* Remove Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleAssetToggle(asset)}
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -470,6 +533,28 @@ export default function EditRequestPage() {
                             : "border-gray-300"
                         }`}
                       />
+                      
+                      {/* Asset Image */}
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {asset.assetImage ? (
+                          <img
+                            src={assetImageService.getPublicImageUrl(asset.assetImage)}
+                            alt={asset.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className="w-full h-full flex items-center justify-center text-gray-400"
+                          style={{ display: asset.assetImage ? 'none' : 'flex' }}
+                        >
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                      </div>
+                      
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                           <h4 className="font-semibold text-gray-900 truncate">
