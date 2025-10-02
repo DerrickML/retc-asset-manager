@@ -36,7 +36,7 @@ The Renewable Energy Training Center (RETC) Asset Management System is a compreh
 - **Language**: JavaScript (ES6+)
 
 ### Project Structure
-\`\`\`
+```
 ├── app/                          # Next.js App Router pages
 │   ├── admin/                    # Admin-only pages
 │   │   ├── requests/             # Request management
@@ -61,7 +61,7 @@ The Renewable Energy Training Center (RETC) Asset Management System is a compreh
 │   ├── appwrite/                 # Appwrite configuration
 │   └── utils/                    # Helper functions
 └── public/                       # Static assets
-\`\`\`
+```
 
 ## User Roles & Permissions
 
