@@ -33,6 +33,7 @@ import {
   assetRequestsService,
   assetsService,
 } from "../../lib/appwrite/provider.js";
+import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { ENUMS } from "../../lib/appwrite/config.js";
 import { Query } from "appwrite";
@@ -182,18 +183,56 @@ export default function MyRequestsPage() {
     return icons[status] || AlertCircle;
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const formatDateTime = (dateString) => {
-    return new Date(dateString).toLocaleString();
-  };
+  // Helper functions for cleaner code
+  const formatDate = (dateString) => new Date(dateString).toLocaleDateString();
+  const formatDateTime = (dateString) => new Date(dateString).toLocaleString();
 
   const clearFilters = () => {
     setStatusFilter("all");
     setSearchTerm("");
     setDateFilter("all");
+  };
+
+  // Filter requests based on current filters
+  const getFilteredRequests = () => {
+    return requests.filter((request) => {
+      const matchesSearch =
+        !searchTerm ||
+        request.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        request.assetName?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === "all" || request.status === statusFilter;
+
+      const matchesDate =
+        dateFilter === "all" ||
+        (() => {
+          const requestDate = new Date(request.$createdAt);
+          const now = new Date();
+          const startOfDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate()
+          );
+
+          switch (dateFilter) {
+            case "today":
+              return requestDate >= startOfDay;
+            case "week":
+              const weekAgo = new Date(startOfDay);
+              weekAgo.setDate(weekAgo.getDate() - 7);
+              return requestDate >= weekAgo;
+            case "month":
+              const monthAgo = new Date(startOfDay);
+              monthAgo.setMonth(monthAgo.getMonth() - 1);
+              return requestDate >= monthAgo;
+            default:
+              return true;
+          }
+        })();
+
+      return matchesSearch && matchesStatus && matchesDate;
+    });
   };
 
   return (
@@ -202,15 +241,15 @@ export default function MyRequestsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Enhanced Header */}
         <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center justify-between">
+            <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent">
                 My Requests
               </h1>
               <p className="text-gray-700 text-lg mt-2 font-medium">
                 Track your asset requests and their status
               </p>
-          </div>
+            </div>
             <Button
               asChild
               className="bg-gradient-to-r from-primary-600 via-primary-700 to-sidebar-600 hover:from-primary-700 hover:via-sidebar-600 hover:to-primary-800 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
@@ -222,7 +261,7 @@ export default function MyRequestsPage() {
                 <Plus className="w-5 h-5" />
                 <span>New Request</span>
               </Link>
-          </Button>
+            </Button>
           </div>
         </div>
         {/* Enhanced Filter Section */}
@@ -239,7 +278,7 @@ export default function MyRequestsPage() {
                   className="pl-10 pr-4 py-3 border-2 border-gray-300 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 rounded-xl shadow-sm hover:shadow-md transition-all duration-300"
                 />
               </div>
-        </div>
+            </div>
 
             {/* Status Filter */}
             <div className="lg:w-48">
@@ -345,7 +384,7 @@ export default function MyRequestsPage() {
                   >
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Clear Filters
-              </Button>
+                  </Button>
                 )}
               </div>
             </CardContent>
@@ -361,7 +400,7 @@ export default function MyRequestsPage() {
                 >
                   <CardContent className="p-8">
                     <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                      <div className="flex-1">
                         <div className="flex items-center gap-4 mb-3">
                           <h3 className="text-xl font-bold text-gray-900 group-hover:text-primary-700 transition-colors duration-300">
                             Request #{request.$id.slice(-8)}
@@ -374,7 +413,7 @@ export default function MyRequestsPage() {
                             <StatusIcon className="w-3 h-3 mr-1" />
                             {request.status.replace(/_/g, " ")}
                           </Badge>
-                      </div>
+                        </div>
 
                         <p className="text-gray-700 mb-4 text-lg font-medium">
                           {request.purpose}
@@ -394,17 +433,17 @@ export default function MyRequestsPage() {
                               <strong>Issue:</strong>{" "}
                               {formatDate(request.issueDate)}
                             </span>
-                      </div>
+                          </div>
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-primary-600" />
                             <span>
                               <strong>Return:</strong>{" "}
                               {formatDate(request.expectedReturnDate)}
                             </span>
-                    </div>
-                  </div>
+                          </div>
+                        </div>
 
-                  {/* Requested Assets */}
+                        {/* Requested Assets */}
                         <div className="mb-6">
                           <div className="flex items-center gap-2 mb-3">
                             <Package className="w-5 h-5 text-primary-600" />
@@ -412,21 +451,100 @@ export default function MyRequestsPage() {
                               Requested Assets ({request.assets.length})
                             </span>
                           </div>
-                    <div className="flex flex-wrap gap-2">
-                      {request.assets.map((asset) => (
-                              <Badge
-                                key={asset.$id}
-                                variant="outline"
-                                className="text-sm bg-gradient-to-r from-primary-50 to-sidebar-50 border-primary-200 text-primary-800 hover:from-primary-100 hover:to-sidebar-100 transition-all duration-300"
-                              >
-                          {asset.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {request.assets.map((asset) => {
+                              let imageUrls = [];
+                              let hasImages = false;
 
-                  {/* Decision Notes */}
-                  {request.decisionNotes && (
+                              try {
+                                imageUrls = assetImageService.getAssetImageUrls(
+                                  asset.publicImages
+                                );
+                                hasImages = imageUrls && imageUrls.length > 0;
+                              } catch (error) {
+                                console.warn(
+                                  "Error loading asset images:",
+                                  error
+                                );
+                                imageUrls = [];
+                                hasImages = false;
+                              }
+
+                              return (
+                                <div
+                                  key={asset.$id}
+                                  className="bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200/60 p-4 hover:shadow-lg hover:scale-105 transition-all duration-300 group"
+                                >
+                                  {/* Asset Image */}
+                                  <div className="mb-3">
+                                    {hasImages ? (
+                                      <div className="aspect-video relative overflow-hidden rounded-lg">
+                                        <img
+                                          src={imageUrls[0]}
+                                          alt={asset.name}
+                                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                          onError={(e) => {
+                                            e.target.style.display = "none";
+                                            e.target.nextSibling.style.display =
+                                              "flex";
+                                          }}
+                                        />
+                                        <div className="hidden w-full h-full bg-gradient-to-br from-primary-100 to-primary-200 items-center justify-center">
+                                          <div className="text-center">
+                                            <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                                              <span className="text-white font-bold text-sm">
+                                                {asset.name
+                                                  .charAt(0)
+                                                  .toUpperCase()}
+                                              </span>
+                                            </div>
+                                            <p className="text-primary-700 text-xs font-medium">
+                                              Asset Image
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+                                        <div className="text-center">
+                                          <div className="w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                                            <span className="text-white font-bold text-lg">
+                                              {asset.name
+                                                .charAt(0)
+                                                .toUpperCase()}
+                                            </span>
+                                          </div>
+                                          <p className="text-gray-600 text-xs font-medium">
+                                            No Image
+                                          </p>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Asset Details */}
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900 truncate mb-1 group-hover:text-primary-700 transition-colors duration-300">
+                                      {asset.name}
+                                    </h4>
+                                    <div className="text-xs text-gray-600 space-y-1">
+                                      <p>Tag: {asset.assetTag || "N/A"}</p>
+                                      <p>
+                                        Location: {asset.locationName || "N/A"}
+                                      </p>
+                                    </div>
+                                    <Badge className="mt-2 text-xs bg-gradient-to-r from-primary-100 to-primary-200 text-primary-800 border-primary-300">
+                                      {asset.availableStatus || "Unknown"}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Decision Notes */}
+                        {request.decisionNotes && (
                           <div className="bg-gradient-to-r from-gray-50 to-primary-50/30 rounded-xl p-4 mb-4 border border-gray-200/60">
                             <p className="text-sm text-gray-700">
                               <strong className="text-primary-700">
@@ -434,11 +552,11 @@ export default function MyRequestsPage() {
                               </strong>{" "}
                               {request.decisionNotes}
                             </p>
-                    </div>
-                  )}
+                          </div>
+                        )}
                       </div>
 
-                  {/* Actions */}
+                      {/* Actions */}
                       <div className="flex flex-col gap-3 ml-6">
                         <Button
                           asChild
@@ -452,8 +570,8 @@ export default function MyRequestsPage() {
                             <Eye className="w-4 h-4" />
                             View
                           </Link>
-                    </Button>
-                    {request.status === ENUMS.REQUEST_STATUS.PENDING && (
+                        </Button>
+                        {request.status === ENUMS.REQUEST_STATUS.PENDING && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -461,12 +579,12 @@ export default function MyRequestsPage() {
                           >
                             <X className="w-4 h-4 mr-1" />
                             Cancel
-                      </Button>
-                    )}
+                          </Button>
+                        )}
                       </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>

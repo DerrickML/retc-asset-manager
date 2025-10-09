@@ -1,49 +1,55 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
-import { Badge } from "../ui/badge"
-import { assetEventsService, staffService } from "../../lib/appwrite/provider.js"
-
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Badge } from "../ui/badge";
+import {
+  assetEventsService,
+  staffService,
+} from "../../lib/appwrite/provider.js";
 
 export function AssetActivity({ assetId }) {
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadEvents()
-  }, [assetId])
+    loadEvents();
+  }, [assetId]);
 
   const loadEvents = async () => {
     try {
-      const result = await assetEventsService.getByAssetId(assetId)
+      const result = await assetEventsService.getByAssetId(assetId);
 
       // Load staff names for events
       const eventsWithStaff = await Promise.all(
         result.documents.map(async (event) => {
           try {
-            const staff = await staffService.get(event.actorStaffId)
-            return { ...event, actorName: staff.name }
+            const staff = await staffService.get(event.actorStaffId);
+            return { ...event, actorName: staff.name };
           } catch {
-            return { ...event, actorName: "Unknown User" }
+            return { ...event, actorName: "Unknown User" };
           }
-        }),
-      )
+        })
+      );
 
-      setEvents(eventsWithStaff)
+      setEvents(eventsWithStaff);
     } catch (error) {
-      console.error("Failed to load asset events:", error)
+      console.error("Failed to load asset events:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString();
+  };
 
   const formatEventType = (eventType) => {
     return eventType
       .replace(/_/g, " ")
       .toLowerCase()
-      .replace(/\b\w/g, (l) => l.toUpperCase())
-  }
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+  };
 
   const getEventBadgeColor = (eventType) => {
     const colors = {
@@ -55,13 +61,9 @@ export function AssetActivity({ assetId }) {
       LOCATION_CHANGED: "bg-orange-100 text-orange-800",
       RETIRED: "bg-gray-100 text-gray-800",
       DISPOSED: "bg-red-100 text-red-800",
-    }
-    return colors[eventType] || "bg-gray-100 text-gray-800"
-  }
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString()
-  }
+    };
+    return colors[eventType] || "bg-gray-100 text-gray-800";
+  };
 
   if (loading) {
     return (
@@ -78,7 +80,7 @@ export function AssetActivity({ assetId }) {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -88,35 +90,68 @@ export function AssetActivity({ assetId }) {
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No activity recorded for this asset.</p>
+          <p className="text-gray-500 text-center py-8">
+            No activity recorded for this asset.
+          </p>
         ) : (
           <div className="space-y-4">
             {events.map((event) => (
-              <div key={event.$id} className="flex items-start space-x-4 pb-4 border-b border-gray-100 last:border-b-0">
-                <Badge className={getEventBadgeColor(event.eventType)}>{formatEventType(event.eventType)}</Badge>
+              <div
+                key={event.$id}
+                className="flex items-start space-x-4 pb-4 border-b border-gray-100 last:border-b-0"
+              >
+                <Badge className={getEventBadgeColor(event.eventType)}>
+                  {formatEventType(event.eventType)}
+                </Badge>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-900">{event.actorName}</p>
-                    <p className="text-xs text-gray-500">{formatDate(event.at)}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {event.actorName}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formatDate(event.at)}
+                    </p>
                   </div>
 
-                  {event.notes && <p className="text-sm text-gray-600 mt-1">{event.notes}</p>}
+                  {event.notes && (
+                    <p className="text-sm text-gray-600 mt-1">{event.notes}</p>
+                  )}
 
                   {(event.fromValue || event.toValue) && (
                     <div className="text-xs text-gray-500 mt-1">
                       {event.fromValue && event.toValue ? (
                         <span>
-                          Changed from <strong>{typeof event.fromValue === 'object' ? JSON.stringify(event.fromValue) : event.fromValue}</strong> to{" "}
-                          <strong>{typeof event.toValue === 'object' ? JSON.stringify(event.toValue) : event.toValue}</strong>
+                          Changed from{" "}
+                          <strong>
+                            {typeof event.fromValue === "object"
+                              ? JSON.stringify(event.fromValue)
+                              : event.fromValue}
+                          </strong>{" "}
+                          to{" "}
+                          <strong>
+                            {typeof event.toValue === "object"
+                              ? JSON.stringify(event.toValue)
+                              : event.toValue}
+                          </strong>
                         </span>
                       ) : event.toValue ? (
                         <span>
-                          Set to <strong>{typeof event.toValue === 'object' ? JSON.stringify(event.toValue) : event.toValue}</strong>
+                          Set to{" "}
+                          <strong>
+                            {typeof event.toValue === "object"
+                              ? JSON.stringify(event.toValue)
+                              : event.toValue}
+                          </strong>
                         </span>
                       ) : (
                         <span>
-                          Previous value: <strong>{typeof event.fromValue === 'object' ? JSON.stringify(event.fromValue) : event.fromValue}</strong>
+                          Previous value:{" "}
+                          <strong>
+                            {typeof event.fromValue === "object"
+                              ? JSON.stringify(event.fromValue)
+                              : event.fromValue}
+                          </strong>
                         </span>
                       )}
                     </div>
@@ -128,5 +163,5 @@ export function AssetActivity({ assetId }) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

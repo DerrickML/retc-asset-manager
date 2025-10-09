@@ -83,6 +83,9 @@ export default function AdminAssetManagement() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState(null);
 
+  // Export functionality state
+  const [exporting, setExporting] = useState(false);
+
   // New asset form state - matching Appwrite collection attributes
   const [newAsset, setNewAsset] = useState({
     assetTag: "",
@@ -245,6 +248,89 @@ export default function AdminAssetManagement() {
     setAssetToDelete(null);
   };
 
+  /**
+   * Export assets data to JSON file with comprehensive metadata
+   *
+   * This function provides two export modes:
+   * 1. "Assets" - Exports ALL assets from the database
+   * 2. "FilteredAssets" - Exports only the currently filtered/displayed assets
+   *
+   * Features:
+   * - Includes metadata about the export (timestamp, user, filters applied)
+   * - Proper error handling with user feedback
+   * - Loading state management
+   * - Memory cleanup after download
+   * - Professional file naming with date stamps
+   *
+   * @param {string} type - Type of export ("Assets" | "FilteredAssets")
+   * @returns {Promise<void>} - Promise that resolves when export is complete
+   *
+   * @example
+   * // Export all assets
+   * await exportAssetsData("Assets");
+   *
+   * // Export only filtered results
+   * await exportAssetsData("FilteredAssets");
+   */
+  const exportAssetsData = async (type = "Assets") => {
+    try {
+      setExporting(true);
+
+      let dataToExport = [];
+
+      if (type === "FilteredAssets") {
+        // Export only the currently filtered/displayed assets
+        dataToExport = filteredAssets;
+      } else {
+        // Export all assets from the database
+        const result = await assetsService.list();
+        dataToExport = result.documents;
+      }
+
+      // Prepare the export data with additional metadata
+      const exportData = {
+        metadata: {
+          exportType: type,
+          exportedAt: new Date().toISOString(),
+          totalAssets: dataToExport.length,
+          exportedBy: staff?.name || "Unknown",
+          filters: {
+            searchTerm: searchTerm || null,
+            category: filterCategory !== "all" ? filterCategory : null,
+            status: filterStatus !== "all" ? filterStatus : null,
+            condition: filterCondition !== "all" ? filterCondition : null,
+          },
+        },
+        assets: dataToExport,
+      };
+
+      // Convert to JSON with proper formatting
+      const jsonData = JSON.stringify(exportData, null, 2);
+
+      // Create and download the file
+      const blob = new Blob([jsonData], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${type.toLowerCase()}_export_${
+        new Date().toISOString().split("T")[0]
+      }.json`;
+
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up the URL object
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert("Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Filter assets based on search and filters
   const filteredAssets = assets.filter((asset) => {
     const matchesSearch =
@@ -290,19 +376,54 @@ export default function AdminAssetManagement() {
             </div>
 
             <div className="flex flex-wrap gap-3">
+              {/* Export All Assets Button */}
               <Button
+                onClick={() => exportAssetsData("Assets")}
+                disabled={exporting}
                 variant="outline"
-                className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+                title="Export all assets from the database as JSON file"
+                className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center justify-center relative z-10">
-                  <Download className="w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300" />
+                  <Download
+                    className={`w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 ${
+                      exporting ? "animate-spin" : ""
+                    }`}
+                  />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Export
+                    {exporting ? "Exporting..." : "Export All"}
                   </span>
                 </div>
                 {/* Ripple effect */}
                 <div className="absolute inset-0 bg-gray-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </Button>
+
+              {/* Export Filtered Results Button - Only show if filters are applied */}
+              {(searchTerm ||
+                filterCategory !== "all" ||
+                filterStatus !== "all" ||
+                filterCondition !== "all") && (
+                <Button
+                  onClick={() => exportAssetsData("FilteredAssets")}
+                  disabled={exporting}
+                  variant="outline"
+                  title="Export only the currently filtered/displayed assets as JSON file"
+                  className="relative bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:bg-blue-100 hover:border-blue-300 text-blue-700 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-center relative z-10">
+                    <Download
+                      className={`w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300 ${
+                        exporting ? "animate-spin" : ""
+                      }`}
+                    />
+                    <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                      {exporting ? "Exporting..." : "Export Filtered"}
+                    </span>
+                  </div>
+                  {/* Ripple effect */}
+                  <div className="absolute inset-0 bg-blue-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                </Button>
+              )}
 
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                 <DialogTrigger asChild>
@@ -1391,3 +1512,4 @@ export default function AdminAssetManagement() {
     </div>
   );
 }
+

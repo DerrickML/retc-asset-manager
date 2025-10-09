@@ -3,7 +3,8 @@
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import Sidebar from "./sidebar";
-import TopNav from "./top-nav";
+import { Navbar } from "./navbar";
+import { GuestNavbar } from "./guest-navbar";
 import {
   getCurrentStaff,
   initSessionMonitoring,
@@ -51,7 +52,7 @@ export default function LayoutProvider({ children }) {
     return () => {
       cleanup();
     };
-  }, [loadAppData]);
+  }, []);
 
   if (loading) {
     return (
@@ -105,7 +106,7 @@ export default function LayoutProvider({ children }) {
   if (isTopNavOnly) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <TopNav showBranding={true} brandingData={settings?.branding} />
+        <GuestNavbar />
         <main>{children}</main>
       </div>
     );
@@ -136,7 +137,7 @@ export default function LayoutProvider({ children }) {
   // Fallback layout
   return (
     <div className="min-h-screen bg-gray-50">
-      <TopNav showBranding={true} brandingData={settings?.branding} />
+      <Navbar />
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {children}
       </main>

@@ -79,6 +79,11 @@ import {
   staffService,
   departmentsService,
 } from "../../../lib/appwrite/provider.js";
+import {
+  NotificationTriggers,
+  notifyRequestApproved,
+  notifyRequestRejected,
+} from "../../../lib/services/notification-triggers.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import Link from "next/link";
@@ -219,17 +224,51 @@ export default function RequestQueue() {
     setDecisionLoading(true);
     setError(null); // Clear any existing errors
     try {
-      // Only update the status field for now
+      // Get the request details first
+      const request = requests.find((r) => r.$id === requestId);
+      if (!request) {
+        throw new Error("Request not found");
+      }
+
+      // Get requester details
+      const requester = staff.find((s) => s.$id === request.requesterStaffId);
+      if (!requester) {
+        throw new Error("Requester not found");
+      }
+
+      // Get asset details (assuming request has assets array)
+      const asset =
+        request.assets && request.assets[0] ? request.assets[0] : null;
+
+      // Update the request status with notification options
       const updateData = {
         status,
+        approvalNotes:
+          status === ENUMS.REQUEST_STATUS.DENIED
+            ? "Request denied by administrator"
+            : status === ENUMS.REQUEST_STATUS.APPROVED
+            ? "Request approved by administrator"
+            : "",
+        decidedAt: new Date().toISOString(),
+        decidedBy: currentStaff.$id,
       };
 
+      // Update the request
       await assetRequestsService.update(requestId, updateData);
+
+      // Send notification using the new notification triggers
+      const updatedRequest = { ...request, ...updateData };
+      if (status === ENUMS.REQUEST_STATUS.APPROVED) {
+        await notifyRequestApproved(updatedRequest, currentStaff.$id);
+      } else if (status === ENUMS.REQUEST_STATUS.DENIED) {
+        await notifyRequestRejected(updatedRequest, currentStaff.$id);
+      }
 
       await loadRequests();
       setSelectedRequest(null);
     } catch (error) {
       setError("Failed to update request. Please try again.");
+      console.error("Decision error:", error);
     } finally {
       setDecisionLoading(false);
     }
@@ -348,7 +387,7 @@ export default function RequestQueue() {
             </button>
           </div>
         </div>
-        </div>
+      </div>
     );
   }
 
@@ -363,7 +402,7 @@ export default function RequestQueue() {
             backgroundSize: "60px 60px",
           }}
         ></div>
-        </div>
+      </div>
 
       <div className="relative container mx-auto p-6 space-y-8 max-w-7xl">
         {/* Enhanced Header */}
@@ -373,17 +412,17 @@ export default function RequestQueue() {
               <div className="flex items-center space-x-4">
                 <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
                   <Clock className="w-7 h-7 text-white" />
-            </div>
+                </div>
                 <div>
                   <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent">
                     Request Queue
                   </h1>
                   <p className="text-gray-700 font-medium text-lg">
                     Manage and process asset requests
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="flex flex-wrap gap-3">
               <Button
@@ -398,8 +437,8 @@ export default function RequestQueue() {
                 Refresh
               </Button>
             </div>
-                      </div>
-                    </div>
+          </div>
+        </div>
 
         {/* Enhanced Filters */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
@@ -416,8 +455,8 @@ export default function RequestQueue() {
                   Refine your search with advanced filters
                 </p>
               </div>
-                      </div>
-                              <Button
+            </div>
+            <Button
               onClick={() => {
                 setSearchTerm("");
                 setSelectedStatus("all");
@@ -428,8 +467,8 @@ export default function RequestQueue() {
             >
               <X className="w-4 h-4 mr-2" />
               Clear All
-                                    </Button>
-                                </div>
+            </Button>
+          </div>
 
           {/* Primary Filters Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -446,8 +485,8 @@ export default function RequestQueue() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm"
                 />
-                                  </div>
-                                </div>
+              </div>
+            </div>
 
             {/* Status Filter */}
             <div>
@@ -509,22 +548,22 @@ export default function RequestQueue() {
                     </div>
                   </SelectItem>
                   <SelectItem value="medium">
-                                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
                       <span>Medium</span>
-                                  </div>
+                    </div>
                   </SelectItem>
                   <SelectItem value="low">
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span>Low</span>
-                                  </div>
+                    </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
-                                </div>
-                              </div>
-                              
+            </div>
+          </div>
+
           {/* Active Filters Display */}
           {(searchTerm ||
             selectedStatus !== "all" ||
@@ -567,8 +606,8 @@ export default function RequestQueue() {
                     </button>
                   </Badge>
                 )}
-                                  </div>
-                                </div>
+              </div>
+            </div>
           )}
         </div>
 
@@ -596,8 +635,8 @@ export default function RequestQueue() {
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto mb-4"></div>
               <p className="text-slate-600">Loading staff data...</p>
-                                  </div>
-                                </div>
+            </div>
+          </div>
         )}
 
         {/* Empty State */}
@@ -660,9 +699,9 @@ export default function RequestQueue() {
                           <p className="text-sm text-slate-600">
                             {formatDate(request.issueDate)} -{" "}
                             {formatDate(request.expectedReturnDate)}
-                                    </p>
-                                  </div>
-                                </div>
+                          </p>
+                        </div>
+                      </div>
 
                       {/* Requested Assets */}
                       <div className="mb-4">
@@ -677,16 +716,28 @@ export default function RequestQueue() {
                             >
                               {asset.name}
                             </Badge>
-                          ))}
-                                  </div>
-                                </div>
-                              </div>
-                              
+                          )) ||
+                            request.requestedItems?.map((assetId, index) => (
+                              <Badge
+                                key={assetId}
+                                className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
+                              >
+                                Asset {index + 1}
+                              </Badge>
+                            )) || (
+                              <span className="text-sm text-gray-500">
+                                No assets specified
+                              </span>
+                            )}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-2">
-                                      <Button 
+                      <Button
                         asChild
-                                        variant="outline" 
+                        variant="outline"
                         size="sm"
                         className="hover:bg-sidebar-100 hover:text-sidebar-700"
                       >
@@ -714,8 +765,8 @@ export default function RequestQueue() {
                               <CheckCircle className="w-4 h-4 mr-2" />
                             )}
                             Approve
-                                      </Button>
-                                    <Button
+                          </Button>
+                          <Button
                             size="sm"
                             disabled={decisionLoading}
                             onClick={() =>
@@ -732,7 +783,7 @@ export default function RequestQueue() {
                               <XCircle className="w-4 h-4 mr-2" />
                             )}
                             Deny
-                                    </Button>
+                          </Button>
                         </>
                       )}
 
@@ -749,9 +800,9 @@ export default function RequestQueue() {
                         </Button>
                       )}
                     </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}

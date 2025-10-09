@@ -19,12 +19,12 @@ import { Button } from "../../../components/ui/button";
 import { Progress } from "../../../components/ui/progress";
 import { Badge } from "../../../components/ui/badge";
 import { Alert, AlertDescription } from "../../../components/ui/alert";
-import { 
-  Download, 
-  Users, 
-  Package, 
-  Clock, 
-  AlertTriangle, 
+import {
+  Download,
+  Users,
+  Package,
+  Clock,
+  AlertTriangle,
   TrendingUp,
   Activity,
   FileText,
@@ -44,10 +44,10 @@ import {
   Archive,
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
-import { 
-  assetsService, 
-  assetRequestsService, 
-  staffService, 
+import {
+  assetsService,
+  assetRequestsService,
+  staffService,
   departmentsService,
   assetEventsService,
 } from "../../../lib/appwrite/provider.js";
@@ -107,7 +107,7 @@ export default function AdminDashboard() {
       // Load all real data from Appwrite in parallel
       const [
         assetsResult,
-        requestsResult, 
+        requestsResult,
         staffResult,
         departmentsResult,
         recentEventsResult,
@@ -136,13 +136,13 @@ export default function AdminDashboard() {
         ).length,
         maintenanceAssets: assets.filter(
           (a) =>
-          a.availableStatus === ENUMS.AVAILABLE_STATUS.MAINTENANCE || 
-          a.availableStatus === ENUMS.AVAILABLE_STATUS.REPAIR_REQUIRED
+            a.availableStatus === ENUMS.AVAILABLE_STATUS.MAINTENANCE ||
+            a.availableStatus === ENUMS.AVAILABLE_STATUS.REPAIR_REQUIRED
         ).length,
         retiredAssets: assets.filter(
           (a) =>
-          a.availableStatus === ENUMS.AVAILABLE_STATUS.RETIRED ||
-          a.availableStatus === ENUMS.AVAILABLE_STATUS.DISPOSED
+            a.availableStatus === ENUMS.AVAILABLE_STATUS.RETIRED ||
+            a.availableStatus === ENUMS.AVAILABLE_STATUS.DISPOSED
         ).length,
         pendingRequests: requests.filter(
           (r) => r.status === ENUMS.REQUEST_STATUS.PENDING
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
             .replace(/_/g, " ")
             .toLowerCase()
             .replace(/\b\w/g, (l) => l.toUpperCase()),
-        value: count,
+          value: count,
           percentage:
             assets.length > 0 ? ((count / assets.length) * 100).toFixed(1) : 0,
         })
@@ -249,7 +249,7 @@ export default function AdminDashboard() {
 
       const assetsByDepartment = Object.entries(deptAssetsMap).map(
         ([deptName, data]) => ({
-        name: deptName,
+          name: deptName,
           ...data,
         })
       );
@@ -271,12 +271,12 @@ export default function AdminDashboard() {
       setRefreshing(false);
     }
   };
-
+  // function to refresh the dashboard data
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadDashboardData();
   };
-
+  // function to export the dashboard data
   const exportData = async (type) => {
     try {
       let data = {};
@@ -285,7 +285,7 @@ export default function AdminDashboard() {
           const assets = await assetsService.list();
           data = assets.documents;
           break;
-        case "Requests": 
+        case "Requests":
           const requests = await assetRequestsService.list();
           data = requests.documents;
           break;
@@ -295,7 +295,7 @@ export default function AdminDashboard() {
         default:
           data = dashboardData;
       }
-
+      // function to export the dashboard data in a json format to the user
       const jsonData = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonData], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -315,7 +315,7 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-primary-50 to-primary-100">
+      <div className="flex items-center justify-center py-20">
         <div className="flex flex-col items-center space-y-6">
           <div className="relative">
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200"></div>
@@ -331,18 +331,18 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+    <div className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40 -mx-6 -my-6 px-6 py-6">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div
           className="w-full h-full"
           style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.3'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.3'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
             backgroundSize: "60px 60px",
           }}
         ></div>
       </div>
-      
+
       <div className="relative container mx-auto p-6 space-y-8 max-w-7xl">
         {/* Modern Header */}
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg shadow-blue-500/5 p-6">
@@ -351,12 +351,12 @@ export default function AdminDashboard() {
               <div className="flex items-center space-x-3">
                 <div>
                   {staff && (
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
                       {getTimeBasedGreeting()},
                       <span className="text-green-600">{staff.name}</span>! 👋
-                </h1>
+                    </h1>
                   )}
-              </div>
+                </div>
               </div>
               <p className="text-slate-600 font-medium">
                 Real-time system analytics & insights
@@ -370,11 +370,11 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex flex-wrap gap-3">
-              <Button 
-                onClick={handleRefresh} 
-                variant="outline" 
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
                 disabled={refreshing}
                 className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:hover:scale-100 disabled:opacity-60"
               >
@@ -391,14 +391,14 @@ export default function AdminDashboard() {
                 {/* Ripple effect */}
                 <div className="absolute inset-0 bg-gray-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </Button>
-              <Button 
-                onClick={() => exportData("Assets")} 
+              <Button
+                onClick={() => exportData("Assets")}
                 className="relative bg-gradient-to-r from-sidebar-500 to-sidebar-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
               >
                 <div className="flex items-center justify-center relative z-10">
                   <Download className="w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300" />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                Export Data
+                    Export Data
                   </span>
                 </div>
                 {/* Animated background gradient */}
@@ -408,14 +408,14 @@ export default function AdminDashboard() {
                 {/* Shimmer effect */}
                 <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
               </Button>
-              <Button 
-                onClick={() => exportData("Dashboard")} 
+              <Button
+                onClick={() => exportData("Dashboard")}
                 className="relative bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
               >
                 <div className="flex items-center justify-center relative z-10">
                   <FileText className="w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300" />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                Generate Report
+                    Generate Report
                   </span>
                 </div>
                 {/* Animated background gradient */}
@@ -432,7 +432,10 @@ export default function AdminDashboard() {
         {/* Modern Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {/* Total Assets Card */}
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-0 shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: "0ms" }}>
+          <Card
+            className="bg-gradient-to-br from-blue-50 to-indigo-100 border-0 shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4"
+            style={{ animationDelay: "0ms" }}
+          >
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
@@ -479,7 +482,10 @@ export default function AdminDashboard() {
           </Card>
 
           {/* Pending Requests Card */}
-          <Card className="bg-gradient-to-br from-amber-50 to-orange-100 border-0 shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: "100ms" }}>
+          <Card
+            className="bg-gradient-to-br from-amber-50 to-orange-100 border-0 shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4"
+            style={{ animationDelay: "100ms" }}
+          >
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
@@ -582,56 +588,56 @@ export default function AdminDashboard() {
             <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-sidebar-500/5 rounded-2xl opacity-0 transition-opacity duration-500" />
 
             <TabsList className="grid w-full grid-cols-4 bg-transparent gap-1 relative z-10">
-              <TabsTrigger 
-                value="overview" 
+              <TabsTrigger
+                value="overview"
                 className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary-500 data-[state=active]:to-primary-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-primary-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
               >
                 <div className="flex items-center justify-center relative">
                   <PieChart className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-primary-600 group-hover:text-primary-700" />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                Overview
+                    Overview
                   </span>
                 </div>
                 {/* Ripple effect */}
                 <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </TabsTrigger>
 
-              <TabsTrigger 
-                value="assets" 
+              <TabsTrigger
+                value="assets"
                 className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-sidebar-500 data-[state=active]:to-sidebar-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-sidebar-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
               >
                 <div className="flex items-center justify-center relative">
                   <Package className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-sidebar-600 group-hover:text-sidebar-700" />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                Assets
+                    Assets
                   </span>
                 </div>
                 {/* Ripple effect */}
                 <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </TabsTrigger>
 
-              <TabsTrigger 
-                value="requests" 
+              <TabsTrigger
+                value="requests"
                 className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary-500 data-[state=active]:to-primary-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-primary-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
               >
                 <div className="flex items-center justify-center relative">
                   <Clock className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-primary-600 group-hover:text-primary-700" />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                Requests
+                    Requests
                   </span>
                 </div>
                 {/* Ripple effect */}
                 <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </TabsTrigger>
 
-              <TabsTrigger 
-                value="activity" 
+              <TabsTrigger
+                value="activity"
                 className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-sidebar-500 data-[state=active]:to-sidebar-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-sidebar-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
               >
                 <div className="flex items-center justify-center relative">
                   <Activity className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-sidebar-600 group-hover:text-sidebar-700" />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                Activity
+                    Activity
                   </span>
                 </div>
                 {/* Ripple effect */}
@@ -686,8 +692,8 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div className="relative">
-                            <Progress 
-                              value={parseFloat(category.percentage)} 
+                            <Progress
+                              value={parseFloat(category.percentage)}
                               className="h-2 bg-slate-200"
                             />
                           </div>
@@ -743,9 +749,9 @@ export default function AdminDashboard() {
                               </div>
                               <Badge
                                 className={`text-xs border-0 ${
-                                parseFloat(dept.utilization) >= 80 
+                                  parseFloat(dept.utilization) >= 80
                                     ? "bg-red-100 text-red-700"
-                                  : parseFloat(dept.utilization) >= 60 
+                                    : parseFloat(dept.utilization) >= 60
                                     ? "bg-orange-100 text-orange-700"
                                     : "bg-green-100 text-green-700"
                                 }`}
@@ -755,8 +761,8 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div className="relative">
-                            <Progress 
-                              value={parseFloat(dept.utilization)} 
+                            <Progress
+                              value={parseFloat(dept.utilization)}
                               className="h-3 bg-slate-200"
                             />
                           </div>
@@ -805,7 +811,7 @@ export default function AdminDashboard() {
                       {dashboardData.metrics.availableAssets}
                     </div>
                     <div className="text-xs text-green-600 font-medium">
-                      {dashboardData.metrics.totalAssets > 0 
+                      {dashboardData.metrics.totalAssets > 0
                         ? (
                             (dashboardData.metrics.availableAssets /
                               dashboardData.metrics.totalAssets) *
@@ -826,7 +832,7 @@ export default function AdminDashboard() {
                       {dashboardData.metrics.inUseAssets}
                     </div>
                     <div className="text-xs text-blue-600 font-medium">
-                      {dashboardData.metrics.totalAssets > 0 
+                      {dashboardData.metrics.totalAssets > 0
                         ? (
                             (dashboardData.metrics.inUseAssets /
                               dashboardData.metrics.totalAssets) *
@@ -906,7 +912,7 @@ export default function AdminDashboard() {
                           return "from-purple-50 to-violet-100 border-purple-200";
                       }
                     };
-                    
+
                     const getStatusIcon = (status) => {
                       switch (status) {
                         case "AVAILABLE":
@@ -951,8 +957,8 @@ export default function AdminDashboard() {
                         <div className="text-3xl font-bold text-slate-900 mb-3 group-hover:scale-105 transition-transform duration-200">
                           {statusGroup.value}
                         </div>
-                        <Progress 
-                          value={parseFloat(statusGroup.percentage)} 
+                        <Progress
+                          value={parseFloat(statusGroup.percentage)}
                           className="h-2 bg-white/50"
                         />
                       </div>
@@ -987,7 +993,7 @@ export default function AdminDashboard() {
                     {dashboardData.requestsByStatus.length > 0 ? (
                       dashboardData.requestsByStatus.map(
                         (statusGroup, index) => {
-                        const getRequestStatusColor = (status) => {
+                          const getRequestStatusColor = (status) => {
                             switch (status) {
                               case "PENDING":
                                 return "from-orange-50 to-amber-100 border-orange-200";
@@ -1002,7 +1008,7 @@ export default function AdminDashboard() {
                             }
                           };
 
-                        const getRequestStatusIcon = (status) => {
+                          const getRequestStatusIcon = (status) => {
                             switch (status) {
                               case "PENDING":
                                 return (
@@ -1027,25 +1033,25 @@ export default function AdminDashboard() {
                             }
                           };
 
-                        return (
+                          return (
                             <div
                               key={statusGroup.name}
                               className={`p-4 bg-gradient-to-r ${getRequestStatusColor(
                                 statusGroup.status
                               )} rounded-xl border hover:shadow-md transition-all duration-200`}
                             >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                {getRequestStatusIcon(statusGroup.status)}
-                                <div>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  {getRequestStatusIcon(statusGroup.status)}
+                                  <div>
                                     <div className="font-semibold text-slate-800">
                                       {statusGroup.name}
-                                </div>
+                                    </div>
                                     <div className="text-sm text-slate-600">
                                       {statusGroup.percentage}% of total
-                              </div>
-                            </div>
-                          </div>
+                                    </div>
+                                  </div>
+                                </div>
                                 <div className="text-2xl font-bold text-slate-900">
                                   {statusGroup.value}
                                 </div>
@@ -1197,8 +1203,8 @@ export default function AdminDashboard() {
                                 </span>
                               </div>
                               <p className="text-sm font-medium text-slate-800 mb-1">
-                                {event.fromValue && event.toValue 
-                                  ? `Changed from "${event.fromValue}" to "${event.toValue}"` 
+                                {event.fromValue && event.toValue
+                                  ? `Changed from "${event.fromValue}" to "${event.toValue}"`
                                   : event.eventType
                                       .replace(/_/g, " ")
                                       .toLowerCase()}

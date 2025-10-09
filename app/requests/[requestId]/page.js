@@ -44,6 +44,7 @@ import {
   RotateCcw,
   Eye,
   MessageSquare,
+  X,
 } from "lucide-react";
 import {
   assetRequestsService,
@@ -55,6 +56,7 @@ import { assetImageService } from "../../../lib/appwrite/image-service.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
+import { notifyRequestCancelled } from "../../../lib/services/notification-triggers.js";
 
 export default function RequestDetailsPage() {
   const params = useParams();
@@ -219,17 +221,29 @@ export default function RequestDetailsPage() {
 
   const handleCancelRequest = async () => {
     setActionLoading(true);
+    setError("");
     try {
-      await assetRequestsService.update(request.$id, {
+      console.log("Cancelling request:", request.$id);
+      console.log("Cancel reason:", cancelReason);
+
+      const updateData = {
         status: ENUMS.REQUEST_STATUS.CANCELLED,
-        decisionNotes: cancelReason,
-        decidedAt: new Date().toISOString(),
-      });
+      };
+
+      console.log("Update data:", updateData);
+
+      await assetRequestsService.update(request.$id, updateData);
+
+      // Send notification for request cancellation
+      await notifyRequestCancelled(request, currentStaff.$id);
+
+      console.log("Request cancelled successfully");
       setCancelDialogOpen(false);
       setCancelReason("");
       await loadData();
     } catch (error) {
-      setError("Failed to cancel request");
+      console.error("Cancel request error:", error);
+      setError(`Failed to cancel request: ${error.message || "Unknown error"}`);
     } finally {
       setActionLoading(false);
     }
@@ -304,6 +318,9 @@ export default function RequestDetailsPage() {
     return <IconComponent className="w-4 h-4" />;
   };
 
+  // Permission checks
+  const isRequester = currentStaff?.$id === request?.requesterStaffId;
+  const isAdmin = currentStaff && permissions.canApproveRequests(currentStaff);
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -322,9 +339,6 @@ export default function RequestDetailsPage() {
     });
   };
 
-  // Permission checks
-  const isRequester = currentStaff?.$id === request?.requesterStaffId;
-  const isAdmin = currentStaff && permissions.canApproveRequests(currentStaff);
   const canEditRequest =
     isRequester && request?.status === ENUMS.REQUEST_STATUS.PENDING;
   const canCancelRequest =
@@ -450,38 +464,73 @@ export default function RequestDetailsPage() {
                       Cancel
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="z-[99999]">
-                    <DialogHeader>
-                      <DialogTitle>Cancel Request</DialogTitle>
-                      <DialogDescription>
+                  <DialogContent className="z-[99999] max-w-lg">
+                    {/* Header with warning icon */}
+                    <DialogHeader className="text-center pb-4">
+                      <div className="mx-auto mb-4 p-4 bg-gradient-to-br from-primary-50 to-primary-100 rounded-full w-16 h-16 flex items-center justify-center">
+                        <X className="w-8 h-8 text-primary-600" />
+                      </div>
+                      <DialogTitle className="text-2xl font-bold text-gray-900 mb-2">
+                        Cancel Request
+                      </DialogTitle>
+                      <DialogDescription className="text-gray-600 text-base leading-relaxed">
                         Are you sure you want to cancel this request? This
-                        action cannot be undone.
+                        action cannot be undone and will notify the admin team.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="cancelReason">
+
+                    {/* Content */}
+                    <div className="space-y-6 py-4">
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="cancelReason"
+                          className="text-sm font-semibold text-gray-700 flex items-center gap-2"
+                        >
+                          <FileText className="w-4 h-4 text-primary-600" />
                           Cancellation Reason
                         </Label>
                         <Textarea
                           id="cancelReason"
                           value={cancelReason}
                           onChange={(e) => setCancelReason(e.target.value)}
-                          placeholder="Please provide a reason for cancellation..."
-                          rows={3}
+                          placeholder="Please provide a detailed reason for cancellation..."
+                          rows={4}
+                          className="border-gray-300 focus:border-primary-500 focus:ring-primary-500 resize-none transition-all duration-200"
                         />
+                        <p className="text-xs text-gray-500">
+                          This reason will be visible to administrators and may
+                          be used for future reference.
+                        </p>
                       </div>
                     </div>
-                    <DialogFooter>
+
+                    {/* Footer */}
+                    <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200">
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button
+                          variant="outline"
+                          className="w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Keep Request
+                        </Button>
                       </DialogClose>
                       <Button
                         onClick={handleCancelRequest}
                         disabled={actionLoading || !cancelReason.trim()}
-                        className="bg-orange-600 hover:bg-orange-700"
+                        className="w-full sm:w-auto bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {actionLoading ? "Cancelling..." : "Cancel Request"}
+                        {actionLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                            Cancelling...
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-4 h-4 mr-2" />
+                            Cancel Request
+                          </>
+                        )}
                       </Button>
                     </DialogFooter>
                   </DialogContent>

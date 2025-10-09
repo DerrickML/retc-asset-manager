@@ -27,6 +27,58 @@ export default function GuestHomePage() {
   const [stats, setStats] = useState({ total: 0, available: 0, categories: 0 });
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Loading spinner component (inline to avoid new files)
+  const LoadingSpinner = ({ message = "Loading..." }) => (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-200 border-t-primary-600 mx-auto mb-4"></div>
+        <p className="text-primary-600 font-medium">{message}</p>
+      </div>
+    </div>
+  );
+
+  // Helper function to calculate asset statistics
+  const calculateAssetStats = (assets) => {
+    const categories = new Set(assets.map((asset) => asset.category));
+    const available = assets.filter(
+      (asset) => asset.availableStatus === "AVAILABLE"
+    ).length;
+
+    return {
+      total: assets.length,
+      available,
+      categories: categories.size,
+    };
+  };
+
+  // Stats card component for cleaner code
+  const StatsCard = ({
+    icon: Icon,
+    title,
+    value,
+    subtitle,
+    color = "blue",
+  }) => (
+    <Card
+      className={`bg-gradient-to-br from-${color}-50 to-${color}-100 border-2 border-${color}-200 hover:shadow-xl transition-all duration-300 hover:scale-105`}
+    >
+      <CardContent className="text-center py-8">
+        <div
+          className={`w-16 h-16 bg-gradient-to-br from-${color}-500 to-${color}-600 rounded-full flex items-center justify-center mx-auto mb-4`}
+        >
+          <Icon className="w-8 h-8 text-white" />
+        </div>
+        <div className={`text-4xl font-bold text-${color}-700 mb-2`}>
+          {value}
+        </div>
+        <div className={`text-${color}-600 font-semibold`}>{title}</div>
+        {subtitle && (
+          <div className={`text-xs text-${color}-500 mt-1`}>{subtitle}</div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   useEffect(() => {
     loadData();
   }, []);
@@ -46,18 +98,8 @@ export default function GuestHomePage() {
 
       // Calculate stats
       const allPublicAssets = await assetsService.getPublicAssets();
-      const categories = new Set(
-        allPublicAssets.documents.map((asset) => asset.category)
-      );
-      const available = allPublicAssets.documents.filter(
-        (asset) => asset.availableStatus === "AVAILABLE"
-      ).length;
-
-      setStats({
-        total: allPublicAssets.total,
-        available,
-        categories: categories.size,
-      });
+      const calculatedStats = calculateAssetStats(allPublicAssets.documents);
+      setStats(calculatedStats);
     } catch (error) {
       console.error("Failed to load guest portal data:", error);
     }
@@ -65,26 +107,15 @@ export default function GuestHomePage() {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      window.location.href = `/guest/assets?search=${encodeURIComponent(
-        searchQuery.trim()
-      )}`;
-    } else {
-      window.location.href = "/guest/assets";
-    }
+    const trimmedQuery = searchQuery.trim();
+    const searchUrl = trimmedQuery
+      ? `/guest/assets?search=${encodeURIComponent(trimmedQuery)}`
+      : "/guest/assets";
+    window.location.href = searchUrl;
   };
 
   if (!settings) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-200 border-t-primary-600 mx-auto mb-4"></div>
-          <p className="text-primary-600 font-medium">
-            Loading guest portal...
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading guest portal..." />;
   }
 
   // Check if guest portal is enabled
@@ -151,43 +182,24 @@ export default function GuestHomePage() {
 
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-            <Card className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 border-2 border-sidebar-200 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <CardContent className="text-center py-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Package className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-4xl font-bold text-sidebar-700 mb-2">
-                  {stats.total}
-                </div>
-                <div className="text-sidebar-600 font-semibold">
-                  Total Assets
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-primary-50 to-primary-100 border-2 border-primary-200 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <CardContent className="text-center py-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-4xl font-bold text-primary-700 mb-2">
-                  {stats.available}
-                </div>
-                <div className="text-primary-600 font-semibold">
-                  Available Now
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <CardContent className="text-center py-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Tag className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-4xl font-bold text-purple-700 mb-2">
-                  {stats.categories}
-                </div>
-                <div className="text-purple-600 font-semibold">Categories</div>
-              </CardContent>
-            </Card>
+            <StatsCard
+              icon={Package}
+              title="Total Assets"
+              value={stats.total}
+              color="sidebar"
+            />
+            <StatsCard
+              icon={CheckCircle}
+              title="Available Now"
+              value={stats.available}
+              color="primary"
+            />
+            <StatsCard
+              icon={Tag}
+              title="Categories"
+              value={stats.categories}
+              color="purple"
+            />
           </div>
 
           <Button
@@ -321,7 +333,7 @@ export default function GuestHomePage() {
                 <Users className="w-5 h-5 mr-2" />
                 Sign In to Request Assets
               </Link>
-          </Button>
+            </Button>
           </div>
         </div>
       </section>
