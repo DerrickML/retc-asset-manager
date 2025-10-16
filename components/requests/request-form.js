@@ -52,14 +52,13 @@ export function RequestForm() {
     try {
       const [currentStaff, assetsResult] = await Promise.all([
         getCurrentStaff(),
-        assetsService.list([
-          Query.equal("availableStatus", ENUMS.AVAILABLE_STATUS.AVAILABLE),
-          Query.orderAsc("name"),
-        ]),
+        assetsService.list([Query.orderAsc("name")]),
       ]);
 
       setStaff(currentStaff);
       setAvailableAssets(assetsResult.documents);
+
+      // Loaded assets for request form
 
       // Set default dates (tomorrow to next week)
       const tomorrow = new Date();
@@ -101,7 +100,9 @@ export function RequestForm() {
         status: ENUMS.REQUEST_STATUS.PENDING,
       };
 
-      await assetRequestsService.create(requestData);
+      console.log("Creating request with data:", requestData);
+      const createdRequest = await assetRequestsService.create(requestData);
+      console.log("Request created successfully:", createdRequest);
 
       router.push("/requests");
     } catch (err) {
@@ -268,10 +269,33 @@ export function RequestForm() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {assets.map((asset) => {
-                      const imageUrls = assetImageService.getAssetImageUrls(
-                        asset.publicImages
-                      );
-                      const hasImages = imageUrls && imageUrls.length > 0;
+                      let imageUrls = [];
+                      let hasImages = false;
+
+                      try {
+                        // Handle both assets and consumables
+                        if (asset.itemType === "CONSUMABLE") {
+                          // For consumables, use the direct assetImage URL
+                          if (
+                            asset.assetImage &&
+                            asset.assetImage.trim() !== ""
+                          ) {
+                            imageUrls = [asset.assetImage];
+                            hasImages = true;
+                          }
+                        } else {
+                          // For assets, use the publicImages array
+                          imageUrls = assetImageService.getAssetImageUrls(
+                            asset.publicImages
+                          );
+                          hasImages = imageUrls && imageUrls.length > 0;
+                        }
+                      } catch (error) {
+                        console.warn("Error loading asset images:", error);
+                        imageUrls = [];
+                        hasImages = false;
+                      }
+
                       const isSelected = selectedAssets.includes(asset.$id);
 
                       return (

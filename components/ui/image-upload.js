@@ -5,6 +5,7 @@ import { Button } from "./button";
 import { Card, CardContent } from "./card";
 import { X, Upload, Image as ImageIcon, Trash2 } from "lucide-react";
 import { assetImageService } from "../../lib/appwrite/image-service";
+import { useToastContext } from "../providers/toast-provider";
 
 export function ImageUpload({
   assetId,
@@ -13,6 +14,7 @@ export function ImageUpload({
   maxImages = 5,
   className = "",
 }) {
+  const toast = useToastContext();
   // Handle both string (JSON) and array formats for existing images
   const parseExistingImages = (images) => {
     if (!images) return [];
@@ -46,13 +48,13 @@ export function ImageUpload({
     );
 
     if (validFiles.length !== files.length) {
-      alert("Please select only image files (JPEG, PNG, WebP)");
+      toast.warning("Please select only image files (JPEG, PNG, WebP)");
       return;
     }
 
     // Check max images limit
     if (images.length + validFiles.length > maxImages) {
-      alert(`Maximum ${maxImages} images allowed`);
+      toast.warning(`Maximum ${maxImages} images allowed`);
       return;
     }
 
@@ -67,7 +69,7 @@ export function ImageUpload({
       onImagesChange?.(newImages);
     } catch (error) {
       console.error("Error uploading images:", error);
-      alert("Failed to upload images. Please try again.");
+      toast.error("Failed to upload images. Please try again.");
     } finally {
       setUploading(false);
       // Reset file input
@@ -85,7 +87,7 @@ export function ImageUpload({
       onImagesChange?.(newImages);
     } catch (error) {
       console.error("Error deleting image:", error);
-      alert("Failed to delete image. Please try again.");
+      toast.error("Failed to delete image. Please try again.");
     }
   };
 

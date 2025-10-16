@@ -21,6 +21,7 @@ import {
   Menu,
   X,
   ChevronLeft,
+  ShoppingCart,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -32,19 +33,37 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { getCurrentStaff, permissions, logout } from "../../lib/utils/auth.js";
+import { assetRequestsService } from "../../lib/appwrite/provider.js";
+import { Query } from "appwrite";
+import { ENUMS } from "../../lib/appwrite/config.js";
 
 export default function Sidebar() {
   const [staff, setStaff] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [viewMode, setViewMode] = useState("user"); // "user" or "admin"
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("viewMode") || "user";
+    }
+    return "user";
+  }); // "user" or "admin"
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     admin: false,
     assets: false,
+    consumables: false,
     requests: false,
   });
   const pathname = usePathname();
+
+  // Function to update view mode and persist it
+  const updateViewMode = (mode) => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("viewMode", mode);
+    }
+  };
 
   useEffect(() => {
     loadStaffData();
@@ -73,6 +92,17 @@ export default function Sidebar() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Refresh pending requests count every 30 seconds for admins
+  useEffect(() => {
+    if (isAdmin && viewMode === "admin") {
+      const interval = setInterval(() => {
+        loadPendingRequestsCount();
+      }, 30000); // 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [isAdmin, viewMode]);
+
   // Save sidebar state
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 768) {
@@ -88,6 +118,11 @@ export default function Sidebar() {
         const adminStatus = permissions.isAdmin(currentStaff);
         setIsAdmin(adminStatus);
 
+        // Load pending request count for admins
+        if (adminStatus) {
+          loadPendingRequestsCount();
+        }
+
         // Auto-set view mode based on current path
         if (pathname.startsWith("/admin")) {
           setViewMode("admin");
@@ -98,6 +133,19 @@ export default function Sidebar() {
       }
     } catch (error) {
       // Silent fail for staff data loading
+    }
+  };
+
+  const loadPendingRequestsCount = async () => {
+    try {
+      const response = await assetRequestsService.list([
+        Query.equal("status", ENUMS.REQUEST_STATUS.PENDING),
+        Query.orderDesc("$createdAt"),
+      ]);
+      setPendingRequestsCount(response.documents?.length || 0);
+    } catch (error) {
+      console.error("Error loading pending requests count:", error);
+      setPendingRequestsCount(0);
     }
   };
 
@@ -129,7 +177,7 @@ export default function Sidebar() {
   };
 
   const switchViewMode = (mode) => {
-    setViewMode(mode);
+    updateViewMode(mode);
     if (mode === "admin") {
       window.location.href = "/admin/dashboard";
     } else {
@@ -155,6 +203,12 @@ export default function Sidebar() {
       label: "Browse Assets",
       href: "/assets",
       icon: Package,
+      badge: null,
+    },
+    {
+      label: "Browse Consumables",
+      href: "/consumables",
+      icon: ShoppingCart,
       badge: null,
     },
     {
@@ -185,15 +239,25 @@ export default function Sidebar() {
       icon: Package,
       badge: null,
       children: [
-        { label: "All Assets", href: "/assets" },
-        { label: "Add Asset", href: "/assets/new" },
+        { label: "All Assets", href: "/admin/assets" },
+        { label: "Add Asset", href: "/admin/assets/new" },
+      ],
+    },
+    {
+      label: "Consumable Management",
+      href: "/admin/consumables",
+      icon: ShoppingCart,
+      badge: null,
+      children: [
+        { label: "All Consumables", href: "/admin/consumables" },
+        { label: "Add Consumable", href: "/admin/consumables/new" },
       ],
     },
     {
       label: "Request Management",
       href: "/admin/requests",
       icon: FileText,
-      badge: "3",
+      badge: pendingRequestsCount > 0 ? pendingRequestsCount.toString() : null,
     },
     {
       label: "User Management",
@@ -211,7 +275,7 @@ export default function Sidebar() {
       label: "Notifications",
       href: "/admin/notifications",
       icon: Bell,
-      badge: "2",
+      badge: null, // No notification system implemented yet
     },
     {
       label: "System Settings",

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -10,8 +11,15 @@ import {
   CardTitle,
 } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
-import { Input } from "../../../components/ui/input";
 import { Badge } from "../../../components/ui/badge";
+import { Input } from "../../../components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
 import {
   Table,
   TableBody,
@@ -20,13 +28,6 @@ import {
   TableHeader,
   TableRow,
 } from "../../../components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../../components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -39,8 +40,6 @@ import {
 } from "../../../components/ui/dialog";
 import { Label } from "../../../components/ui/label";
 import { Textarea } from "../../../components/ui/textarea";
-import { ImageUpload } from "../../../components/ui/image-upload";
-import { assetImageService } from "../../../lib/appwrite/image-service";
 import {
   Plus,
   Search,
@@ -61,63 +60,110 @@ import {
   CheckCircle,
   Clock,
   Image,
+  ShoppingCart,
 } from "lucide-react";
-import { assetsService } from "../../../lib/appwrite/provider.js";
+import {
+  assetsService,
+  departmentsService,
+} from "../../../lib/appwrite/provider.js";
+import { assetImageService } from "../../../lib/appwrite/image-service.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
 import { useConfirmation } from "../../../components/ui/confirmation-dialog";
 import { ENUMS } from "../../../lib/appwrite/config.js";
+import { Query } from "appwrite";
 import {
   formatCategory,
   getStatusBadgeColor,
   getConditionBadgeColor,
 } from "../../../lib/utils/mappings.js";
 
-export default function AdminAssetManagement() {
+export default function AdminConsumablesPage() {
+  const router = useRouter();
   const toast = useToastContext();
   const { confirm } = useConfirmation();
   const [staff, setStaff] = useState(null);
-  const [assets, setAssets] = useState([]);
+  const [consumables, setConsumables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterCondition, setFilterCondition] = useState("all");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [assetToDelete, setAssetToDelete] = useState(null);
+  const [consumableToDelete, setConsumableToDelete] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Export functionality state
   const [exporting, setExporting] = useState(false);
 
-  // New asset form state - matching Appwrite collection attributes
-  const [newAsset, setNewAsset] = useState({
-    assetTag: "",
-    serialNumber: "",
+  // Helper functions to extract stock data from stored fields
+  const getCurrentStock = (consumable) => {
+    if (
+      consumable.serialNumber &&
+      consumable.serialNumber.startsWith("STOCK:")
+    ) {
+      return parseInt(consumable.serialNumber.replace("STOCK:", "")) || 0;
+    }
+    return 0;
+  };
+
+  const getMinStock = (consumable) => {
+    if (consumable.model && consumable.model.startsWith("MIN:")) {
+      return parseInt(consumable.model.replace("MIN:", "")) || 0;
+    }
+    return 0;
+  };
+
+  const getMaxStock = (consumable) => {
+    if (consumable.manufacturer && consumable.manufacturer.startsWith("MAX:")) {
+      return parseInt(consumable.manufacturer.replace("MAX:", "")) || 0;
+    }
+    return 0;
+  };
+
+  const getStatus = (consumable) => {
+    if (consumable.subcategory && consumable.subcategory.includes("|")) {
+      return (
+        consumable.subcategory.split("|")[1] || ENUMS.CONSUMABLE_STATUS.IN_STOCK
+      );
+    }
+    return ENUMS.CONSUMABLE_STATUS.IN_STOCK;
+  };
+
+  const getUnit = (consumable) => {
+    if (consumable.subcategory && consumable.subcategory.includes("|")) {
+      return (
+        consumable.subcategory.split("|")[0] || ENUMS.CONSUMABLE_UNIT.PIECE
+      );
+    }
+    return consumable.subcategory || ENUMS.CONSUMABLE_UNIT.PIECE;
+  };
+
+  const getConsumableCategory = (consumable) => {
+    if (consumable.subcategory && consumable.subcategory.includes("|")) {
+      const parts = consumable.subcategory.split("|");
+      return parts[2] || ENUMS.CATEGORY.OFFICE_SUPPLIES;
+    }
+    return ENUMS.CATEGORY.OFFICE_SUPPLIES;
+  };
+
+  // New consumable form state - matching Appwrite collection attributes
+  const [newConsumable, setNewConsumable] = useState({
     name: "",
-    category: ENUMS.CATEGORY.IT_EQUIPMENT,
-    subcategory: "",
-    model: "",
-    manufacturer: "",
-    departmentId: "",
-    custodianStaffId: "",
-    availableStatus: ENUMS.AVAILABLE_STATUS.AVAILABLE,
-    currentCondition: ENUMS.CURRENT_CONDITION.NEW,
+    category: ENUMS.CATEGORY.CONSUMABLE,
+    consumableCategory: ENUMS.CATEGORY.OFFICE_SUPPLIES,
+    currentStock: 0,
+    minStock: 0,
+    maxStock: 0,
+    unit: ENUMS.CONSUMABLE_UNIT.PIECE,
+    status: ENUMS.CONSUMABLE_STATUS.IN_STOCK,
     locationName: "",
     roomOrArea: "",
-    purchaseDate: "",
-    warrantyExpiryDate: "",
-    lastMaintenanceDate: "",
-    nextMaintenanceDue: "",
-    lastInventoryCheck: "",
-    retirementDate: "",
-    disposalDate: "",
-    attachmentFileIds: [],
     isPublic: false,
     publicSummary: "",
-    publicImages: [],
-    publicLocationLabel: "",
-    publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW,
+    itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
+    assetImage: "", // Will store the uploaded image URL
+    selectedFile: null, // Store the selected file
   });
 
   useEffect(() => {
@@ -132,7 +178,7 @@ export default function AdminAssetManagement() {
         return;
       }
       setStaff(currentStaff);
-      await loadAssets();
+      await loadConsumables();
     } catch (error) {
       // Silent fail for data loading
     } finally {
@@ -140,167 +186,150 @@ export default function AdminAssetManagement() {
     }
   };
 
-  const loadAssets = async () => {
+  const loadConsumables = async () => {
     try {
-      const result = await assetsService.list();
-
-      // Filter to only show assets (not consumables)
-      const assetsOnly = result.documents.filter(
-        (item) =>
-          item.itemType === ENUMS.ITEM_TYPE.ASSET ||
-          !item.itemType ||
-          item.itemType === undefined
-      );
-
-      setAssets(assetsOnly);
+      const result = await assetsService.getConsumables();
+      setConsumables(result.documents);
     } catch (error) {
-      // Silent fail for assets loading
+      // Silent fail for consumables loading
     }
   };
 
-  const handleCreateAsset = async () => {
+  const handleCreateConsumable = async () => {
     try {
-      // Generate asset tag if not provided
-      const assetTag = newAsset.assetTag || `RETC-${Date.now()}`;
+      let imageUrl = "";
 
-      // Prepare asset data matching Appwrite collection schema
-      const assetData = {
-        assetTag,
-        serialNumber: newAsset.serialNumber || "",
-        name: newAsset.name,
-        category: newAsset.category,
-        subcategory: newAsset.subcategory || "",
-        model: newAsset.model || "",
-        manufacturer: newAsset.manufacturer || "",
-        departmentId: newAsset.departmentId || "",
-        custodianStaffId: newAsset.custodianStaffId || "",
-        availableStatus: newAsset.availableStatus,
-        currentCondition: newAsset.currentCondition,
-        locationName: newAsset.locationName || "",
-        roomOrArea: newAsset.roomOrArea || "",
-        purchaseDate: newAsset.purchaseDate || null,
-        warrantyExpiryDate: newAsset.warrantyExpiryDate || null,
-        lastMaintenanceDate: newAsset.lastMaintenanceDate || null,
-        nextMaintenanceDue: newAsset.nextMaintenanceDue || null,
-        lastInventoryCheck: newAsset.lastInventoryCheck || null,
-        retirementDate: newAsset.retirementDate || null,
-        disposalDate: newAsset.disposalDate || null,
-        attachmentFileIds: newAsset.attachmentFileIds || [],
-        isPublic: newAsset.isPublic || false,
-        publicSummary: newAsset.publicSummary || "",
-        publicImages: JSON.stringify(newAsset.publicImages || []),
-        publicLocationLabel: newAsset.publicLocationLabel || "",
-        publicConditionLabel:
-          newAsset.publicConditionLabel || ENUMS.PUBLIC_CONDITION_LABEL.NEW,
-        // Add required assetImage field - use first image URL or empty string
-        assetImage:
-          newAsset.publicImages && newAsset.publicImages.length > 0
-            ? assetImageService.getPublicImageUrl(newAsset.publicImages[0])
-            : "",
-        // Mark as asset type
-        itemType: ENUMS.ITEM_TYPE.ASSET,
+      // Upload image if one is selected
+      if (newConsumable.selectedFile) {
+        try {
+          const uploadResult = await assetImageService.uploadImage(
+            newConsumable.selectedFile,
+            `consumable-${Date.now()}` // Use a temporary ID for the upload
+          );
+          imageUrl = assetImageService.getPublicImageUrl(uploadResult.$id);
+        } catch (uploadError) {
+          console.error("Failed to upload image:", uploadError);
+          toast.error("Failed to upload image. Please try again.");
+          return;
+        }
+      }
+
+      // Prepare consumable data matching Appwrite collection schema
+      const consumableData = {
+        // Basic information - use existing ASSETS collection fields
+        assetTag: `CONS-${Date.now()}`, // Generate unique tag for consumables
+        name: newConsumable.name,
+        category: ENUMS.CATEGORY.CONSUMABLE, // Use the correct CONSUMABLE category
+        subcategory: `${newConsumable.unit}|${newConsumable.status}|${newConsumable.consumableCategory}`, // Store unit, status, and consumable category in subcategory
+        itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
+
+        // Stock information - store in existing ASSETS fields
+        // Store stock data in existing fields that aren't used by consumables
+        serialNumber: `STOCK:${newConsumable.currentStock || 0}`, // Store current stock in serialNumber
+        model: `MIN:${newConsumable.minStock || 0}`, // Store min stock in model
+        manufacturer: `MAX:${newConsumable.maxStock || 0}`, // Store max stock in manufacturer
+
+        // Location information
+        locationName: newConsumable.locationName || "",
+        roomOrArea: newConsumable.roomOrArea || "",
+
+        // Public information
+        isPublic: newConsumable.isPublic || false,
+        publicSummary: newConsumable.publicSummary || "",
+        publicImages: JSON.stringify([]), // Empty array as JSON string
+        publicLocationLabel: "", // Empty string for consumables
+        publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW, // Default for consumables
+
+        // Required fields for ASSETS collection (already set above for stock data)
+        departmentId: "", // Empty for consumables
+        custodianStaffId: "", // Empty for consumables
+        availableStatus: ENUMS.AVAILABLE_STATUS.AVAILABLE, // Default for consumables
+        currentCondition: ENUMS.CURRENT_CONDITION.NEW, // Default for consumables
+        purchaseDate: null, // Empty for consumables
+        warrantyExpiryDate: null, // Empty for consumables
+        lastMaintenanceDate: null, // Empty for consumables
+        nextMaintenanceDue: null, // Empty for consumables
+        lastInventoryCheck: null, // Empty for consumables
+        retirementDate: null, // Empty for consumables
+        disposalDate: null, // Empty for consumables
+        attachmentFileIds: [], // Empty array for consumables
+        assetImage: imageUrl, // Use uploaded image URL or empty string
       };
 
-      await assetsService.create(assetData, staff.$id);
+      console.log("Creating consumable with data:", consumableData);
+      const result = await assetsService.create(consumableData, staff.$id);
+      console.log("Consumable created successfully:", result);
 
-      // Reset form and refresh assets
-      setNewAsset({
-        assetTag: "",
-        serialNumber: "",
+      // Reset form and refresh consumables
+      setNewConsumable({
         name: "",
-        category: ENUMS.CATEGORY.IT_EQUIPMENT,
-        subcategory: "",
-        model: "",
-        manufacturer: "",
-        departmentId: "",
-        custodianStaffId: "",
-        availableStatus: ENUMS.AVAILABLE_STATUS.AVAILABLE,
-        currentCondition: ENUMS.CURRENT_CONDITION.NEW,
+        category: ENUMS.CATEGORY.CONSUMABLE,
+        consumableCategory: ENUMS.CATEGORY.OFFICE_SUPPLIES,
+        currentStock: 0,
+        minStock: 0,
+        maxStock: 0,
+        unit: ENUMS.CONSUMABLE_UNIT.PIECE,
+        status: ENUMS.CONSUMABLE_STATUS.IN_STOCK,
         locationName: "",
         roomOrArea: "",
-        purchaseDate: "",
-        warrantyExpiryDate: "",
-        lastMaintenanceDate: "",
-        nextMaintenanceDue: "",
-        lastInventoryCheck: "",
-        retirementDate: "",
-        disposalDate: "",
-        attachmentFileIds: [],
         isPublic: false,
         publicSummary: "",
-        publicImages: "",
-        publicLocationLabel: "",
-        publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW,
+        itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
+        assetImage: "",
+        selectedFile: null,
       });
 
       setShowAddDialog(false);
-      await loadAssets();
-      toast.success("Asset created successfully!");
+      await loadConsumables();
+      toast.success("Consumable created successfully!");
+      setShowSuccessModal(true);
     } catch (error) {
-      toast.error("Failed to create asset. Please try again.");
+      console.error("Failed to create consumable:", error);
+      toast.error(
+        `Failed to create consumable: ${error.message || "Please try again."}`
+      );
     }
   };
 
-  const handleDeleteAsset = (asset) => {
-    setAssetToDelete(asset);
+  const handleDeleteConsumable = (consumable) => {
+    setConsumableToDelete(consumable);
     setShowDeleteDialog(true);
   };
 
-  const confirmDeleteAsset = async () => {
-    if (!assetToDelete) return;
+  const confirmDeleteConsumable = async () => {
+    if (!consumableToDelete) return;
 
     try {
-      await assetsService.delete(assetToDelete.$id);
-      await loadAssets();
+      await assetsService.delete(consumableToDelete.$id);
+      await loadConsumables();
       setShowDeleteDialog(false);
-      setAssetToDelete(null);
-      toast.success("Asset deleted successfully!");
+      setConsumableToDelete(null);
+      toast.success("Consumable deleted successfully!");
     } catch (error) {
-      toast.error("Failed to delete asset. Please try again.");
+      toast.error("Failed to delete consumable. Please try again.");
     }
   };
 
-  const cancelDeleteAsset = () => {
+  const cancelDeleteConsumable = () => {
     setShowDeleteDialog(false);
-    setAssetToDelete(null);
+    setConsumableToDelete(null);
   };
 
   /**
-   * Export assets data to JSON file with comprehensive metadata
-   *
-   * This function provides two export modes:
-   * 1. "Assets" - Exports ALL assets from the database
-   * 2. "FilteredAssets" - Exports only the currently filtered/displayed assets
-   *
-   * Features:
-   * - Includes metadata about the export (timestamp, user, filters applied)
-   * - Proper error handling with user feedback
-   * - Loading state management
-   * - Memory cleanup after download
-   * - Professional file naming with date stamps
-   *
-   * @param {string} type - Type of export ("Assets" | "FilteredAssets")
-   * @returns {Promise<void>} - Promise that resolves when export is complete
-   *
-   * @example
-   * // Export all assets
-   * await exportAssetsData("Assets");
-   *
-   * // Export only filtered results
-   * await exportAssetsData("FilteredAssets");
+   * Export consumables data to JSON file with comprehensive metadata
    */
-  const exportAssetsData = async (type = "Assets") => {
+  const exportConsumablesData = async (type = "Consumables") => {
     try {
       setExporting(true);
 
       let dataToExport = [];
 
-      if (type === "FilteredAssets") {
-        // Export only the currently filtered/displayed assets
-        dataToExport = filteredAssets;
+      if (type === "FilteredConsumables") {
+        // Export only the currently filtered/displayed consumables
+        dataToExport = filteredConsumables;
       } else {
-        // Export all assets from the database
-        const result = await assetsService.list();
+        // Export all consumables from the database
+        const result = await assetsService.getConsumables();
         dataToExport = result.documents;
       }
 
@@ -309,16 +338,15 @@ export default function AdminAssetManagement() {
         metadata: {
           exportType: type,
           exportedAt: new Date().toISOString(),
-          totalAssets: dataToExport.length,
+          totalConsumables: dataToExport.length,
           exportedBy: staff?.name || "Unknown",
           filters: {
             searchTerm: searchTerm || null,
             category: filterCategory !== "all" ? filterCategory : null,
             status: filterStatus !== "all" ? filterStatus : null,
-            condition: filterCondition !== "all" ? filterCondition : null,
           },
         },
-        assets: dataToExport,
+        consumables: dataToExport,
       };
 
       // Convert to JSON with proper formatting
@@ -348,23 +376,19 @@ export default function AdminAssetManagement() {
     }
   };
 
-  // Filter assets based on search and filters
-  const filteredAssets = assets.filter((asset) => {
+  // Filter consumables based on search and filters
+  const filteredConsumables = consumables.filter((consumable) => {
     const matchesSearch =
-      asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase());
+      consumable.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consumable.category?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesCategory =
-      filterCategory === "all" || asset.category === filterCategory;
+      filterCategory === "all" ||
+      getConsumableCategory(consumable) === filterCategory;
     const matchesStatus =
-      filterStatus === "all" || asset.availableStatus === filterStatus;
-    const matchesCondition =
-      filterCondition === "all" || asset.currentCondition === filterCondition;
+      filterStatus === "all" || getStatus(consumable) === filterStatus;
 
-    return (
-      matchesSearch && matchesCategory && matchesStatus && matchesCondition
-    );
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
   if (loading) {
@@ -384,21 +408,21 @@ export default function AdminAssetManagement() {
             <div className="space-y-1">
               <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
-                  Asset Management
+                  Consumable Management
                 </h1>
                 <p className="text-slate-600 font-medium">
-                  Manage system assets, inventory, and equipment
+                  Manage consumable inventory and stock levels
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {/* Export All Assets Button */}
+              {/* Export All Consumables Button */}
               <Button
-                onClick={() => exportAssetsData("Assets")}
+                onClick={() => exportConsumablesData("Consumables")}
                 disabled={exporting}
                 variant="outline"
-                title="Export all assets from the database as JSON file"
+                title="Export all consumables from the database as JSON file"
                 className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center justify-center relative z-10">
@@ -418,13 +442,12 @@ export default function AdminAssetManagement() {
               {/* Export Filtered Results Button - Only show if filters are applied */}
               {(searchTerm ||
                 filterCategory !== "all" ||
-                filterStatus !== "all" ||
-                filterCondition !== "all") && (
+                filterStatus !== "all") && (
                 <Button
-                  onClick={() => exportAssetsData("FilteredAssets")}
+                  onClick={() => exportConsumablesData("FilteredConsumables")}
                   disabled={exporting}
                   variant="outline"
-                  title="Export only the currently filtered/displayed assets as JSON file"
+                  title="Export only the currently filtered/displayed consumables as JSON file"
                   className="relative bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:bg-blue-100 hover:border-blue-300 text-blue-700 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center relative z-10">
@@ -448,7 +471,7 @@ export default function AdminAssetManagement() {
                     <div className="flex items-center justify-center relative z-10">
                       <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 group-hover:scale-110 transition-all duration-300" />
                       <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                        Add Asset
+                        Add Consumable
                       </span>
                     </div>
                     {/* Animated background gradient */}
@@ -459,16 +482,16 @@ export default function AdminAssetManagement() {
                     <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto">
                   <DialogHeader className="sticky top-0 bg-white border-b pb-4 mb-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <DialogTitle className="text-xl font-semibold">
-                          Add New Asset
+                          Add New Consumable
                         </DialogTitle>
                         <DialogDescription className="text-gray-600 mt-1">
-                          Create a new asset record in the system with detailed
-                          information
+                          Create a new consumable item in the system with
+                          detailed information
                         </DialogDescription>
                       </div>
                       <DialogClose asChild>
@@ -494,56 +517,42 @@ export default function AdminAssetManagement() {
                         </h3>
                       </div>
 
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="space-y-3">
-                          <Label
-                            htmlFor="assetTag"
-                            className="text-sm font-medium text-gray-700"
-                          >
-                            Asset Tag
-                          </Label>
-                          <Input
-                            id="assetTag"
-                            value={newAsset.assetTag}
-                            onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                assetTag: e.target.value,
-                              })
-                            }
-                            placeholder="Auto-generated if empty"
-                            className="h-11"
-                          />
-                        </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-3">
                           <Label
                             htmlFor="name"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Asset Name *
+                            Consumable Name *
                           </Label>
                           <Input
                             id="name"
-                            value={newAsset.name}
+                            value={newConsumable.name}
                             onChange={(e) =>
-                              setNewAsset({ ...newAsset, name: e.target.value })
+                              setNewConsumable({
+                                ...newConsumable,
+                                name: e.target.value,
+                              })
                             }
-                            placeholder="e.g., Dell Laptop XPS 13"
+                            placeholder="e.g., A4 Paper, Office Pens"
                             className="h-11"
                             required
                           />
                         </div>
                         <div className="space-y-3">
                           <Label
-                            htmlFor="category"
+                            htmlFor="consumableCategory"
                             className="text-sm font-medium text-gray-700"
                           >
                             Category *
                           </Label>
                           <Select
-                            value={newAsset.category}
+                            value={newConsumable.consumableCategory}
                             onValueChange={(value) =>
-                              setNewAsset({ ...newAsset, category: value })
+                              setNewConsumable({
+                                ...newConsumable,
+                                consumableCategory: value,
+                              })
                             }
                           >
                             <SelectTrigger className="h-11">
@@ -559,153 +568,90 @@ export default function AdminAssetManagement() {
                           </Select>
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                          <Label
-                            htmlFor="subcategory"
-                            className="text-sm font-medium text-gray-700"
-                          >
-                            Subcategory
-                          </Label>
-                          <Input
-                            id="subcategory"
-                            value={newAsset.subcategory}
-                            onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                subcategory: e.target.value,
-                              })
-                            }
-                            placeholder="e.g., Laptop, Desktop, Server"
-                            className="h-11"
-                          />
-                        </div>
-                        <div className="space-y-3">
-                          <Label
-                            htmlFor="serialNumber"
-                            className="text-sm font-medium text-gray-700"
-                          >
-                            Serial Number
-                          </Label>
-                          <Input
-                            id="serialNumber"
-                            value={newAsset.serialNumber}
-                            onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                serialNumber: e.target.value,
-                              })
-                            }
-                            placeholder="e.g., ABC123456"
-                            className="h-11"
-                          />
-                        </div>
-                      </div>
                     </div>
 
-                    {/* Technical Details */}
+                    {/* Stock Information */}
                     <div className="bg-blue-50 p-6 rounded-lg space-y-6">
                       <div className="flex items-center space-x-2">
                         <Settings className="h-5 w-5 text-blue-600" />
                         <h3 className="text-lg font-semibold text-gray-900">
-                          Technical Details
+                          Stock Information
                         </h3>
                       </div>
 
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="space-y-3">
                           <Label
-                            htmlFor="model"
+                            htmlFor="currentStock"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Model
+                            Current Stock *
                           </Label>
                           <Input
-                            id="model"
-                            value={newAsset.model}
+                            id="currentStock"
+                            type="number"
+                            value={newConsumable.currentStock}
                             onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                model: e.target.value,
+                              setNewConsumable({
+                                ...newConsumable,
+                                currentStock: parseInt(e.target.value) || 0,
                               })
                             }
-                            placeholder="e.g., XPS-13-9310"
+                            placeholder="0"
+                            className="h-11"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-3">
+                          <Label
+                            htmlFor="minStock"
+                            className="text-sm font-medium text-gray-700"
+                          >
+                            Minimum Stock
+                          </Label>
+                          <Input
+                            id="minStock"
+                            type="number"
+                            value={newConsumable.minStock}
+                            onChange={(e) =>
+                              setNewConsumable({
+                                ...newConsumable,
+                                minStock: parseInt(e.target.value) || 0,
+                              })
+                            }
+                            placeholder="0"
                             className="h-11"
                           />
                         </div>
                         <div className="space-y-3">
                           <Label
-                            htmlFor="manufacturer"
+                            htmlFor="unit"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Manufacturer
+                            Unit *
                           </Label>
-                          <Input
-                            id="manufacturer"
-                            value={newAsset.manufacturer}
-                            onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                manufacturer: e.target.value,
+                          <Select
+                            value={newConsumable.unit}
+                            onValueChange={(value) =>
+                              setNewConsumable({
+                                ...newConsumable,
+                                unit: value,
                               })
                             }
-                            placeholder="e.g., Dell Technologies"
-                            className="h-11"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Purchase & Warranty Information */}
-                    <div className="bg-green-50 p-6 rounded-lg space-y-6">
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="h-5 w-5 text-green-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Purchase & Warranty Information
-                        </h3>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                          <Label
-                            htmlFor="purchaseDate"
-                            className="text-sm font-medium text-gray-700"
                           >
-                            Purchase Date
-                          </Label>
-                          <Input
-                            id="purchaseDate"
-                            type="datetime-local"
-                            value={newAsset.purchaseDate}
-                            onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                purchaseDate: e.target.value,
-                              })
-                            }
-                            className="h-11"
-                          />
-                        </div>
-                        <div className="space-y-3">
-                          <Label
-                            htmlFor="warrantyExpiryDate"
-                            className="text-sm font-medium text-gray-700"
-                          >
-                            Warranty Expiry Date
-                          </Label>
-                          <Input
-                            id="warrantyExpiryDate"
-                            type="datetime-local"
-                            value={newAsset.warrantyExpiryDate}
-                            onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                warrantyExpiryDate: e.target.value,
-                              })
-                            }
-                            className="h-11"
-                          />
+                            <SelectTrigger className="h-11">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.values(ENUMS.CONSUMABLE_UNIT).map(
+                                (unit) => (
+                                  <SelectItem key={unit} value={unit}>
+                                    {formatCategory(unit)}
+                                  </SelectItem>
+                                )
+                              )}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -722,17 +668,17 @@ export default function AdminAssetManagement() {
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-3">
                           <Label
-                            htmlFor="currentCondition"
+                            htmlFor="status"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Current Condition
+                            Status
                           </Label>
                           <Select
-                            value={newAsset.currentCondition}
+                            value={newConsumable.status}
                             onValueChange={(value) =>
-                              setNewAsset({
-                                ...newAsset,
-                                currentCondition: value,
+                              setNewConsumable({
+                                ...newConsumable,
+                                status: value,
                               })
                             }
                           >
@@ -740,49 +686,16 @@ export default function AdminAssetManagement() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {Object.values(ENUMS.CURRENT_CONDITION).map(
-                                (condition) => (
-                                  <SelectItem key={condition} value={condition}>
-                                    {condition.replace(/_/g, " ")}
-                                  </SelectItem>
-                                )
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-3">
-                          <Label
-                            htmlFor="availableStatus"
-                            className="text-sm font-medium text-gray-700"
-                          >
-                            Available Status
-                          </Label>
-                          <Select
-                            value={newAsset.availableStatus}
-                            onValueChange={(value) =>
-                              setNewAsset({
-                                ...newAsset,
-                                availableStatus: value,
-                              })
-                            }
-                          >
-                            <SelectTrigger className="h-11">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.values(ENUMS.AVAILABLE_STATUS).map(
+                              {Object.values(ENUMS.CONSUMABLE_STATUS).map(
                                 (status) => (
                                   <SelectItem key={status} value={status}>
-                                    {status.replace(/_/g, " ")}
+                                    {formatCategory(status)}
                                   </SelectItem>
                                 )
                               )}
                             </SelectContent>
                           </Select>
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-3">
                           <Label
                             htmlFor="locationName"
@@ -792,34 +705,14 @@ export default function AdminAssetManagement() {
                           </Label>
                           <Input
                             id="locationName"
-                            value={newAsset.locationName}
+                            value={newConsumable.locationName}
                             onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
+                              setNewConsumable({
+                                ...newConsumable,
                                 locationName: e.target.value,
                               })
                             }
-                            placeholder="e.g., Building A"
-                            className="h-11"
-                          />
-                        </div>
-                        <div className="space-y-3">
-                          <Label
-                            htmlFor="roomOrArea"
-                            className="text-sm font-medium text-gray-700"
-                          >
-                            Room/Area
-                          </Label>
-                          <Input
-                            id="roomOrArea"
-                            value={newAsset.roomOrArea}
-                            onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
-                                roomOrArea: e.target.value,
-                              })
-                            }
-                            placeholder="e.g., Room 101"
+                            placeholder="e.g., Storage Room A"
                             className="h-11"
                           />
                         </div>
@@ -827,23 +720,61 @@ export default function AdminAssetManagement() {
 
                       <div className="space-y-3">
                         <Label
-                          htmlFor="publicLocationLabel"
+                          htmlFor="roomOrArea"
                           className="text-sm font-medium text-gray-700"
                         >
-                          Public Location Label
+                          Room/Area
                         </Label>
                         <Input
-                          id="publicLocationLabel"
-                          value={newAsset.publicLocationLabel}
+                          id="roomOrArea"
+                          value={newConsumable.roomOrArea}
                           onChange={(e) =>
-                            setNewAsset({
-                              ...newAsset,
-                              publicLocationLabel: e.target.value,
+                            setNewConsumable({
+                              ...newConsumable,
+                              roomOrArea: e.target.value,
                             })
                           }
-                          placeholder="e.g., Main Lab (visible to guests)"
+                          placeholder="e.g., Shelf 1, Cabinet B"
                           className="h-11"
                         />
+                      </div>
+                    </div>
+
+                    {/* Image Upload */}
+                    <div className="bg-green-50 p-6 rounded-lg space-y-6">
+                      <div className="flex items-center space-x-2">
+                        <Image className="h-5 w-5 text-green-600" />
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          Image
+                        </h3>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="assetImage"
+                          className="text-sm font-medium text-gray-700"
+                        >
+                          Consumable Image
+                        </Label>
+                        <Input
+                          id="assetImage"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              setNewConsumable({
+                                ...newConsumable,
+                                selectedFile: file,
+                                assetImage: file.name, // Show file name in UI
+                              });
+                            }
+                          }}
+                          className="h-11"
+                        />
+                        <p className="text-xs text-gray-500">
+                          Upload an image for this consumable (optional)
+                        </p>
                       </div>
                     </div>
 
@@ -861,10 +792,10 @@ export default function AdminAssetManagement() {
                           <input
                             type="checkbox"
                             id="isPublic"
-                            checked={newAsset.isPublic}
+                            checked={newConsumable.isPublic}
                             onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
+                              setNewConsumable({
+                                ...newConsumable,
                                 isPublic: e.target.checked,
                               })
                             }
@@ -874,7 +805,7 @@ export default function AdminAssetManagement() {
                             htmlFor="isPublic"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Make this asset visible in guest portal
+                            Make this consumable visible in guest portal
                           </Label>
                         </div>
 
@@ -887,10 +818,10 @@ export default function AdminAssetManagement() {
                           </Label>
                           <Textarea
                             id="publicSummary"
-                            value={newAsset.publicSummary}
+                            value={newConsumable.publicSummary}
                             onChange={(e) =>
-                              setNewAsset({
-                                ...newAsset,
+                              setNewConsumable({
+                                ...newConsumable,
                                 publicSummary: e.target.value,
                               })
                             }
@@ -899,59 +830,7 @@ export default function AdminAssetManagement() {
                             className="resize-none"
                           />
                         </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          <div className="space-y-3">
-                            <Label
-                              htmlFor="publicConditionLabel"
-                              className="text-sm font-medium text-gray-700"
-                            >
-                              Public Condition Label
-                            </Label>
-                            <Select
-                              value={newAsset.publicConditionLabel}
-                              onValueChange={(value) =>
-                                setNewAsset({
-                                  ...newAsset,
-                                  publicConditionLabel: value,
-                                })
-                              }
-                            >
-                              <SelectTrigger className="h-11">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.values(
-                                  ENUMS.PUBLIC_CONDITION_LABEL
-                                ).map((condition) => (
-                                  <SelectItem key={condition} value={condition}>
-                                    {condition.replace(/_/g, " ")}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
                       </div>
-                    </div>
-
-                    {/* Asset Images Section */}
-                    <div className="bg-gradient-to-br from-primary-50 to-sidebar-50 p-6 rounded-lg space-y-6">
-                      <div className="flex items-center space-x-2">
-                        <Image className="h-5 w-5 text-primary-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Asset Images
-                        </h3>
-                      </div>
-
-                      <ImageUpload
-                        assetId={newAsset.assetTag || "new_asset"}
-                        existingImages={newAsset.publicImages || []}
-                        onImagesChange={(newImages) => {
-                          setNewAsset({ ...newAsset, publicImages: newImages });
-                        }}
-                        maxImages={10}
-                      />
                     </div>
                   </div>
 
@@ -967,12 +846,15 @@ export default function AdminAssetManagement() {
                           </Button>
                         </DialogClose>
                         <Button
-                          onClick={handleCreateAsset}
-                          disabled={!newAsset.name || !newAsset.category}
+                          onClick={handleCreateConsumable}
+                          disabled={
+                            !newConsumable.name ||
+                            !newConsumable.consumableCategory
+                          }
                           className="px-6 bg-blue-600 hover:bg-blue-700"
                         >
                           <Plus className="w-4 h-4 mr-2" />
-                          Create Asset
+                          Create Consumable
                         </Button>
                       </div>
                     </div>
@@ -984,7 +866,7 @@ export default function AdminAssetManagement() {
 
           {/* Modern Key Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-            {/* Total Assets Card */}
+            {/* Total Consumables Card */}
             <Card className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -997,32 +879,31 @@ export default function AdminAssetManagement() {
                 </div>
                 <div className="space-y-1">
                   <div className="text-3xl font-bold text-slate-900">
-                    {assets.length}
+                    {consumables.length}
                   </div>
                   <p className="text-sm font-medium text-slate-600">
-                    Total Assets
+                    Total Consumables
                   </p>
                   <p className="text-xs text-sidebar-600">
                     {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
+                      consumables.filter(
+                        (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
                       ).length
                     }{" "}
-                    available •{" "}
+                    in stock •{" "}
                     {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
+                      consumables.filter(
+                        (c) =>
+                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
                       ).length
                     }{" "}
-                    in use
+                    low stock
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Available Assets Card */}
+            {/* In Stock Card */}
             <Card className="bg-gradient-to-br from-primary-50 to-primary-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -1036,49 +917,46 @@ export default function AdminAssetManagement() {
                 <div className="space-y-1">
                   <div className="text-3xl font-bold text-slate-900">
                     {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
+                      consumables.filter(
+                        (c) => getStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
                       ).length
                     }
                   </div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Available
-                  </p>
-                  <p className="text-xs text-primary-600">
-                    Ready for deployment
-                  </p>
+                  <p className="text-sm font-medium text-slate-600">In Stock</p>
+                  <p className="text-xs text-primary-600">Available for use</p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* In Use Assets Card */}
+            {/* Low Stock Card */}
             <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <Clock className="h-6 w-6 text-white" />
+                    <AlertTriangle className="h-6 w-6 text-white" />
                   </div>
                   <Badge className="bg-orange-500/20 text-orange-600 border-orange-500/30">
-                    Active
+                    Alert
                   </Badge>
                 </div>
                 <div className="space-y-1">
                   <div className="text-3xl font-bold text-slate-900">
                     {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
+                      consumables.filter(
+                        (c) =>
+                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
                       ).length
                     }
                   </div>
-                  <p className="text-sm font-medium text-slate-600">In Use</p>
-                  <p className="text-xs text-orange-600">Currently assigned</p>
+                  <p className="text-sm font-medium text-slate-600">
+                    Low Stock
+                  </p>
+                  <p className="text-xs text-orange-600">Needs restocking</p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Maintenance Assets Card */}
+            {/* Out of Stock Card */}
             <Card className="bg-gradient-to-br from-red-50 to-red-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -1092,36 +970,44 @@ export default function AdminAssetManagement() {
                 <div className="space-y-1">
                   <div className="text-3xl font-bold text-slate-900">
                     {
-                      assets.filter(
-                        (a) =>
-                          a.availableStatus ===
-                          ENUMS.AVAILABLE_STATUS.MAINTENANCE
+                      consumables.filter(
+                        (c) =>
+                          getStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
                       ).length
                     }
                   </div>
                   <p className="text-sm font-medium text-slate-600">
-                    Maintenance
+                    Out of Stock
                   </p>
-                  <p className="text-xs text-red-600">Needs attention</p>
+                  <p className="text-xs text-red-600">
+                    Needs immediate attention
+                  </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Staff Card */}
+            {/* Categories Card */}
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                    <Users className="h-6 w-6 text-white" />
+                    <ShoppingCart className="h-6 w-6 text-white" />
                   </div>
                   <Badge className="bg-purple-500/20 text-purple-600 border-purple-500/30">
-                    Team
+                    Types
                   </Badge>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-3xl font-bold text-slate-900">5</div>
-                  <p className="text-sm font-medium text-slate-600">Staff</p>
-                  <p className="text-xs text-purple-600">2 departments</p>
+                  <div className="text-3xl font-bold text-slate-900">
+                    {
+                      new Set(consumables.map((c) => getConsumableCategory(c)))
+                        .size
+                    }
+                  </div>
+                  <p className="text-sm font-medium text-slate-600">
+                    Categories
+                  </p>
+                  <p className="text-xs text-purple-600">Different types</p>
                 </div>
               </CardContent>
             </Card>
@@ -1138,15 +1024,15 @@ export default function AdminAssetManagement() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-slate-700">
-                  Search Assets
+                  Search Consumables
                 </Label>
                 <div className="relative group">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-primary-500 transition-colors duration-200" />
                   <Input
-                    placeholder="Search by name, tag, or serial..."
+                    placeholder="Search by name or category..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20 transition-all duration-200"
@@ -1186,31 +1072,9 @@ export default function AdminAssetManagement() {
                   </SelectTrigger>
                   <SelectContent className="z-30">
                     <SelectItem value="all">All Statuses</SelectItem>
-                    {Object.values(ENUMS.AVAILABLE_STATUS).map((status) => (
+                    {Object.values(ENUMS.CONSUMABLE_STATUS).map((status) => (
                       <SelectItem key={status} value={status}>
-                        {status.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-sm font-medium text-slate-700">
-                  Condition
-                </Label>
-                <Select
-                  value={filterCondition}
-                  onValueChange={setFilterCondition}
-                >
-                  <SelectTrigger className="h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20 transition-all duration-200">
-                    <SelectValue placeholder="All Conditions" />
-                  </SelectTrigger>
-                  <SelectContent className="z-30">
-                    <SelectItem value="all">All Conditions</SelectItem>
-                    {Object.values(ENUMS.CURRENT_CONDITION).map((condition) => (
-                      <SelectItem key={condition} value={condition}>
-                        {condition.replace(/_/g, " ")}
+                        {formatCategory(status)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1219,7 +1083,7 @@ export default function AdminAssetManagement() {
             </div>
           </div>
 
-          {/* Modern Assets Table */}
+          {/* Modern Consumables Table */}
           <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden relative z-10">
             <div className="p-6 border-b border-gray-200/60">
               <div className="flex items-center justify-between">
@@ -1229,16 +1093,18 @@ export default function AdminAssetManagement() {
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-slate-900">
-                      Assets
+                      Consumables
                     </h2>
                     <p className="text-sm text-slate-600">
-                      Manage and track all system assets
+                      Manage and track all consumable inventory
                     </p>
                   </div>
                 </div>
                 <Badge className="bg-sidebar-500/20 text-sidebar-600 border-sidebar-500/30 px-3 py-1">
-                  {filteredAssets.length}{" "}
-                  {filteredAssets.length === 1 ? "Asset" : "Assets"}
+                  {filteredConsumables.length}{" "}
+                  {filteredConsumables.length === 1
+                    ? "Consumable"
+                    : "Consumables"}
                 </Badge>
               </div>
             </div>
@@ -1248,25 +1114,22 @@ export default function AdminAssetManagement() {
                 <TableHeader>
                   <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
-                      Asset
+                      Consumable
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
-                      Images
+                      Image
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
                       Category
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
+                      Stock
+                    </TableHead>
+                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
                       Status
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
-                      Condition
-                    </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
                       Location
-                    </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
-                      Value
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6 text-center">
                       Actions
@@ -1274,10 +1137,10 @@ export default function AdminAssetManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAssets.length > 0 ? (
-                    filteredAssets.map((asset, index) => (
+                  {filteredConsumables.length > 0 ? (
+                    filteredConsumables.map((consumable, index) => (
                       <TableRow
-                        key={asset.$id}
+                        key={consumable.$id}
                         className="hover:bg-gray-50/50 transition-colors duration-200 group border-b border-gray-100/50"
                       >
                         <TableCell className="py-4 px-6">
@@ -1287,89 +1150,82 @@ export default function AdminAssetManagement() {
                             </div>
                             <div>
                               <p className="font-medium text-slate-900 group-hover:text-sidebar-700 transition-colors duration-200">
-                                {asset.name}
+                                {consumable.name}
                               </p>
-                              {asset.serialNumber && (
-                                <p className="text-sm text-slate-500">
-                                  S/N: {asset.serialNumber}
-                                </p>
-                              )}
+                              <p className="text-sm text-slate-500">
+                                {formatCategory(getUnit(consumable))}
+                              </p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="py-4 px-6">
-                          {(() => {
-                            const imageUrls =
-                              assetImageService.getAssetImageUrls(
-                                asset.publicImages
-                              );
-                            return imageUrls.length > 0 ? (
-                              <div className="flex items-center space-x-1">
-                                <img
-                                  src={imageUrls[0]}
-                                  alt={asset.name}
-                                  className="w-8 h-8 rounded object-cover border border-gray-200"
-                                  onError={(e) => {
-                                    e.target.style.display = "none";
-                                    e.target.nextSibling.style.display = "flex";
-                                  }}
-                                />
-                                <div className="hidden w-8 h-8 bg-gray-100 rounded border border-gray-200 items-center justify-center">
-                                  <Image className="w-4 h-4 text-gray-400" />
-                                </div>
-                                {imageUrls.length > 1 && (
-                                  <span className="text-xs text-gray-500 bg-gray-100 px-1 rounded">
-                                    +{imageUrls.length - 1}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="w-8 h-8 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                          {consumable.assetImage ? (
+                            <div className="flex items-center space-x-1">
+                              <img
+                                src={consumable.assetImage}
+                                alt={consumable.name}
+                                className="w-8 h-8 rounded object-cover border border-gray-200"
+                                onError={(e) => {
+                                  e.target.style.display = "none";
+                                  e.target.nextSibling.style.display = "flex";
+                                }}
+                              />
+                              <div className="hidden w-8 h-8 bg-gray-100 rounded border border-gray-200 items-center justify-center">
                                 <Image className="w-4 h-4 text-gray-400" />
                               </div>
-                            );
-                          })()}
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                              <Image className="w-4 h-4 text-gray-400" />
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           <Badge
                             variant="outline"
                             className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100 transition-colors duration-200"
                           >
-                            {formatCategory(asset.category)}
+                            {formatCategory(getConsumableCategory(consumable))}
                           </Badge>
                         </TableCell>
                         <TableCell className="py-4 px-6">
-                          <Badge
-                            className={`${getStatusBadgeColor(
-                              asset.availableStatus
-                            )} shadow-sm`}
-                          >
-                            {asset.availableStatus.replace(/_/g, " ")}
-                          </Badge>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium text-slate-900">
+                              {getCurrentStock(consumable)}
+                            </span>
+                            {getMinStock(consumable) > 0 && (
+                              <span className="text-sm text-slate-500">
+                                (min: {getMinStock(consumable)})
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           <Badge
-                            className={`${getConditionBadgeColor(
-                              asset.currentCondition
-                            )} shadow-sm`}
+                            className={`${
+                              getStatus(consumable) ===
+                              ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                                ? "bg-green-100 text-green-700 border-green-200"
+                                : getStatus(consumable) ===
+                                  ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                                ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                : getStatus(consumable) ===
+                                  ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+                                ? "bg-red-100 text-red-700 border-red-200"
+                                : "bg-gray-100 text-gray-700 border-gray-200"
+                            } shadow-sm`}
                           >
-                            {asset.currentCondition.replace(/_/g, " ")}
+                            {getStatus(consumable).replace(/_/g, " ")}
                           </Badge>
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           <div className="flex items-center space-x-2">
                             <MapPin className="h-4 w-4 text-slate-400" />
                             <span className="text-slate-700">
-                              {asset.locationName ||
-                                asset.roomOrArea ||
+                              {consumable.locationName ||
+                                consumable.roomOrArea ||
                                 "Not specified"}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4 px-6">
-                          <div className="flex items-center space-x-2">
-                            <DollarSign className="h-4 w-4 text-slate-400" />
-                            <span className="text-slate-500">-</span>
                           </div>
                         </TableCell>
                         <TableCell className="py-4 px-6">
@@ -1380,7 +1236,9 @@ export default function AdminAssetManagement() {
                               size="sm"
                               className="h-10 w-10 p-0 hover:bg-sidebar-100 hover:text-sidebar-700 transition-all duration-200 group/btn"
                             >
-                              <Link href={`/assets/${asset.$id}`}>
+                              <Link
+                                href={`/admin/consumables/${consumable.$id}`}
+                              >
                                 <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                               </Link>
                             </Button>
@@ -1390,14 +1248,16 @@ export default function AdminAssetManagement() {
                               size="sm"
                               className="h-10 w-10 p-0 hover:bg-primary-100 hover:text-primary-700 transition-all duration-200 group/btn"
                             >
-                              <Link href={`/admin/assets/${asset.$id}/edit`}>
+                              <Link
+                                href={`/admin/consumables/${consumable.$id}/edit`}
+                              >
                                 <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                               </Link>
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDeleteAsset(asset)}
+                              onClick={() => handleDeleteConsumable(consumable)}
                               className="h-10 w-10 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn"
                             >
                               <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
@@ -1415,7 +1275,7 @@ export default function AdminAssetManagement() {
                           </div>
                           <div className="space-y-2">
                             <p className="text-lg font-medium text-slate-600">
-                              No assets found
+                              No consumables found
                             </p>
                             <p className="text-sm text-slate-400">
                               Try adjusting your search or filters
@@ -1426,7 +1286,7 @@ export default function AdminAssetManagement() {
                             className="mt-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white"
                           >
                             <Plus className="w-4 h-4 mr-2" />
-                            Add First Asset
+                            Add First Consumable
                           </Button>
                         </div>
                       </TableCell>
@@ -1443,7 +1303,7 @@ export default function AdminAssetManagement() {
       {showDeleteDialog && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={cancelDeleteAsset}
+          onClick={cancelDeleteConsumable}
           style={{
             backgroundColor: "rgba(0, 0, 0, 0.5)",
             isolation: "isolate",
@@ -1474,15 +1334,15 @@ export default function AdminAssetManagement() {
               {/* Dialog Content */}
               <div className="text-center space-y-4 p-6">
                 <h3 className="text-xl font-semibold text-gray-900">
-                  Delete Asset
+                  Delete Consumable
                 </h3>
                 <p className="text-gray-600">
-                  Are you sure you want to delete this asset? This action cannot
-                  be undone.
+                  Are you sure you want to delete this consumable? This action
+                  cannot be undone.
                 </p>
 
-                {/* Asset Details */}
-                {assetToDelete && (
+                {/* Consumable Details */}
+                {consumableToDelete && (
                   <div className="bg-gray-50 rounded-lg p-4 mt-4">
                     <div className="flex items-center space-x-3">
                       <div className="p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg">
@@ -1490,15 +1350,16 @@ export default function AdminAssetManagement() {
                       </div>
                       <div className="text-left">
                         <p className="font-medium text-gray-900">
-                          {assetToDelete.name}
+                          {consumableToDelete.name}
                         </p>
-                        {assetToDelete.serialNumber && (
-                          <p className="text-sm text-gray-500">
-                            S/N: {assetToDelete.serialNumber}
-                          </p>
-                        )}
                         <p className="text-sm text-gray-500">
-                          {formatCategory(assetToDelete.category)}
+                          {formatCategory(
+                            getConsumableCategory(consumableToDelete)
+                          )}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Stock: {getCurrentStock(consumableToDelete)}{" "}
+                          {formatCategory(getUnit(consumableToDelete))}
                         </p>
                       </div>
                     </div>
@@ -1508,20 +1369,59 @@ export default function AdminAssetManagement() {
                 {/* Action Buttons */}
                 <div className="flex items-center space-x-3 w-full pt-4">
                   <Button
-                    onClick={cancelDeleteAsset}
+                    onClick={cancelDeleteConsumable}
                     className="flex-1 bg-green-600 hover:bg-green-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
                   >
                     Cancel
                   </Button>
                   <Button
-                    onClick={confirmDeleteAsset}
+                    onClick={confirmDeleteConsumable}
                     className="flex-1 bg-red-600 hover:bg-red-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Asset
+                    Delete Consumable
                   </Button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Beautiful Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-gradient-to-br from-black/40 via-primary-900/20 to-sidebar-900/20 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full relative z-[10000] animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+
+            {/* Success Content */}
+            <div className="p-8 text-center">
+              {/* Success Icon */}
+              <div className="mx-auto mb-6 w-20 h-20 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg">
+                <CheckCircle className="w-10 h-10 text-white" />
+              </div>
+
+              {/* Success Message */}
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                Success!
+              </h3>
+              <p className="text-gray-600 text-lg mb-8">
+                Consumable created successfully!
+              </p>
+
+              {/* Action Button */}
+              <Button
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+              >
+                Continue
+              </Button>
             </div>
           </div>
         </div>

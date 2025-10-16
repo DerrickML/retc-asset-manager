@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { ImageUpload } from "../ui/image-upload";
 import { assetImageService } from "../../lib/appwrite/image-service";
 import { assetsService } from "../../lib/appwrite/provider";
+import { useToastContext } from "../providers/toast-provider";
 import { X, Upload, Image as ImageIcon } from "lucide-react";
 
 export function AssetImageManager({ asset, onAssetUpdate }) {
+  const toast = useToastContext();
   const [uploading, setUploading] = useState(false);
 
   const handleImagesChange = async (newImageIds) => {
@@ -28,7 +30,7 @@ export function AssetImageManager({ asset, onAssetUpdate }) {
       });
     } catch (error) {
       console.error("Error updating asset images:", error);
-      alert("Failed to update asset images. Please try again.");
+      toast.error("Failed to update asset images. Please try again.");
     } finally {
       setUploading(false);
     }

@@ -53,7 +53,11 @@ import {
   assetEventsService,
 } from "../../../lib/appwrite/provider.js";
 import { assetImageService } from "../../../lib/appwrite/image-service.js";
-import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
+import {
+  getCurrentStaff,
+  permissions,
+  getCurrentViewMode,
+} from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
 import { notifyRequestCancelled } from "../../../lib/services/notification-triggers.js";
@@ -162,7 +166,7 @@ export default function RequestDetailsPage() {
           timestamp: requestData.approvedAt,
           title: "Request Approved",
           description: `Approved by ${approver?.name || "Admin"}`,
-          notes: requestData.approvalNotes,
+          notes: requestData.notes || "Request approved",
           icon: CheckCircle,
           color: "green",
         });
@@ -321,6 +325,7 @@ export default function RequestDetailsPage() {
   // Permission checks
   const isRequester = currentStaff?.$id === request?.requesterStaffId;
   const isAdmin = currentStaff && permissions.canApproveRequests(currentStaff);
+  const viewMode = getCurrentViewMode();
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -340,16 +345,23 @@ export default function RequestDetailsPage() {
   };
 
   const canEditRequest =
-    isRequester && request?.status === ENUMS.REQUEST_STATUS.PENDING;
+    isRequester &&
+    request?.status === ENUMS.REQUEST_STATUS.PENDING &&
+    viewMode === "user";
   const canCancelRequest =
     isRequester &&
     [ENUMS.REQUEST_STATUS.PENDING, ENUMS.REQUEST_STATUS.APPROVED].includes(
       request?.status
-    );
+    ) &&
+    viewMode === "user";
   const canDeleteRequest =
-    isRequester && request?.status === ENUMS.REQUEST_STATUS.PENDING;
+    isRequester &&
+    request?.status === ENUMS.REQUEST_STATUS.PENDING &&
+    viewMode === "user";
   const canResubmitRequest =
-    isRequester && request?.status === ENUMS.REQUEST_STATUS.DENIED;
+    isRequester &&
+    request?.status === ENUMS.REQUEST_STATUS.DENIED &&
+    viewMode === "user";
 
   if (loading) {
     return (
@@ -762,9 +774,7 @@ export default function RequestDetailsPage() {
                   </div>
                 )}
 
-                {(request.approvalNotes ||
-                  request.denialReason ||
-                  request.decisionNotes) && (
+                {(request.denialReason || request.decisionNotes) && (
                   <div>
                     <Label className="text-sm font-medium text-slate-700">
                       {request.status === ENUMS.REQUEST_STATUS.APPROVED
@@ -782,9 +792,7 @@ export default function RequestDetailsPage() {
                           : "bg-slate-50 border-slate-200"
                       }`}
                     >
-                      {request.approvalNotes ||
-                        request.denialReason ||
-                        request.decisionNotes}
+                      {request.denialReason || request.decisionNotes}
                     </div>
                   </div>
                 )}

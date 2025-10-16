@@ -74,18 +74,11 @@ import {
 import { register } from "../../../lib/utils/auth.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
-
-// Available user roles that match the collection array values
-const USER_ROLES = ["STAFF", "SYSTEM_ADMIN", "ASSET_ADMIN"];
+import { USER_ROLES } from "../../../lib/utils/mappings.js";
 
 // Helper function to format role for display
 const formatRole = (role) => {
-  const roleMap = {
-    STAFF: "Staff",
-    SYSTEM_ADMIN: "System Administrator",
-    ASSET_ADMIN: "Asset Administrator",
-  };
-  return roleMap[role] || role;
+  return USER_ROLES[role] || role;
 };
 
 // Helper function to get role badge color
@@ -329,6 +322,10 @@ export default function UserManagement() {
       setCreationStep("Finalizing setup...");
       await loadUsers();
 
+      // Reset filters to show all users
+      setSelectedRole("all");
+      setSearchTerm("");
+
       // Show success state
       setShowSuccess({
         userId: generatedUserId,
@@ -355,6 +352,9 @@ export default function UserManagement() {
     try {
       await staffService.update(userId, updates);
       await loadUsers();
+      // Reset filters to show all users
+      setSelectedRole("all");
+      setSearchTerm("");
       setEditingUser(null);
     } catch (error) {
       setError("Failed to update user");
@@ -435,6 +435,10 @@ export default function UserManagement() {
       await staffService.update(editingUser.$id, updateData);
       await loadUsers();
 
+      // Reset filters to show all users
+      setSelectedRole("all");
+      setSearchTerm("");
+
       // Close edit dialog
       setEditingUser(null);
       setEditUser({
@@ -489,6 +493,9 @@ export default function UserManagement() {
     try {
       await staffService.delete(userToDelete.$id);
       await loadUsers();
+      // Reset filters to show all users
+      setSelectedRole("all");
+      setSearchTerm("");
       setShowDeleteDialog(false);
       setUserToDelete(null);
     } catch (error) {
@@ -574,7 +581,7 @@ export default function UserManagement() {
         ></div>
       </div>
 
-      <div className="relative container mx-auto p-6 space-y-8 max-w-7xl">
+      <div className="relative container mx-auto p-6 space-y-8 max-w-7xl overflow-visible">
         {/* Modern Header */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
@@ -1027,12 +1034,10 @@ export default function UserManagement() {
                                       >
                                         <input
                                           type="checkbox"
-                                          checked={newUser.roles.includes(
-                                            value
-                                          )}
+                                          checked={newUser.roles.includes(key)}
                                           onChange={(e) =>
                                             handleRoleToggle(
-                                              value,
+                                              key,
                                               e.target.checked
                                             )
                                           }
@@ -1056,7 +1061,7 @@ export default function UserManagement() {
                                         key={role}
                                         className="text-sm font-semibold bg-gradient-to-r from-primary-500 to-sidebar-500 text-white px-3 py-1.5 rounded-lg shadow-md"
                                       >
-                                        {role}
+                                        {USER_ROLES[role] || role}
                                       </Badge>
                                     ))}
                                   </div>
@@ -1097,7 +1102,7 @@ export default function UserManagement() {
                                   <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
                                     <SelectValue placeholder="Select department" />
                                   </SelectTrigger>
-                                  <SelectContent className="z-50">
+                                  <SelectContent className="z-[9999]">
                                     {departments.map((dept) => (
                                       <SelectItem
                                         key={dept.$id}
@@ -1185,7 +1190,7 @@ export default function UserManagement() {
         </div>
 
         {/* Modern Filters */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-0">
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-10 overflow-visible">
           <div className="flex items-center space-x-3 mb-4">
             <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
               <Filter className="w-5 h-5 text-white" />
@@ -1210,7 +1215,12 @@ export default function UserManagement() {
               <SelectTrigger className="w-48 h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
-              <SelectContent className="z-50">
+              <SelectContent
+                className="z-[9999]"
+                position="popper"
+                sideOffset={4}
+                style={{ position: "fixed" }}
+              >
                 <SelectItem value="all">All Roles</SelectItem>
                 {Object.entries(USER_ROLES).map(([key, value]) => (
                   <SelectItem key={key} value={value}>
@@ -1566,12 +1576,9 @@ export default function UserManagement() {
                               >
                                 <input
                                   type="checkbox"
-                                  checked={editUser.roles.includes(value)}
+                                  checked={editUser.roles.includes(key)}
                                   onChange={(e) =>
-                                    handleEditRoleToggle(
-                                      value,
-                                      e.target.checked
-                                    )
+                                    handleEditRoleToggle(key, e.target.checked)
                                   }
                                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                                   disabled={editSubmitting}
@@ -1593,7 +1600,7 @@ export default function UserManagement() {
                                   variant="secondary"
                                   className="text-xs"
                                 >
-                                  {role}
+                                  {USER_ROLES[role] || role}
                                 </Badge>
                               ))}
                             </div>
@@ -1629,7 +1636,7 @@ export default function UserManagement() {
                             <SelectTrigger className="h-11">
                               <SelectValue placeholder="Select department" />
                             </SelectTrigger>
-                            <SelectContent className="z-50">
+                            <SelectContent className="z-[9999]">
                               {departments.map((dept) => (
                                 <SelectItem key={dept.$id} value={dept.$id}>
                                   {dept.name}

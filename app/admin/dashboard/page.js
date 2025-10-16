@@ -42,8 +42,10 @@ import {
   AlertCircle,
   Pause,
   Archive,
+  ShoppingCart,
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
+import { useToastContext } from "../../../components/providers/toast-provider";
 import {
   assetsService,
   assetRequestsService,
@@ -53,8 +55,14 @@ import {
 } from "../../../lib/appwrite/provider.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
+import {
+  getConsumableStatus,
+  getCurrentStock,
+  getMinStock,
+} from "../../../lib/utils/mappings.js";
 
 export default function AdminDashboard() {
+  const toast = useToastContext();
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -76,6 +84,10 @@ export default function AdminDashboard() {
       inUseAssets: 0,
       maintenanceAssets: 0,
       retiredAssets: 0,
+      totalConsumables: 0,
+      inStockConsumables: 0,
+      lowStockConsumables: 0,
+      outOfStockConsumables: 0,
       pendingRequests: 0,
       approvedRequests: 0,
       fulfilledRequests: 0,
@@ -85,6 +97,8 @@ export default function AdminDashboard() {
     assetsByCategory: [],
     assetsByDepartment: [],
     assetsByStatus: [],
+    consumablesByCategory: [],
+    consumablesByStatus: [],
     requestsByStatus: [],
     recentEvents: [],
   });
@@ -107,59 +121,92 @@ export default function AdminDashboard() {
       // Load all real data from Appwrite in parallel
       const [
         assetsResult,
+        consumablesResult,
         requestsResult,
         staffResult,
         departmentsResult,
         recentEventsResult,
       ] = await Promise.all([
         assetsService.list(),
-        assetRequestsService.list(),
+        assetsService.getConsumables(),
+        assetRequestsService.list([Query.orderDesc("$createdAt")]),
         staffService.list(),
         departmentsService.list(),
         assetEventsService.list([Query.orderDesc("at"), Query.limit(10)]),
       ]);
 
       const assets = assetsResult.documents;
+      const consumables = consumablesResult.documents;
       const requests = requestsResult.documents;
+      const consumableRequests = []; // No separate consumable requests in unified approach
       const allStaff = staffResult.documents;
       const departments = departmentsResult.documents;
       const events = recentEventsResult.documents;
+      const consumableEvents = []; // No separate consumable events in unified approach
 
       // Calculate real metrics from actual data
+      // Filter assets to only include actual assets (not consumables)
+      // Use same logic as Asset Management page
+      const actualAssets = assets.filter(
+        (item) =>
+          item.itemType === ENUMS.ITEM_TYPE.ASSET ||
+          !item.itemType ||
+          item.itemType === undefined
+      );
+
       const metrics = {
-        totalAssets: assets.length,
-        availableAssets: assets.filter(
+        totalAssets: actualAssets.length,
+        availableAssets: actualAssets.filter(
           (a) => a.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
         ).length,
-        inUseAssets: assets.filter(
+        inUseAssets: actualAssets.filter(
           (a) => a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE
         ).length,
-        maintenanceAssets: assets.filter(
+        maintenanceAssets: actualAssets.filter(
           (a) =>
             a.availableStatus === ENUMS.AVAILABLE_STATUS.MAINTENANCE ||
             a.availableStatus === ENUMS.AVAILABLE_STATUS.REPAIR_REQUIRED
         ).length,
-        retiredAssets: assets.filter(
+        retiredAssets: actualAssets.filter(
           (a) =>
             a.availableStatus === ENUMS.AVAILABLE_STATUS.RETIRED ||
             a.availableStatus === ENUMS.AVAILABLE_STATUS.DISPOSED
         ).length,
-        pendingRequests: requests.filter(
-          (r) => r.status === ENUMS.REQUEST_STATUS.PENDING
+        totalConsumables: consumables.length,
+        inStockConsumables: consumables.filter(
+          (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
         ).length,
-        approvedRequests: requests.filter(
-          (r) => r.status === ENUMS.REQUEST_STATUS.APPROVED
+        lowStockConsumables: consumables.filter(
+          (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
         ).length,
-        fulfilledRequests: requests.filter(
-          (r) => r.status === ENUMS.REQUEST_STATUS.FULFILLED
+        outOfStockConsumables: consumables.filter(
+          (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
         ).length,
+        pendingRequests:
+          requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.PENDING)
+            .length +
+          consumableRequests.filter(
+            (r) => r.status === ENUMS.DISTRIBUTION_STATUS.PENDING
+          ).length,
+        approvedRequests:
+          requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.APPROVED)
+            .length +
+          consumableRequests.filter(
+            (r) => r.status === ENUMS.DISTRIBUTION_STATUS.APPROVED
+          ).length,
+        fulfilledRequests:
+          requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.FULFILLED)
+            .length +
+          consumableRequests.filter(
+            (r) => r.status === ENUMS.DISTRIBUTION_STATUS.DISTRIBUTED
+          ).length,
         totalStaff: allStaff.length,
         totalDepartments: departments.length,
       };
 
       // Process assets by category (real data)
       const categoryMap = {};
-      assets.forEach((asset) => {
+      actualAssets.forEach((asset) => {
         const category = asset.category || "UNCATEGORIZED";
         categoryMap[category] = (categoryMap[category] || 0) + 1;
       });
@@ -172,14 +219,16 @@ export default function AdminDashboard() {
             .replace(/\b\w/g, (l) => l.toUpperCase()),
           value: count,
           percentage:
-            assets.length > 0 ? ((count / assets.length) * 100).toFixed(1) : 0,
+            actualAssets.length > 0
+              ? ((count / actualAssets.length) * 100).toFixed(1)
+              : 0,
         })
       );
 
       // Process assets by status (real data)
       const statusMap = {};
       Object.values(ENUMS.AVAILABLE_STATUS).forEach((status) => {
-        statusMap[status] = assets.filter(
+        statusMap[status] = actualAssets.filter(
           (a) => a.availableStatus === status
         ).length;
       });
@@ -193,7 +242,9 @@ export default function AdminDashboard() {
             .replace(/\b\w/g, (l) => l.toUpperCase()),
           value: count,
           percentage:
-            assets.length > 0 ? ((count / assets.length) * 100).toFixed(1) : 0,
+            actualAssets.length > 0
+              ? ((count / actualAssets.length) * 100).toFixed(1)
+              : 0,
           status: status,
         }));
 
@@ -223,7 +274,9 @@ export default function AdminDashboard() {
       // Process assets by department (real data)
       const deptAssetsMap = {};
       departments.forEach((dept) => {
-        const deptAssets = assets.filter((a) => a.departmentId === dept.$id);
+        const deptAssets = actualAssets.filter(
+          (a) => a.departmentId === dept.$id
+        );
         if (deptAssets.length > 0) {
           deptAssetsMap[dept.name] = {
             total: deptAssets.length,
@@ -254,13 +307,65 @@ export default function AdminDashboard() {
         })
       );
 
+      // Process consumables by category (real data)
+      const consumableCategoryMap = {};
+      consumables.forEach((consumable) => {
+        const category = consumable.category || "UNCATEGORIZED";
+        consumableCategoryMap[category] =
+          (consumableCategoryMap[category] || 0) + 1;
+      });
+
+      const consumablesByCategory = Object.entries(consumableCategoryMap).map(
+        ([category, count]) => ({
+          name: category
+            .replace(/_/g, " ")
+            .toLowerCase()
+            .replace(/\b\w/g, (l) => l.toUpperCase()),
+          value: count,
+          percentage:
+            consumables.length > 0
+              ? ((count / consumables.length) * 100).toFixed(1)
+              : 0,
+        })
+      );
+
+      // Process consumables by status (real data)
+      const consumableStatusMap = {};
+      Object.values(ENUMS.CONSUMABLE_STATUS).forEach((status) => {
+        consumableStatusMap[status] = consumables.filter(
+          (c) => getConsumableStatus(c) === status
+        ).length;
+      });
+
+      const consumablesByStatus = Object.entries(consumableStatusMap)
+        .filter(([status, count]) => count > 0)
+        .map(([status, count]) => ({
+          name: status
+            .replace(/_/g, " ")
+            .toLowerCase()
+            .replace(/\b\w/g, (l) => l.toUpperCase()),
+          value: count,
+          percentage:
+            consumables.length > 0
+              ? ((count / consumables.length) * 100).toFixed(1)
+              : 0,
+          status: status,
+        }));
+
+      // Combine recent events from both assets and consumables
+      const allRecentEvents = [...events, ...consumableEvents]
+        .sort((a, b) => new Date(b.at) - new Date(a.at))
+        .slice(0, 10);
+
       setDashboardData({
         metrics,
         assetsByCategory,
         assetsByDepartment,
         assetsByStatus,
+        consumablesByCategory,
+        consumablesByStatus,
         requestsByStatus,
-        recentEvents: events,
+        recentEvents: allRecentEvents,
       });
 
       setLastUpdated(new Date());
@@ -286,7 +391,9 @@ export default function AdminDashboard() {
           data = assets.documents;
           break;
         case "Requests":
-          const requests = await assetRequestsService.list();
+          const requests = await assetRequestsService.list([
+            Query.orderDesc("$createdAt"),
+          ]);
           data = requests.documents;
           break;
         case "Dashboard":
@@ -309,7 +416,7 @@ export default function AdminDashboard() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      alert("Export failed. Please try again.");
+      toast.error("Export failed. Please try again.");
     }
   };
 
@@ -430,97 +537,89 @@ export default function AdminDashboard() {
         </div>
 
         {/* Modern Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Total Assets Card */}
-          <Card
-            className="bg-gradient-to-br from-blue-50 to-indigo-100 border-0 shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4"
-            style={{ animationDelay: "0ms" }}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <Package className="h-6 w-6 text-white group-hover:animate-pulse" />
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-0 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-300 group cursor-pointer">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
+                  <Package className="h-3 w-3 text-white" />
                 </div>
-                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-0">
+                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-0 text-xs px-1.5 py-0.5">
                   Total
                 </Badge>
               </div>
               <div className="space-y-1">
-                <h3 className="text-3xl font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-slate-900">
                   {dashboardData.metrics.totalAssets}
                 </h3>
-                <p className="text-sm font-medium text-slate-600">
+                <p className="text-xs font-medium text-slate-600">
                   Total Assets
                 </p>
                 <p className="text-xs text-blue-600">
-                  {dashboardData.metrics.availableAssets} available •{" "}
-                  {dashboardData.metrics.inUseAssets} in use
+                  {dashboardData.metrics.availableAssets} available
                 </p>
               </div>
             </CardContent>
           </Card>
 
           {/* Available Assets Card */}
-          <Card className="bg-gradient-to-br from-emerald-50 to-green-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <CheckCircle2 className="h-6 w-6 text-white" />
+          <Card className="bg-gradient-to-br from-emerald-50 to-green-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-1.5 bg-gradient-to-br from-emerald-500 to-green-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
+                  <CheckCircle2 className="h-3 w-3 text-white" />
                 </div>
-                <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-0">
+                <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-0 text-xs px-1.5 py-0.5">
                   Ready
                 </Badge>
               </div>
               <div className="space-y-1">
-                <h3 className="text-3xl font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-slate-900">
                   {dashboardData.metrics.availableAssets}
                 </h3>
-                <p className="text-sm font-medium text-slate-600">Available</p>
-                <p className="text-xs text-green-600">Ready for deployment</p>
+                <p className="text-xs font-medium text-slate-600">Available</p>
+                <p className="text-xs text-green-600">Ready to deploy</p>
               </div>
             </CardContent>
           </Card>
 
           {/* Pending Requests Card */}
-          <Card
-            className="bg-gradient-to-br from-amber-50 to-orange-100 border-0 shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-500 group cursor-pointer animate-in fade-in slide-in-from-bottom-4"
-            style={{ animationDelay: "100ms" }}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <Clock className="h-6 w-6 text-white group-hover:animate-pulse" />
+          <Card className="bg-gradient-to-br from-amber-50 to-orange-100 border-0 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-300 group cursor-pointer">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-1.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
+                  <Clock className="h-3 w-3 text-white" />
                 </div>
-                <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-0">
+                <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-0 text-xs px-1.5 py-0.5">
                   Pending
                 </Badge>
               </div>
               <div className="space-y-1">
-                <h3 className="text-3xl font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-slate-900">
                   {dashboardData.metrics.pendingRequests}
                 </h3>
-                <p className="text-sm font-medium text-slate-600">Requests</p>
+                <p className="text-xs font-medium text-slate-600">Requests</p>
                 <p className="text-xs text-orange-600">Awaiting approval</p>
               </div>
             </CardContent>
           </Card>
-
           {/* Maintenance Card */}
-          <Card className="bg-gradient-to-br from-red-50 to-rose-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <AlertCircle className="h-6 w-6 text-white" />
+          <Card className="bg-gradient-to-br from-red-50 to-rose-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-1.5 bg-gradient-to-br from-red-500 to-rose-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
+                  <AlertCircle className="h-3 w-3 text-white" />
                 </div>
-                <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-0">
+                <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-0 text-xs px-1.5 py-0.5">
                   Alert
                 </Badge>
               </div>
               <div className="space-y-1">
-                <h3 className="text-3xl font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-slate-900">
                   {dashboardData.metrics.maintenanceAssets}
                 </h3>
-                <p className="text-sm font-medium text-slate-600">
+                <p className="text-xs font-medium text-slate-600">
                   Maintenance
                 </p>
                 <p className="text-xs text-red-600">Needs attention</p>
@@ -529,27 +628,105 @@ export default function AdminDashboard() {
           </Card>
 
           {/* Staff & Departments Card */}
-          <Card className="bg-gradient-to-br from-purple-50 to-indigo-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <Users className="h-6 w-6 text-white" />
+          <Card className="bg-gradient-to-br from-purple-50 to-indigo-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-1.5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
+                  <Users className="h-3 w-3 text-white" />
                 </div>
-                <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-0">
+                <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-0 text-xs px-1.5 py-0.5">
                   Team
                 </Badge>
               </div>
               <div className="space-y-1">
-                <h3 className="text-3xl font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-slate-900">
                   {dashboardData.metrics.totalStaff}
                 </h3>
-                <p className="text-sm font-medium text-slate-600">Staff</p>
+                <p className="text-xs font-medium text-slate-600">Staff</p>
                 <p className="text-xs text-purple-600">
                   {dashboardData.metrics.totalDepartments} departments
                 </p>
               </div>
             </CardContent>
           </Card>
+
+          {/* Total Consumables Card */}
+          <Card className="bg-gradient-to-br from-cyan-50 to-blue-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="p-1.5 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
+                  <ShoppingCart className="h-3 w-3 text-white" />
+                </div>
+                <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200 border-0 text-xs px-1.5 py-0.5">
+                  Stock
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900">
+                  {dashboardData.metrics.totalConsumables}
+                </h3>
+                <p className="text-xs font-medium text-slate-600">
+                  Consumables
+                </p>
+                <p className="text-xs text-cyan-600">
+                  {dashboardData.metrics.inStockConsumables} in stock
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Alert Cards - Full Width Below Main Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          {/* Low Stock Alert Card */}
+          {dashboardData.metrics.lowStockConsumables > 0 && (
+            <Card className="bg-gradient-to-br from-yellow-50 to-amber-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-1.5 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-md shadow-sm group-hover:scale-105 transition-transform duration-300">
+                    <AlertTriangle className="h-3 w-3 text-white" />
+                  </div>
+                  <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-0 text-xs px-1.5 py-0.5">
+                    Alert
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {dashboardData.metrics.lowStockConsumables}
+                  </h3>
+                  <p className="text-xs font-medium text-slate-600">
+                    Low Stock Items
+                  </p>
+                  <p className="text-xs text-yellow-600">Needs reordering</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Out of Stock Alert Card */}
+          {dashboardData.metrics.outOfStockConsumables > 0 && (
+            <Card className="bg-gradient-to-br from-red-50 to-rose-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-1.5 bg-gradient-to-br from-red-500 to-rose-600 rounded-md shadow-sm group-hover:scale-105 transition-transform duration-300">
+                    <XCircle className="h-3 w-3 text-white" />
+                  </div>
+                  <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-0 text-xs px-1.5 py-0.5">
+                    Critical
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {dashboardData.metrics.outOfStockConsumables}
+                  </h3>
+                  <p className="text-xs font-medium text-slate-600">
+                    Out of Stock
+                  </p>
+                  <p className="text-xs text-red-600">Urgent reorder needed</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Modern Alert for pending requests */}
@@ -587,7 +764,7 @@ export default function AdminDashboard() {
             {/* Animated background gradient */}
             <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-sidebar-500/5 rounded-2xl opacity-0 transition-opacity duration-500" />
 
-            <TabsList className="grid w-full grid-cols-4 bg-transparent gap-1 relative z-10">
+            <TabsList className="grid w-full grid-cols-5 bg-transparent gap-1 relative z-10">
               <TabsTrigger
                 value="overview"
                 className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary-500 data-[state=active]:to-primary-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-primary-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
@@ -638,6 +815,20 @@ export default function AdminDashboard() {
                   <Activity className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-sidebar-600 group-hover:text-sidebar-700" />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
                     Activity
+                  </span>
+                </div>
+                {/* Ripple effect */}
+                <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="consumables"
+                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-cyan-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
+              >
+                <div className="flex items-center justify-center relative">
+                  <ShoppingCart className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-cyan-600 group-hover:text-cyan-700" />
+                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                    Consumables
                   </span>
                 </div>
                 {/* Ripple effect */}
@@ -1089,7 +1280,7 @@ export default function AdminDashboard() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-amber-100 rounded-2xl border border-orange-200">
                       <div className="flex items-center justify-center mb-3">
                         <Clock className="w-6 h-6 text-orange-600 mr-2" />
@@ -1232,6 +1423,195 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                   )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Consumables Tab */}
+          <TabsContent value="consumables" className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Consumables Summary Cards */}
+              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
+                <CardHeader className="pb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg shadow-lg">
+                      <ShoppingCart className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-semibold text-slate-900">
+                        Consumables Overview
+                      </CardTitle>
+                      <CardDescription className="text-slate-600">
+                        Current consumable inventory status
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl border border-cyan-200">
+                      <div className="text-2xl font-bold text-cyan-700">
+                        {dashboardData.metrics.totalConsumables}
+                      </div>
+                      <div className="text-sm text-cyan-600 font-medium">
+                        Total Items
+                      </div>
+                    </div>
+                    <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
+                      <div className="text-2xl font-bold text-green-700">
+                        {dashboardData.metrics.inStockConsumables}
+                      </div>
+                      <div className="text-sm text-green-600 font-medium">
+                        In Stock
+                      </div>
+                    </div>
+                    <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl border border-yellow-200">
+                      <div className="text-2xl font-bold text-yellow-700">
+                        {dashboardData.metrics.lowStockConsumables}
+                      </div>
+                      <div className="text-sm text-yellow-600 font-medium">
+                        Low Stock
+                      </div>
+                    </div>
+                    <div className="text-center p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200">
+                      <div className="text-2xl font-bold text-red-700">
+                        {dashboardData.metrics.outOfStockConsumables}
+                      </div>
+                      <div className="text-sm text-red-600 font-medium">
+                        Out of Stock
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Consumables by Category */}
+              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
+                <CardHeader className="pb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg shadow-lg">
+                      <BarChart3 className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-semibold text-slate-900">
+                        Consumables by Category
+                      </CardTitle>
+                      <CardDescription className="text-slate-600">
+                        Distribution across different categories
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {dashboardData.consumablesByCategory.length > 0 ? (
+                      dashboardData.consumablesByCategory.map(
+                        (category, index) => (
+                          <div key={index} className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium text-slate-700">
+                                {category.name}
+                              </span>
+                              <span className="text-sm text-slate-500">
+                                {category.count} ({category.percentage}%)
+                              </span>
+                            </div>
+                            <Progress
+                              value={parseFloat(category.percentage)}
+                              className="h-2 bg-slate-100"
+                            />
+                          </div>
+                        )
+                      )
+                    ) : (
+                      <div className="text-center py-8">
+                        <ShoppingCart className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                        <p className="text-slate-500">No consumables found</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Consumables by Status */}
+            <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
+              <CardHeader className="pb-6">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg">
+                    <Target className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-semibold text-slate-900">
+                      Consumables by Status
+                    </CardTitle>
+                    <CardDescription className="text-slate-600">
+                      Current status distribution
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {dashboardData.consumablesByStatus.map((status, index) => {
+                    const getStatusColor = (statusName) => {
+                      if (statusName === "In Stock")
+                        return "from-green-500 to-green-600";
+                      if (statusName === "Low Stock")
+                        return "from-yellow-500 to-yellow-600";
+                      if (statusName === "Out of Stock")
+                        return "from-red-500 to-red-600";
+                      return "from-slate-500 to-slate-600";
+                    };
+
+                    const getStatusIcon = (statusName) => {
+                      if (statusName === "In Stock")
+                        return <CheckCircle2 className="h-6 w-6" />;
+                      if (statusName === "Low Stock")
+                        return <AlertTriangle className="h-6 w-6" />;
+                      if (statusName === "Out of Stock")
+                        return <XCircle className="h-6 w-6" />;
+                      return <Package className="h-6 w-6" />;
+                    };
+
+                    return (
+                      <div
+                        key={index}
+                        className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 hover:shadow-lg transition-all duration-300"
+                      >
+                        <div className="flex items-center space-x-3 mb-4">
+                          <div
+                            className={`p-3 bg-gradient-to-br ${getStatusColor(
+                              status.name
+                            )} rounded-lg shadow-lg`}
+                          >
+                            {getStatusIcon(status.name)}
+                          </div>
+                          <div>
+                            <div className="text-2xl font-bold text-slate-900">
+                              {status.count}
+                            </div>
+                            <div className="text-sm text-slate-600 font-medium">
+                              {status.name}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-600">Percentage</span>
+                            <span className="font-medium text-slate-900">
+                              {status.percentage}%
+                            </span>
+                          </div>
+                          <Progress
+                            value={parseFloat(status.percentage)}
+                            className="h-2 bg-slate-100"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

@@ -42,8 +42,10 @@ import {
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { settingsService } from "../../../lib/appwrite/provider.js";
+import { useToastContext } from "../../../components/providers/toast-provider";
 
 export default function AdminSettings() {
+  const toast = useToastContext();
   const [staff, setStaff] = useState(null);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +94,7 @@ export default function AdminSettings() {
       setStaff(currentStaff);
       await loadSettings();
     } catch (error) {
-      console.error("Failed to load data:", error);
+      // Failed to load data - will show error state
     } finally {
       setLoading(false);
     }
@@ -131,7 +133,7 @@ export default function AdminSettings() {
         });
       }
     } catch (error) {
-      console.error("Failed to load settings:", error);
+      // Failed to load settings - will use defaults
     }
   };
 
@@ -145,7 +147,7 @@ export default function AdminSettings() {
       await loadSettings(); // Refresh data
     } catch (error) {
       console.error("Failed to save settings:", error);
-      alert("Failed to save settings. Please try again.");
+      toast.error("Failed to save settings. Please try again.");
     } finally {
       setSaving(false);
     }

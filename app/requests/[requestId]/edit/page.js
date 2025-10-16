@@ -39,7 +39,10 @@ import {
   staffService,
 } from "../../../../lib/appwrite/provider.js";
 import { assetImageService } from "../../../../lib/appwrite/image-service.js";
-import { getCurrentStaff } from "../../../../lib/utils/auth.js";
+import {
+  getCurrentStaff,
+  getCurrentViewMode,
+} from "../../../../lib/utils/auth.js";
 import { ENUMS } from "../../../../lib/appwrite/config.js";
 import { validateRequestDates } from "../../../../lib/utils/validation.js";
 import { formatCategory } from "../../../../lib/utils/mappings.js";
@@ -98,6 +101,17 @@ export default function EditRequestPage() {
       }
 
       // Check if user can edit this request
+      const viewMode = getCurrentViewMode();
+
+      // Admins cannot edit requests in admin mode
+      if (viewMode === "admin") {
+        setError(
+          "Admins cannot edit requests. Switch to user mode to edit your own requests."
+        );
+        return;
+      }
+
+      // Users can only edit their own requests
       if (requestData.requesterStaffId !== staff.$id) {
         setError("You can only edit your own requests");
         return;
@@ -140,7 +154,7 @@ export default function EditRequestPage() {
                   );
                   asset.assetImage = null; // Remove invalid image reference
                 }
-          } catch {
+              } catch {
                 console.warn(
                   `Failed to validate image URL for asset ${asset.name}:`,
                   asset.assetImage
@@ -275,10 +289,10 @@ export default function EditRequestPage() {
 
   if (loading) {
     return (
-        <div className="animate-pulse space-y-6">
+      <div className="animate-pulse space-y-6">
         <div className="h-8 bg-gradient-to-r from-green-200 to-blue-200 rounded w-1/3"></div>
         <div className="h-64 bg-gradient-to-r from-green-100 to-blue-100 rounded-lg"></div>
-        </div>
+      </div>
     );
   }
 
@@ -313,8 +327,8 @@ export default function EditRequestPage() {
   }
 
   return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -340,26 +354,26 @@ export default function EditRequestPage() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-              Edit Request #{request.$id.slice(-8)}
-            </h1>
+                  Edit Request #{request.$id.slice(-8)}
+                </h1>
                 <p className="text-gray-600 mt-1">
                   Make changes to your pending request
                 </p>
               </div>
             </div>
           </div>
-          </div>
         </div>
+      </div>
 
-        {error && (
+      {error && (
         <Alert variant="destructive" className="border-red-200 bg-red-50">
-            <AlertTriangle className="h-4 w-4" />
+          <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="text-red-800">{error}</AlertDescription>
-          </Alert>
-        )}
+        </Alert>
+      )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Request Details */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Request Details */}
         <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
           <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-100">
             <CardTitle className="flex items-center gap-3 text-xl">
@@ -369,69 +383,69 @@ export default function EditRequestPage() {
               <span className="bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
                 Request Details
               </span>
-              </CardTitle>
-            </CardHeader>
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-6 p-6">
-              <div>
+            <div>
               <Label
                 htmlFor="purpose"
                 className="text-sm font-semibold text-gray-700 mb-2 block"
               >
                 Purpose *
               </Label>
-                <Textarea
-                  id="purpose"
-                  value={formData.purpose}
-                  onChange={(e) => handleInputChange("purpose", e.target.value)}
-                  placeholder="Describe why you need these assets..."
+              <Textarea
+                id="purpose"
+                value={formData.purpose}
+                onChange={(e) => handleInputChange("purpose", e.target.value)}
+                placeholder="Describe why you need these assets..."
                 rows={4}
                 className="mt-1 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
-                  required
-                />
-              </div>
+                required
+              />
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+              <div>
                 <Label
                   htmlFor="issueDate"
                   className="text-sm font-semibold text-gray-700 mb-2 block"
                 >
                   Issue Date *
                 </Label>
-                  <Input
-                    type="date"
-                    id="issueDate"
-                    value={formData.issueDate}
+                <Input
+                  type="date"
+                  id="issueDate"
+                  value={formData.issueDate}
                   onChange={(e) =>
                     handleInputChange("issueDate", e.target.value)
                   }
                   className="mt-1 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
-                    required
-                  />
-                </div>
-                <div>
+                  required
+                />
+              </div>
+              <div>
                 <Label
                   htmlFor="expectedReturnDate"
                   className="text-sm font-semibold text-gray-700 mb-2 block"
                 >
                   Expected Return Date *
                 </Label>
-                  <Input
-                    type="date"
-                    id="expectedReturnDate"
-                    value={formData.expectedReturnDate}
+                <Input
+                  type="date"
+                  id="expectedReturnDate"
+                  value={formData.expectedReturnDate}
                   onChange={(e) =>
                     handleInputChange("expectedReturnDate", e.target.value)
                   }
                   className="mt-1 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
-                    required
-                  />
-                </div>
+                  required
+                />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Asset Selection */}
+        {/* Asset Selection */}
         <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
           <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 border-b border-blue-100">
             <CardTitle className="flex items-center gap-3 text-xl">
@@ -441,17 +455,17 @@ export default function EditRequestPage() {
               <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Select Assets ({selectedAssets.length} selected)
               </span>
-              </CardTitle>
-            </CardHeader>
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-6 p-6">
-              {/* Selected Assets */}
-              {selectedAssets.length > 0 && (
-                <div>
+            {/* Selected Assets */}
+            {selectedAssets.length > 0 && (
+              <div>
                 <Label className="text-sm font-semibold text-gray-700 mb-3 block">
                   Selected Assets:
                 </Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {selectedAssets.map((asset) => (
+                  {selectedAssets.map((asset) => (
                     <div
                       key={asset.$id}
                       className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow"
@@ -489,7 +503,7 @@ export default function EditRequestPage() {
                         {/* Asset Info */}
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900 truncate">
-                        {asset.name}
+                            {asset.name}
                           </h4>
                           <p className="text-sm text-gray-600 truncate">
                             {formatCategory(asset.category)}
@@ -510,77 +524,77 @@ export default function EditRequestPage() {
                         </button>
                       </div>
                     </div>
-                    ))}
-                  </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Filters */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
-                  <Input
-                    type="search"
-                    placeholder="Search assets..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <Input
+                  type="search"
+                  placeholder="Search assets..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-lg"
-                  />
-                </div>
-                <div className="w-full sm:w-48">
+                />
+              </div>
+              <div className="w-full sm:w-48">
                 <Select
                   value={categoryFilter}
                   onValueChange={setCategoryFilter}
                 >
                   <SelectTrigger className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-lg">
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
-                      {Object.values(ENUMS.CATEGORY).map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {formatCategory(category)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {Object.values(ENUMS.CATEGORY).map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {formatCategory(category)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
 
-              {/* Available Assets */}
+            {/* Available Assets */}
             <div className="space-y-3 max-h-96 overflow-y-auto border border-gray-200 rounded-xl p-4 bg-gray-50/50">
-                {filteredAssets.length === 0 ? (
+              {filteredAssets.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <div className="p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
                     <Package className="w-8 h-8 text-gray-400" />
                   </div>
                   <p className="text-lg font-medium mb-2">No assets found</p>
-                    {searchTerm && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSearchTerm("")}
+                  {searchTerm && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSearchTerm("")}
                       className="mt-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      >
-                        Clear search
-                      </Button>
-                    )}
-                  </div>
-                ) : (
-                  filteredAssets.map((asset) => {
+                    >
+                      Clear search
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                filteredAssets.map((asset) => {
                   const isSelected = selectedAssets.some(
                     (selected) => selected.$id === asset.$id
                   );
-                    return (
-                      <div
-                        key={asset.$id}
+                  return (
+                    <div
+                      key={asset.$id}
                       className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
                         isSelected
                           ? "bg-gradient-to-r from-green-50 to-blue-50 border-green-200 shadow-md"
                           : "bg-white hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 hover:border-blue-200 hover:shadow-sm"
-                        }`}
-                        onClick={() => handleAssetToggle(asset)}
-                      >
+                      }`}
+                      onClick={() => handleAssetToggle(asset)}
+                    >
                       <Checkbox
                         checked={isSelected}
                         readOnly
@@ -620,7 +634,7 @@ export default function EditRequestPage() {
                         </div>
                       </div>
 
-                        <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                           <h4 className="font-semibold text-gray-900 truncate">
                             {asset.name}
@@ -633,28 +647,28 @@ export default function EditRequestPage() {
                                 : "border-gray-300 text-gray-600"
                             }`}
                           >
-                              {formatCategory(asset.category)}
-                            </Badge>
-                          </div>
+                            {formatCategory(asset.category)}
+                          </Badge>
+                        </div>
                         <p className="text-sm text-gray-600 truncate mb-1">
                           📍 {asset.locationName}
-                            {asset.roomOrArea && ` - ${asset.roomOrArea}`}
-                          </p>
-                          {asset.publicSummary && (
+                          {asset.roomOrArea && ` - ${asset.roomOrArea}`}
+                        </p>
+                        {asset.publicSummary && (
                           <p className="text-xs text-gray-500 line-clamp-2">
-                              {asset.publicSummary}
-                            </p>
-                          )}
-                        </div>
+                            {asset.publicSummary}
+                          </p>
+                        )}
                       </div>
+                    </div>
                   );
-                  })
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                })
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Actions */}
+        {/* Actions */}
         <div className="flex justify-between items-center bg-white rounded-xl shadow-lg border border-gray-100 p-6">
           <Button
             asChild
@@ -669,18 +683,18 @@ export default function EditRequestPage() {
               <ArrowLeft className="w-4 h-4" />
               Cancel
             </Link>
-            </Button>
-            
+          </Button>
+
           <Button
             type="submit"
             disabled={saving || selectedAssets.length === 0}
             className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-8 py-2 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-              <Save className="w-4 h-4 mr-2" />
-              {saving ? "Updating..." : "Update Request"}
-            </Button>
-          </div>
-        </form>
-      </div>
+            <Save className="w-4 h-4 mr-2" />
+            {saving ? "Updating..." : "Update Request"}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }

@@ -31,9 +31,11 @@ import { Clock, Settings, Send } from "lucide-react";
 import { databases } from "../../../lib/appwrite/client.js";
 import { DATABASE_ID, COLLECTIONS } from "../../../lib/appwrite/config.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
+import { useToastContext } from "../../../components/providers/toast-provider";
 import { Query } from "appwrite";
 
 export default function NotificationSettings() {
+  const toast = useToastContext();
   const [staff, setStaff] = useState(null);
   const [settings, setSettings] = useState({
     emailEnabled: true,
@@ -100,9 +102,9 @@ export default function NotificationSettings() {
     setLoading(true);
     try {
       // In a real implementation, this would save to a settings collection
-      alert("Settings saved successfully!");
+      toast.success("Settings saved successfully!");
     } catch (error) {
-      alert("Error saving settings");
+      toast.error("Error saving settings");
     } finally {
       setLoading(false);
     }
@@ -110,7 +112,7 @@ export default function NotificationSettings() {
 
   const sendTestEmail = async () => {
     if (!testEmail) {
-      alert("Please enter a test email address");
+      toast.warning("Please enter a test email address");
       return;
     }
 
@@ -123,10 +125,10 @@ export default function NotificationSettings() {
         timestamp: new Date().toISOString(),
       });
 
-      alert("Test email sent successfully!");
+      toast.success("Test email sent successfully!");
     } catch (error) {
       // Silent fail for test email
-      alert("Error sending test email");
+      toast.error("Error sending test email");
     } finally {
       setLoading(false);
     }
@@ -136,9 +138,9 @@ export default function NotificationSettings() {
     setLoading(true);
     try {
       // In a real implementation, this would trigger the scheduled functions
-      alert(`${taskType} task completed successfully!`);
+      toast.success(`${taskType} task completed successfully!`);
     } catch (error) {
-      alert(`Error running ${taskType}`);
+      toast.error(`Error running ${taskType}`);
     } finally {
       setLoading(false);
     }

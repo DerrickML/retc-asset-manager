@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -26,6 +27,7 @@ import {
   RefreshCw,
   Eye,
   Image as ImageIcon,
+  FileText,
 } from "lucide-react";
 import {
   assetsService,
@@ -37,11 +39,16 @@ import {
   getConditionBadgeColor,
   formatCategory,
 } from "../../lib/utils/mappings.js";
-import { getCurrentStaff, permissions } from "../../lib/utils/auth.js";
+import {
+  getCurrentStaff,
+  permissions,
+  getCurrentViewMode,
+} from "../../lib/utils/auth.js";
 import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { Query } from "appwrite";
 
 export default function AssetsPage() {
+  const router = useRouter();
   const [assets, setAssets] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,8 +113,23 @@ export default function AssetsPage() {
       queries.push(Query.orderDesc("$createdAt"));
 
       const result = await assetsService.list(queries);
-      setAssets(result.documents);
-      setTotalPages(Math.ceil(result.total / pageSize));
+
+      // Filter to only show assets (not consumables)
+      const assetsOnly = result.documents.filter(
+        (item) =>
+          item.itemType === ENUMS.ITEM_TYPE.ASSET ||
+          !item.itemType ||
+          item.itemType === undefined
+      );
+
+      console.log("All items:", result.documents.length);
+      console.log("Assets only:", assetsOnly.length);
+      console.log("Item types found:", [
+        ...new Set(result.documents.map((item) => item.itemType)),
+      ]);
+
+      setAssets(assetsOnly);
+      setTotalPages(Math.ceil(assetsOnly.length / pageSize));
     } catch (error) {
       console.error("Failed to load assets:", error);
     } finally {
@@ -123,7 +145,10 @@ export default function AssetsPage() {
     setCurrentPage(1);
   };
 
-  const canManageAssets = staff && permissions.canManageAssets(staff);
+  const canManageAssets =
+    staff &&
+    permissions.canManageAssets(staff) &&
+    getCurrentViewMode() === "admin";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -143,17 +168,30 @@ export default function AssetsPage() {
                 </p>
               </div>
             </div>
-            {canManageAssets && (
-              <Button
-                asChild
-                className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Link href="/assets/new" className="flex items-center gap-2">
-                  <Plus className="w-5 h-5" />
-                  Add Asset
-                </Link>
-              </Button>
-            )}
+            <div className="flex items-center gap-3">
+              {/* Request Asset button only for users (not admin mode) */}
+              {getCurrentViewMode() === "user" && (
+                <Button
+                  onClick={() => router.push("/requests/new")}
+                  className="bg-primary-600 hover:bg-primary-700 text-white"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Request Asset
+                </Button>
+              )}
+
+              {canManageAssets && (
+                <Button
+                  asChild
+                  className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Link href="/assets/new" className="flex items-center gap-2">
+                    <Plus className="w-5 h-5" />
+                    Add Asset
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 

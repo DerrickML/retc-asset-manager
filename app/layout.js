@@ -2,6 +2,8 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import LayoutProvider from "../components/layout/layout-provider";
 import QueryProvider from "../lib/providers/query-provider";
+import ErrorBoundary from "../components/error-boundary";
+import { ToastProvider } from "../components/providers/toast-provider";
 import "./globals.css";
 
 export const metadata = {
@@ -36,7 +38,7 @@ export const metadata = {
       },
     ],
   },
-}
+};
 
 export default function RootLayout({ children }) {
   return (
@@ -70,11 +72,36 @@ html {
   --font-mono: ${GeistMono.variable};
 }
         `}</style>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+            // Handle chunk load errors
+            window.addEventListener('error', function(e) {
+              if (e.message && e.message.includes('Loading chunk')) {
+                // Reload page for chunk load errors
+                window.location.reload();
+              }
+            });
+            
+            // Handle unhandled promise rejections
+            window.addEventListener('unhandledrejection', function(e) {
+              if (e.reason && e.reason.message && e.reason.message.includes('Loading chunk')) {
+                // Reload page for chunk load errors
+                window.location.reload();
+              }
+            });
+          `,
+          }}
+        />
       </head>
       <body>
-        <QueryProvider>
-          <LayoutProvider>{children}</LayoutProvider>
-        </QueryProvider>
+        <ErrorBoundary>
+          <QueryProvider>
+            <ToastProvider>
+              <LayoutProvider>{children}</LayoutProvider>
+            </ToastProvider>
+          </QueryProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

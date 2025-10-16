@@ -13,7 +13,11 @@ import {
   getConditionBadgeColor,
   formatCategory,
 } from "../../lib/utils/mappings.js";
-import { getCurrentStaff, permissions } from "../../lib/utils/auth.js";
+import {
+  getCurrentStaff,
+  permissions,
+  getCurrentViewMode,
+} from "../../lib/utils/auth.js";
 
 export function AssetOverview({ asset, onUpdate }) {
   const [department, setDepartment] = useState(null);
@@ -48,7 +52,10 @@ export function AssetOverview({ asset, onUpdate }) {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const canManageAssets = staff && permissions.canManageAssets(staff);
+  const canManageAssets =
+    staff &&
+    permissions.canManageAssets(staff) &&
+    getCurrentViewMode() === "admin";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

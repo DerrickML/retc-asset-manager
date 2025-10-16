@@ -5,14 +5,13 @@ import { useState, useEffect, useCallback } from "react";
 import Sidebar from "./sidebar";
 import { Navbar } from "./navbar";
 import { GuestNavbar } from "./guest-navbar";
-import {
-  getCurrentStaff,
-  initSessionMonitoring,
-} from "../../lib/utils/auth.js";
+import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { settingsService } from "../../lib/appwrite/provider.js";
+import { useToastContext } from "../providers/toast-provider";
 
 export default function LayoutProvider({ children }) {
   const pathname = usePathname();
+  const toast = useToastContext();
   const [staff, setStaff] = useState(null);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,10 +22,16 @@ export default function LayoutProvider({ children }) {
       setError(null);
 
       // Load staff data with timeout
-      const staffPromise = getCurrentStaff().catch(() => null);
+      const staffPromise = getCurrentStaff().catch((err) => {
+        // Silent fail for staff - user can still use the app
+        return null;
+      });
 
       // Load settings with timeout
-      const settingsPromise = settingsService.get().catch(() => null);
+      const settingsPromise = settingsService.get().catch((err) => {
+        // Silent fail for settings - app will use defaults
+        return null;
+      });
 
       // Wait for both with a timeout
       const [currentStaff, systemSettings] = await Promise.all([
@@ -46,13 +51,27 @@ export default function LayoutProvider({ children }) {
   useEffect(() => {
     loadAppData();
 
-    // Initialize session monitoring for authenticated users
-    const cleanup = initSessionMonitoring();
+    // Set a timeout to stop loading after 10 seconds
+    const timeout = setTimeout(() => {
+      if (loading) {
+        // Timeout reached - stop loading
+        setLoading(false);
+      }
+    }, 10000);
 
-    return () => {
-      cleanup();
+    return () => clearTimeout(timeout);
+  }, [loadAppData, loading]);
+
+  // Listen for session warning events
+  useEffect(() => {
+    const handleSessionWarning = (event) => {
+      toast.info(event.detail.message);
     };
-  }, []);
+
+    window.addEventListener("session-warning", handleSessionWarning);
+    return () =>
+      window.removeEventListener("session-warning", handleSessionWarning);
+  }, [toast]);
 
   if (loading) {
     return (
@@ -70,10 +89,41 @@ export default function LayoutProvider({ children }) {
           <div className="text-red-600 mb-4">Error loading application</div>
           <div className="text-gray-600 mb-4">{error}</div>
           <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              loadAppData();
+            }}
+            disabled={loading}
+            className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Retry
+            {loading ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Retrying...
+              </>
+            ) : (
+              "Retry"
+            )}
           </button>
         </div>
       </div>
@@ -87,7 +137,13 @@ export default function LayoutProvider({ children }) {
   const topNavOnlyRoutes = ["/guest"];
 
   // Define routes that need full sidebar layout (authenticated users)
-  const sidebarRoutes = ["/dashboard", "/admin", "/assets", "/requests"];
+  const sidebarRoutes = [
+    "/dashboard",
+    "/admin",
+    "/assets",
+    "/consumables",
+    "/requests",
+  ];
 
   const isNoLayout = noLayoutRoutes.some((route) => pathname.startsWith(route));
   const isTopNavOnly = topNavOnlyRoutes.some((route) =>

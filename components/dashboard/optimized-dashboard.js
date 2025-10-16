@@ -3,89 +3,114 @@
  * Implements lazy loading, memoization, and efficient re-rendering strategies
  */
 
-"use client"
+"use client";
 
-import React, { useState, useCallback, useMemo, Suspense } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
-import { Button } from "../ui/button"
-import { Badge } from "../ui/badge"
-import { Progress } from "../ui/progress"
-import { Alert } from "../ui/alert"
-import { 
-  Download, Users, Package, Clock, AlertTriangle, Settings, 
-  RefreshCw, TrendingUp, BarChart3, Activity, Filter
-} from "lucide-react"
-import { 
-  useDashboardData, 
-  useRefreshDashboard, 
+import React, { useState, useCallback, useMemo, Suspense } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Progress } from "../ui/progress";
+import { Alert } from "../ui/alert";
+import {
+  Download,
+  Users,
+  Package,
+  Clock,
+  AlertTriangle,
+  Settings,
+  RefreshCw,
+  TrendingUp,
+  BarChart3,
+  Activity,
+  Filter,
+} from "lucide-react";
+import {
+  useDashboardData,
+  useRefreshDashboard,
   useDashboardMutations,
-  useRoleBasedDashboard 
-} from "../../lib/hooks/use-dashboard-data.js"
+  useRoleBasedDashboard,
+} from "../../lib/hooks/use-dashboard-data.js";
+import { useToastContext } from "../providers/toast-provider";
 
 // Lazy load heavy chart components
-const MetricsChart = React.lazy(() => import("./charts/metrics-chart"))
-const TrendsChart = React.lazy(() => import("./charts/trends-chart"))
-const UtilizationChart = React.lazy(() => import("./charts/utilization-chart"))
-const AlertsList = React.lazy(() => import("./alerts/alerts-list"))
+const MetricsChart = React.lazy(() => import("./charts/metrics-chart"));
+const TrendsChart = React.lazy(() => import("./charts/trends-chart"));
+const UtilizationChart = React.lazy(() => import("./charts/utilization-chart"));
+const AlertsList = React.lazy(() => import("./alerts/alerts-list"));
 
 // Memoized metric card component to prevent unnecessary re-renders
-const MetricCard = React.memo(({ icon: Icon, title, value, subtitle, trend, color = "blue" }) => {
-  const trendColor = trend?.direction === 'up' ? 'text-green-600' : 
-                     trend?.direction === 'down' ? 'text-red-600' : 'text-gray-600'
-  
-  return (
-    <Card className="relative overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className={`h-4 w-4 text-${color}-600`} />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value.toLocaleString()}</div>
-        <div className="flex items-center justify-between mt-1">
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
-          {trend && (
-            <span className={`text-xs ${trendColor} flex items-center`}>
-              <TrendingUp className="h-3 w-3 mr-1" />
-              {trend.value}%
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-})
+const MetricCard = React.memo(
+  ({ icon: Icon, title, value, subtitle, trend, color = "blue" }) => {
+    const trendColor =
+      trend?.direction === "up"
+        ? "text-green-600"
+        : trend?.direction === "down"
+        ? "text-red-600"
+        : "text-gray-600";
 
-MetricCard.displayName = 'MetricCard'
+    return (
+      <Card className="relative overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Icon className={`h-4 w-4 text-${color}-600`} />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{value.toLocaleString()}</div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+            {trend && (
+              <span className={`text-xs ${trendColor} flex items-center`}>
+                <TrendingUp className="h-3 w-3 mr-1" />
+                {trend.value}%
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+);
+
+MetricCard.displayName = "MetricCard";
 
 // Memoized status overview component
 const StatusOverview = React.memo(({ metrics }) => {
-  const statusData = useMemo(() => [
-    { 
-      label: 'Available', 
-      value: metrics.availableAssets, 
-      total: metrics.totalAssets,
-      color: 'bg-green-500' 
-    },
-    { 
-      label: 'In Use', 
-      value: metrics.inUseAssets, 
-      total: metrics.totalAssets,
-      color: 'bg-blue-500' 
-    },
-    { 
-      label: 'Maintenance', 
-      value: metrics.maintenanceAssets, 
-      total: metrics.totalAssets,
-      color: 'bg-yellow-500' 
-    },
-    { 
-      label: 'Reserved', 
-      value: metrics.reservedAssets, 
-      total: metrics.totalAssets,
-      color: 'bg-purple-500' 
-    }
-  ], [metrics])
+  const statusData = useMemo(
+    () => [
+      {
+        label: "Available",
+        value: metrics.availableAssets,
+        total: metrics.totalAssets,
+        color: "bg-green-500",
+      },
+      {
+        label: "In Use",
+        value: metrics.inUseAssets,
+        total: metrics.totalAssets,
+        color: "bg-blue-500",
+      },
+      {
+        label: "Maintenance",
+        value: metrics.maintenanceAssets,
+        total: metrics.totalAssets,
+        color: "bg-yellow-500",
+      },
+      {
+        label: "Reserved",
+        value: metrics.reservedAssets,
+        total: metrics.totalAssets,
+        color: "bg-purple-500",
+      },
+    ],
+    [metrics]
+  );
 
   return (
     <div className="space-y-4">
@@ -96,9 +121,9 @@ const StatusOverview = React.memo(({ metrics }) => {
             <span className="text-sm font-medium">{status.label}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Progress 
-              value={(status.value / status.total) * 100} 
-              className="w-32" 
+            <Progress
+              value={(status.value / status.total) * 100}
+              className="w-32"
             />
             <span className="text-sm text-muted-foreground w-12">
               {status.value}
@@ -107,17 +132,17 @@ const StatusOverview = React.memo(({ metrics }) => {
         </div>
       ))}
     </div>
-  )
-})
+  );
+});
 
-StatusOverview.displayName = 'StatusOverview'
+StatusOverview.displayName = "StatusOverview";
 
 // Memoized category breakdown component
 const CategoryBreakdown = React.memo(({ categoryData }) => {
-  const sortedCategories = useMemo(() => 
-    [...categoryData].sort((a, b) => b.value - a.value).slice(0, 8),
+  const sortedCategories = useMemo(
+    () => [...categoryData].sort((a, b) => b.value - a.value).slice(0, 8),
     [categoryData]
-  )
+  );
 
   return (
     <div className="space-y-2">
@@ -125,7 +150,10 @@ const CategoryBreakdown = React.memo(({ categoryData }) => {
         <div key={category.name} className="flex items-center justify-between">
           <span className="text-sm font-medium">{category.name}</span>
           <div className="flex items-center gap-2">
-            <Progress value={parseFloat(category.percentage)} className="w-20" />
+            <Progress
+              value={parseFloat(category.percentage)}
+              className="w-20"
+            />
             <Badge variant="outline" className="text-xs">
               {category.value}
             </Badge>
@@ -133,10 +161,10 @@ const CategoryBreakdown = React.memo(({ categoryData }) => {
         </div>
       ))}
     </div>
-  )
-})
+  );
+});
 
-CategoryBreakdown.displayName = 'CategoryBreakdown'
+CategoryBreakdown.displayName = "CategoryBreakdown";
 
 // Loading fallback components
 const MetricCardSkeleton = () => (
@@ -149,7 +177,7 @@ const MetricCardSkeleton = () => (
       <div className="h-3 bg-gray-200 rounded w-2/3"></div>
     </CardContent>
   </Card>
-)
+);
 
 const ChartSkeleton = () => (
   <Card>
@@ -161,102 +189,97 @@ const ChartSkeleton = () => (
       <div className="h-64 bg-gray-100 rounded animate-pulse"></div>
     </CardContent>
   </Card>
-)
+);
 
 export default function OptimizedDashboard() {
-  const [activeTab, setActiveTab] = useState("overview")
-  const [departmentFilter, setDepartmentFilter] = useState(null)
-  
+  const toast = useToastContext();
+  const [activeTab, setActiveTab] = useState("overview");
+  const [departmentFilter, setDepartmentFilter] = useState(null);
+
   // Get role-based access
-  const { data: roleData } = useRoleBasedDashboard()
-  
+  const { data: roleData } = useRoleBasedDashboard();
+
   // Use the role-determined department filter
-  const effectiveDepartmentFilter = roleData?.departmentFilter || departmentFilter
-  
+  const effectiveDepartmentFilter =
+    roleData?.departmentFilter || departmentFilter;
+
   // Load dashboard data with React Query
-  const {
-    metrics,
-    analytics,
-    alerts,
-    utilization,
-    isLoading,
-    isError,
-    error
-  } = useDashboardData(effectiveDepartmentFilter)
-  
+  const { metrics, analytics, alerts, utilization, isLoading, isError, error } =
+    useDashboardData(effectiveDepartmentFilter);
+
   // Refresh mutation
-  const refreshMutation = useRefreshDashboard()
-  
+  const refreshMutation = useRefreshDashboard();
+
   // Dashboard mutations for cache invalidation
-  const { invalidateAll } = useDashboardMutations()
+  const { invalidateAll } = useDashboardMutations();
 
   // Memoized metric cards data to prevent recalculation
   const metricCards = useMemo(() => {
-    if (!metrics.data) return []
-    
-    const data = metrics.data
+    if (!metrics.data) return [];
+
+    const data = metrics.data;
     return [
       {
         icon: Package,
         title: "Total Assets",
         value: data.totalAssets,
         subtitle: `${data.availableAssets} available`,
-        trend: { direction: 'up', value: 5.2 },
-        color: "blue"
+        trend: { direction: "up", value: 5.2 },
+        color: "blue",
       },
       {
         icon: Users,
         title: "Active Users",
         value: data.activeUsers,
         subtitle: `${data.totalUsers} total staff`,
-        trend: { direction: 'up', value: 2.1 },
-        color: "green"
+        trend: { direction: "up", value: 2.1 },
+        color: "green",
       },
       {
         icon: Clock,
         title: "Pending Requests",
         value: data.pendingRequests,
         subtitle: "Awaiting approval",
-        trend: { direction: 'down', value: 3.5 },
-        color: "yellow"
+        trend: { direction: "down", value: 3.5 },
+        color: "yellow",
       },
       {
         icon: AlertTriangle,
         title: "Maintenance",
         value: data.maintenanceAssets,
         subtitle: "Assets needing attention",
-        trend: { direction: 'up', value: 8.1 },
-        color: "red"
-      }
-    ]
-  }, [metrics.data])
+        trend: { direction: "up", value: 8.1 },
+        color: "red",
+      },
+    ];
+  }, [metrics.data]);
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     try {
-      await refreshMutation.mutateAsync({ 
-        departmentFilter: effectiveDepartmentFilter 
-      })
+      await refreshMutation.mutateAsync({
+        departmentFilter: effectiveDepartmentFilter,
+      });
     } catch (error) {
-      console.error('Refresh failed:', error)
+      console.error("Refresh failed:", error);
     }
-  }, [refreshMutation, effectiveDepartmentFilter])
+  }, [refreshMutation, effectiveDepartmentFilter]);
 
   // Handle export (memoized to prevent recreation)
   const handleExport = useCallback(async (type) => {
     try {
-      console.log(`Exporting ${type} data...`)
+      console.log(`Exporting ${type} data...`);
       // Implementation would go here
-      alert(`${type} report exported successfully!`)
+      toast.success(`${type} report exported successfully!`);
     } catch (error) {
-      console.error('Export error:', error)
+      console.error("Export error:", error);
     }
-  }, [])
+  }, []);
 
   // Tab change handler
   const handleTabChange = useCallback((value) => {
-    setActiveTab(value)
-  }, [])
+    setActiveTab(value);
+  }, []);
 
   // Error state
   if (isError) {
@@ -267,11 +290,11 @@ export default function OptimizedDashboard() {
           <div>
             <h3 className="font-semibold">Dashboard Error</h3>
             <p className="text-sm mt-1">
-              {error?.message || 'Failed to load dashboard data'}
+              {error?.message || "Failed to load dashboard data"}
             </p>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleRefresh}
               className="mt-2"
             >
@@ -281,7 +304,7 @@ export default function OptimizedDashboard() {
           </div>
         </Alert>
       </div>
-    )
+    );
   }
 
   return (
@@ -289,9 +312,7 @@ export default function OptimizedDashboard() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Admin Dashboard
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
           <p className="text-gray-600">
             System overview and analytics
             {effectiveDepartmentFilter && (
@@ -307,7 +328,11 @@ export default function OptimizedDashboard() {
             onClick={handleRefresh}
             disabled={refreshMutation.isPending || isLoading}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${
+                refreshMutation.isPending ? "animate-spin" : ""
+              }`}
+            />
             Refresh
           </Button>
           <Button onClick={() => handleExport("Assets")} variant="outline">
@@ -323,19 +348,21 @@ export default function OptimizedDashboard() {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {isLoading ? (
-          // Loading skeletons
-          Array.from({ length: 4 }, (_, i) => <MetricCardSkeleton key={i} />)
-        ) : (
-          // Actual metric cards
-          metricCards.map((card, index) => (
-            <MetricCard key={index} {...card} />
-          ))
-        )}
+        {isLoading
+          ? // Loading skeletons
+            Array.from({ length: 4 }, (_, i) => <MetricCardSkeleton key={i} />)
+          : // Actual metric cards
+            metricCards.map((card, index) => (
+              <MetricCard key={index} {...card} />
+            ))}
       </div>
 
       {/* Charts and Analytics */}
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="space-y-4"
+      >
         <TabsList className="grid grid-cols-4 w-full lg:w-auto">
           <TabsTrigger value="overview">
             <BarChart3 className="h-4 w-4 mr-2" />
@@ -380,7 +407,9 @@ export default function OptimizedDashboard() {
                 {isLoading ? (
                   <div className="h-48 bg-gray-100 rounded animate-pulse" />
                 ) : (
-                  <CategoryBreakdown categoryData={analytics.data?.categoryDistribution || []} />
+                  <CategoryBreakdown
+                    categoryData={analytics.data?.categoryDistribution || []}
+                  />
                 )}
               </CardContent>
             </Card>
@@ -392,8 +421,8 @@ export default function OptimizedDashboard() {
             <ChartSkeleton />
           ) : (
             <Suspense fallback={<ChartSkeleton />}>
-              <MetricsChart 
-                data={analytics.data} 
+              <MetricsChart
+                data={analytics.data}
                 departmentFilter={effectiveDepartmentFilter}
               />
             </Suspense>
@@ -405,8 +434,8 @@ export default function OptimizedDashboard() {
             <ChartSkeleton />
           ) : (
             <Suspense fallback={<ChartSkeleton />}>
-              <TrendsChart 
-                data={analytics.data} 
+              <TrendsChart
+                data={analytics.data}
                 departmentFilter={effectiveDepartmentFilter}
               />
             </Suspense>
@@ -418,14 +447,11 @@ export default function OptimizedDashboard() {
             <ChartSkeleton />
           ) : (
             <Suspense fallback={<ChartSkeleton />}>
-              <AlertsList 
-                alerts={alerts.data} 
-                onRefresh={handleRefresh}
-              />
+              <AlertsList alerts={alerts.data} onRefresh={handleRefresh} />
             </Suspense>
           )}
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

@@ -49,6 +49,7 @@ import {
   XCircle,
   RefreshCw,
   Filter,
+  ShoppingCart,
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import {
@@ -61,6 +62,11 @@ import {
   formatCategory,
   getStatusBadgeColor,
   getConditionBadgeColor,
+  getConsumableStatus,
+  getCurrentStock,
+  getMinStock,
+  getMaxStock,
+  getConsumableUnit,
 } from "../../../lib/utils/mappings.js";
 
 export default function AdminReports() {
@@ -180,13 +186,25 @@ export default function AdminReports() {
       );
     }
 
+    // Separate assets and consumables
+    const actualAssets = filteredAssets.filter(
+      (item) =>
+        item.itemType === "ASSET" ||
+        !item.itemType ||
+        item.itemType === undefined
+    );
+    const consumables = filteredAssets.filter(
+      (item) => item.itemType === "CONSUMABLE"
+    );
+
     // Calculate metrics
     const assetsByCategory = {};
     const assetsByCondition = {};
     const assetsByStatus = {};
     let totalValue = 0;
 
-    filteredAssets.forEach((asset) => {
+    // Process only actual assets for asset-specific metrics
+    actualAssets.forEach((asset) => {
       // Category distribution
       assetsByCategory[asset.category] =
         (assetsByCategory[asset.category] || 0) + 1;
@@ -201,6 +219,12 @@ export default function AdminReports() {
 
       // Total value
       totalValue += asset.currentValue || 0;
+    });
+
+    // Add consumables to category distribution
+    consumables.forEach((consumable) => {
+      assetsByCategory[consumable.category] =
+        (assetsByCategory[consumable.category] || 0) + 1;
     });
 
     // Request analytics
@@ -268,7 +292,8 @@ export default function AdminReports() {
       });
 
     setAnalytics({
-      totalAssets: filteredAssets.length,
+      totalAssets: actualAssets.length,
+      totalConsumables: consumables.length,
       totalRequests: filteredRequests.length,
       totalUsers: users.length,
       assetsByCategory,
@@ -455,7 +480,7 @@ export default function AdminReports() {
         </div>
 
         {/* Analytics Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {/* Total Assets Card */}
           <div className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 rounded-2xl p-6 border border-sidebar-200/30 shadow-lg hover:shadow-xl transition-all duration-300 group">
             <div className="flex items-center justify-between mb-4">
@@ -477,6 +502,31 @@ export default function AdminReports() {
               </span>
               <div className="px-3 py-1 bg-sidebar-500/20 text-sidebar-600 rounded-lg text-sm font-semibold">
                 Inventory
+              </div>
+            </div>
+          </div>
+
+          {/* Total Consumables Card */}
+          <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-2xl p-6 border border-cyan-200/30 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300">
+                <ShoppingCart className="h-6 w-6 text-white" />
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-slate-900">
+                  {analytics.totalConsumables}
+                </div>
+                <p className="text-sm font-semibold text-slate-600">
+                  Stock items
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700">
+                Total Consumables
+              </span>
+              <div className="px-3 py-1 bg-cyan-500/20 text-cyan-600 rounded-lg text-sm font-semibold">
+                Stock
               </div>
             </div>
           </div>
@@ -559,7 +609,7 @@ export default function AdminReports() {
 
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 bg-gradient-to-r from-gray-50 to-gray-100 p-2 rounded-2xl shadow-inner border border-gray-200/50">
+            <TabsList className="grid w-full grid-cols-5 bg-gradient-to-r from-gray-50 to-gray-100 p-2 rounded-2xl shadow-inner border border-gray-200/50">
               <TabsTrigger
                 value="overview"
                 className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary-500 data-[state=active]:to-primary-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 font-semibold transition-all duration-300 rounded-xl py-3 px-4 group hover:bg-primary-50 hover:text-primary-700 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:text-slate-800"
@@ -579,6 +629,16 @@ export default function AdminReports() {
                   <span>Asset Reports</span>
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-r from-sidebar-500/20 to-sidebar-600/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+              </TabsTrigger>
+              <TabsTrigger
+                value="consumables"
+                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 font-semibold transition-all duration-300 rounded-xl py-3 px-4 group hover:bg-cyan-50 hover:text-cyan-700 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:text-slate-800"
+              >
+                <div className="flex items-center space-x-2">
+                  <ShoppingCart className="w-4 h-4 group-hover:scale-110 transition-transform duration-200" />
+                  <span>Consumable Reports</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </TabsTrigger>
               <TabsTrigger
                 value="requests"
@@ -710,7 +770,7 @@ export default function AdminReports() {
                   <div className="space-y-4">
                     {analytics.topRequesters.map((requester, index) => (
                       <div
-                        key={requester.name}
+                        key={`${requester.name}-${index}`}
                         className="flex items-center justify-between p-4 bg-white rounded-xl border border-primary-200 hover:border-primary-300 transition-colors group"
                       >
                         <div className="flex items-center space-x-3">
@@ -752,7 +812,7 @@ export default function AdminReports() {
                   <div className="space-y-4">
                     {analytics.mostRequestedAssets.map((asset, index) => (
                       <div
-                        key={asset.name}
+                        key={`${asset.name}-${index}`}
                         className="flex items-center justify-between p-4 bg-white rounded-xl border border-orange-200 hover:border-orange-300 transition-colors group"
                       >
                         <div className="flex items-center space-x-3">
@@ -888,6 +948,282 @@ export default function AdminReports() {
                       </p>
                     </div>
                   )}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Consumable Reports Tab */}
+            <TabsContent value="consumables">
+              <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden">
+                <div className="p-6 border-b border-gray-200/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg shadow-md">
+                        <ShoppingCart className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-800">
+                          Consumable Reports
+                        </h2>
+                        <p className="text-slate-600">
+                          Detailed analysis of consumable inventory and usage
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex space-x-3">
+                      <Button
+                        onClick={() =>
+                          exportToCSV(
+                            reportData.assets.filter(
+                              (item) => item.itemType === "CONSUMABLE"
+                            ),
+                            "consumable-report"
+                          )
+                        }
+                        className="bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Export CSV
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {/* Consumable Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-2xl p-6 border border-cyan-200/30 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-cyan-600">
+                            Total Consumables
+                          </p>
+                          <p className="text-3xl font-bold text-slate-900">
+                            {analytics.totalConsumables}
+                          </p>
+                        </div>
+                        <ShoppingCart className="h-8 w-8 text-cyan-500" />
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 border border-green-200/30 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-green-600">
+                            In Stock
+                          </p>
+                          <p className="text-3xl font-bold text-slate-900">
+                            {
+                              reportData.assets
+                                .filter(
+                                  (item) => item.itemType === "CONSUMABLE"
+                                )
+                                .filter((consumable) => {
+                                  return (
+                                    getConsumableStatus(consumable) ===
+                                    ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                                  );
+                                }).length
+                            }
+                          </p>
+                        </div>
+                        <CheckCircle2 className="h-8 w-8 text-green-500" />
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl p-6 border border-orange-200/30 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-orange-600">
+                            Low Stock
+                          </p>
+                          <p className="text-3xl font-bold text-slate-900">
+                            {
+                              reportData.assets
+                                .filter(
+                                  (item) => item.itemType === "CONSUMABLE"
+                                )
+                                .filter((consumable) => {
+                                  return (
+                                    getConsumableStatus(consumable) ===
+                                    ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                                  );
+                                }).length
+                            }
+                          </p>
+                        </div>
+                        <AlertTriangle className="h-8 w-8 text-orange-500" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Consumables by Category */}
+                  <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
+                    <h3 className="text-xl font-bold text-slate-800 mb-4">
+                      Consumables by Category
+                    </h3>
+                    <div className="space-y-4">
+                      {Object.entries(
+                        reportData.assets
+                          .filter((item) => item.itemType === "CONSUMABLE")
+                          .reduce((acc, consumable) => {
+                            const category = consumable.category || "Unknown";
+                            acc[category] = (acc[category] || 0) + 1;
+                            return acc;
+                          }, {})
+                      )
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([category, count]) => (
+                          <div
+                            key={category}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className="w-3 h-3 bg-cyan-500 rounded-full"></div>
+                              <span className="font-medium text-slate-700">
+                                {category}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <div className="w-32 bg-gray-200 rounded-full h-2">
+                                <div
+                                  className="bg-cyan-500 h-2 rounded-full"
+                                  style={{
+                                    width: `${
+                                      (count / analytics.totalConsumables) * 100
+                                    }%`,
+                                  }}
+                                ></div>
+                              </div>
+                              <span className="text-sm font-semibold text-slate-600 w-8 text-right">
+                                {count}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Consumables Table */}
+                  <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl overflow-hidden">
+                    <div className="p-6 border-b border-gray-200/30">
+                      <h3 className="text-xl font-bold text-slate-800">
+                        Consumable Inventory Details
+                      </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50/50">
+                            <TableHead className="font-semibold text-slate-700">
+                              Name
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700">
+                              Category
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700">
+                              Current Stock
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700">
+                              Min Stock
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700">
+                              Max Stock
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700">
+                              Status
+                            </TableHead>
+                            <TableHead className="font-semibold text-slate-700">
+                              Unit
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {reportData.assets
+                            .filter((item) => item.itemType === "CONSUMABLE")
+                            .slice(0, 50)
+                            .map((consumable) => {
+                              const currentStock = getCurrentStock(consumable);
+                              const minStock = getMinStock(consumable);
+                              const maxStock = getMaxStock(consumable);
+                              const status = getConsumableStatus(consumable);
+                              const unit = getConsumableUnit(consumable);
+                              const isLowStock = currentStock <= minStock;
+
+                              return (
+                                <TableRow
+                                  key={consumable.$id}
+                                  className="hover:bg-gray-50/50"
+                                >
+                                  <TableCell className="font-medium text-slate-700">
+                                    {consumable.name}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-cyan-600 border-cyan-200"
+                                    >
+                                      {consumable.category}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span
+                                      className={`font-semibold ${
+                                        isLowStock
+                                          ? "text-orange-600"
+                                          : "text-green-600"
+                                      }`}
+                                    >
+                                      {currentStock}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-slate-600">
+                                    {minStock}
+                                  </TableCell>
+                                  <TableCell className="text-slate-600">
+                                    {maxStock}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant={
+                                        status === "ACTIVE"
+                                          ? "default"
+                                          : "secondary"
+                                      }
+                                      className={
+                                        status === "ACTIVE"
+                                          ? "bg-green-100 text-green-700"
+                                          : "bg-gray-100 text-gray-700"
+                                      }
+                                    >
+                                      {status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-slate-600">
+                                    {unit}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {reportData.assets.filter(
+                      (item) => item.itemType === "CONSUMABLE"
+                    ).length > 50 && (
+                      <div className="p-4 border-t border-gray-200/30 bg-gray-50/50">
+                        <p className="text-sm font-semibold text-slate-700 text-center">
+                          Showing first 50 of{" "}
+                          {
+                            reportData.assets.filter(
+                              (item) => item.itemType === "CONSUMABLE"
+                            ).length
+                          }{" "}
+                          consumables. Export for full report.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </TabsContent>

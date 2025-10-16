@@ -79,13 +79,14 @@ import {
   staffService,
   departmentsService,
 } from "../../../lib/appwrite/provider.js";
-import {
-  NotificationTriggers,
-  notifyRequestApproved,
-  notifyRequestRejected,
-} from "../../../lib/services/notification-triggers.js";
+// import {
+//   NotificationTriggers,
+//   notifyRequestApproved,
+//   notifyRequestRejected,
+// } from "../../../lib/services/notification-triggers.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
+import { Query } from "appwrite";
 import Link from "next/link";
 
 // Helper function to format date
@@ -183,7 +184,9 @@ export default function RequestQueue() {
 
   const loadRequests = async () => {
     try {
-      const response = await assetRequestsService.list();
+      // Sort by creation date descending (newest first)
+      const queries = [Query.orderDesc("$createdAt")];
+      const response = await assetRequestsService.list(queries);
       const requests = response.documents || [];
       setRequests(requests);
     } catch (error) {
@@ -240,18 +243,53 @@ export default function RequestQueue() {
       const asset =
         request.assets && request.assets[0] ? request.assets[0] : null;
 
-      // Update the request status with notification options
+      // Update the request status - use only fields that exist in the schema
       const updateData = {
         status,
-        approvalNotes:
-          status === ENUMS.REQUEST_STATUS.DENIED
-            ? "Request denied by administrator"
-            : status === ENUMS.REQUEST_STATUS.APPROVED
-            ? "Request approved by administrator"
-            : "",
-        decidedAt: new Date().toISOString(),
-        decidedBy: currentStaff.$id,
       };
+
+      // For consumables, automatically issue them when approved
+      if (status === ENUMS.REQUEST_STATUS.APPROVED) {
+        // Check if this request contains consumables
+        const requestedItems = request.requestedItems || [];
+        const consumableItems = [];
+
+        // Load each requested item to check if it's a consumable
+        for (const itemId of requestedItems) {
+          try {
+            const item = await assetsService.get(itemId);
+            if (item.itemType === ENUMS.ITEM_TYPE.CONSUMABLE) {
+              consumableItems.push(item);
+            }
+          } catch (error) {
+            console.warn(`Failed to load item ${itemId}:`, error);
+          }
+        }
+
+        // If there are consumables, automatically issue them
+        if (consumableItems.length > 0) {
+          for (const consumable of consumableItems) {
+            try {
+              await assetsService.adjustConsumableStock(
+                consumable.$id,
+                -1, // Reduce stock by 1
+                currentStaff.$id,
+                `Consumable auto-issued for approved request #${requestId.slice(
+                  -8
+                )}`
+              );
+            } catch (error) {
+              console.error(
+                `Failed to adjust stock for ${consumable.name}:`,
+                error
+              );
+            }
+          }
+
+          // Mark request as fulfilled since consumables are automatically issued
+          updateData.status = ENUMS.REQUEST_STATUS.FULFILLED;
+        }
+      }
 
       // Update the request
       await assetRequestsService.update(requestId, updateData);
@@ -259,9 +297,11 @@ export default function RequestQueue() {
       // Send notification using the new notification triggers
       const updatedRequest = { ...request, ...updateData };
       if (status === ENUMS.REQUEST_STATUS.APPROVED) {
-        await notifyRequestApproved(updatedRequest, currentStaff.$id);
+        // TODO: Implement notifyRequestApproved function
+        // await notifyRequestApproved(updatedRequest, currentStaff.$id);
       } else if (status === ENUMS.REQUEST_STATUS.DENIED) {
-        await notifyRequestRejected(updatedRequest, currentStaff.$id);
+        // TODO: Implement notifyRequestRejected function
+        // await notifyRequestRejected(updatedRequest, currentStaff.$id);
       }
 
       await loadRequests();

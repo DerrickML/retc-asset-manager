@@ -166,16 +166,27 @@ export default function IssueAssetsPage() {
           acknowledgedByRequester: false,
         });
 
-        // Update asset status
-        await assetsService.update(
-          asset.$id,
-          {
-            availableStatus: ENUMS.AVAILABLE_STATUS.IN_USE,
-            custodianStaffId: request.requesterStaffId,
-          },
-          staff.$id,
-          `Asset issued for request #${request.$id.slice(-8)}`
-        );
+        // Update asset/consumable status based on type
+        if (asset.itemType === ENUMS.ITEM_TYPE.CONSUMABLE) {
+          // For consumables, reduce stock by 1
+          await assetsService.adjustConsumableStock(
+            asset.$id,
+            -1, // Reduce stock by 1
+            staff.$id,
+            `Consumable issued for request #${request.$id.slice(-8)}`
+          );
+        } else {
+          // For assets, mark as IN_USE
+          await assetsService.update(
+            asset.$id,
+            {
+              availableStatus: ENUMS.AVAILABLE_STATUS.IN_USE,
+              custodianStaffId: request.requesterStaffId,
+            },
+            staff.$id,
+            `Asset issued for request #${request.$id.slice(-8)}`
+          );
+        }
 
         // Write assignment event
         await writeAssetEvent(
