@@ -683,7 +683,7 @@ export default function GuestHomePage() {
           <div className="inline-flex items-center px-6 py-3 bg-white/80 backdrop-blur-sm rounded-full border border-primary-200/50 shadow-lg mb-8 hover:shadow-xl transition-all duration-300">
             <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
             <span className="text-sm font-semibold text-gray-700">
-              Live Asset Management System
+              Asset Management System
             </span>
           </div>
 
