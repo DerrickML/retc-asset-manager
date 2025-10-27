@@ -60,7 +60,6 @@ import {
 } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
-import { notifyRequestCancelled } from "../../../lib/services/notification-triggers.js";
 
 export default function RequestDetailsPage() {
   const params = useParams();
@@ -238,10 +237,7 @@ export default function RequestDetailsPage() {
 
       await assetRequestsService.update(request.$id, updateData);
 
-      // Send notification for request cancellation
-      await notifyRequestCancelled(request, currentStaff.$id);
-
-      console.log("Request cancelled successfully");
+      // Notification sending can be added here if needed
       setCancelDialogOpen(false);
       setCancelReason("");
       await loadData();

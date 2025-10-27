@@ -54,7 +54,6 @@ export default function IssueAssetsPage() {
         assetRequestsService.get(params.requestId),
         getCurrentStaff(),
       ]);
-      console.log("Loaded request data:", requestData);
 
       if (requestData.status !== ENUMS.REQUEST_STATUS.APPROVED) {
         setError("This request has not been approved yet.");
@@ -217,7 +216,7 @@ export default function IssueAssetsPage() {
           staff
         );
       } catch (error) {
-        console.warn("Failed to send asset issued notification:", error);
+        // Failed to send notification, but continue
       }
 
       router.push("/admin/requests");

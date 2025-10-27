@@ -256,9 +256,7 @@ export default function AdminConsumablesPage() {
         assetImage: imageUrl, // Use uploaded image URL or empty string
       };
 
-      console.log("Creating consumable with data:", consumableData);
       const result = await assetsService.create(consumableData, staff.$id);
-      console.log("Consumable created successfully:", result);
 
       // Reset form and refresh consumables
       setNewConsumable({

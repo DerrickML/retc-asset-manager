@@ -38,60 +38,40 @@ export default function LoginPage() {
     setError("");
 
     try {
-      console.log("🔍 LOGIN DEBUG - Starting login process");
       await login(email, password, callbackUrl);
 
-      console.log("🔍 LOGIN DEBUG - Login successful, waiting for session");
       // Wait for session to be properly established and cookies to be set
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Verify session is established before redirecting (with retries for timing issues)
       let sessionUser = await verifySession();
-      console.log("🔍 LOGIN DEBUG - Session verification result:", sessionUser);
       let retryCount = 0;
       const maxRetries = 3;
 
       // Retry session verification if it fails (to handle timing issues)
       while (!sessionUser && retryCount < maxRetries) {
         retryCount++;
-        console.log(
-          "🔍 LOGIN DEBUG - Retrying session verification, attempt:",
-          retryCount
-        );
         await new Promise((resolve) => setTimeout(resolve, 300));
         sessionUser = await verifySession();
       }
 
       if (sessionUser) {
-        console.log(
-          "🔍 LOGIN DEBUG - Session verified, fetching staff details"
-        );
         // Fetch complete staff details from database
         try {
           await getCurrentStaff();
-          console.log("🔍 LOGIN DEBUG - Staff details fetched successfully");
         } catch (staffError) {
-          console.log(
-            "🔍 LOGIN DEBUG - Staff details fetch failed:",
-            staffError
-          );
           // Staff details fetch failed, but continue with login
         }
 
         // Force a small delay before redirect to ensure middleware sees the session
         await new Promise((resolve) => setTimeout(resolve, 100));
-        console.log("🔍 LOGIN DEBUG - Redirecting to:", callbackUrl);
         router.push(callbackUrl);
       } else {
-        console.log(
-          "🔍 LOGIN DEBUG - Session verification failed after retries"
-        );
         throw new Error(
           "Session verification failed - please try logging in again"
         );
       }
     } catch (err) {
-      console.log("🔍 LOGIN DEBUG - Login error:", err);
       setError(err.message || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);

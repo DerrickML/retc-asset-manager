@@ -493,8 +493,6 @@ export default function GuestHomePage() {
 
   const loadData = async () => {
     try {
-      console.log("Starting to load guest portal data...");
-
       // Set default settings first to prevent infinite loading
       const defaultSettings = {
         guestPortal: true,
@@ -504,7 +502,6 @@ export default function GuestHomePage() {
 
       // Try to load settings with a shorter timeout and retry
       try {
-        console.log("Loading settings...");
         let systemSettings = null;
 
         // Try with a 3-second timeout first
@@ -542,7 +539,6 @@ export default function GuestHomePage() {
         }
 
         if (systemSettings) {
-          console.log("Settings loaded:", systemSettings);
           setSettings(systemSettings);
         }
       } catch (settingsError) {
@@ -555,8 +551,6 @@ export default function GuestHomePage() {
 
       // Try to calculate stats with timeout
       try {
-        console.log("Loading stats data...");
-
         // Load all items with timeout
         const itemsPromise = assetsService.list();
         const itemsTimeoutPromise = new Promise((_, reject) =>
@@ -571,29 +565,10 @@ export default function GuestHomePage() {
           return { documents: [] };
         });
 
-        console.log(
-          "All public items loaded:",
-          allPublicItems.documents.length
-        );
-        console.log("Items by type:", {
-          assets: allPublicItems.documents.filter(
-            (item) =>
-              item.itemType === "ASSET" ||
-              !item.itemType ||
-              item.itemType === undefined
-          ).length,
-          consumables: allPublicItems.documents.filter(
-            (item) => item.itemType === "CONSUMABLE"
-          ).length,
-          undefined: allPublicItems.documents.filter((item) => !item.itemType)
-            .length,
-        });
-
         const calculatedStats = calculateStats(
           allPublicItems.documents,
           [] // Pass empty array since we're processing unified data
         );
-        console.log("Stats calculated:", calculatedStats);
         setStats(calculatedStats);
 
         // Set all items for filtering and pagination
@@ -608,10 +583,7 @@ export default function GuestHomePage() {
         setAllItems([]);
         setFilteredItems([]);
       }
-
-      console.log("Guest portal data loaded successfully");
     } catch (error) {
-      console.warn("Failed to load guest portal data:", error.message);
       // Ensure we have default settings and empty data to prevent infinite loading
       setSettings({
         guestPortal: true,

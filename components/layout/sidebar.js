@@ -424,11 +424,12 @@ export default function Sidebar() {
           <div className="flex items-center justify-between px-4 py-6">
             {!isCollapsed ? (
               <div className="flex items-center space-x-3">
-                <div className="flex items-center justify-center">
+                <div className="relative w-12 h-12 overflow-hidden rounded-full">
                   <img
                     src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
                     alt="Logo"
-                    className="h-12 w-auto object-contain"
+                    className="absolute inset-0 w-full h-full object-contain scale-[1.3]"
+                    style={{ objectPosition: "center" }}
                   />
                 </div>
                 <div>
@@ -439,11 +440,12 @@ export default function Sidebar() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center mx-auto">
+              <div className="relative w-12 h-12 mx-auto overflow-hidden rounded-full">
                 <img
                   src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
                   alt="Logo"
-                  className="h-12 w-auto object-contain"
+                  className="absolute inset-0 w-full h-full object-contain scale-[1.3] mx-auto"
+                  style={{ objectPosition: "center" }}
                 />
               </div>
             )}
@@ -656,11 +658,12 @@ export default function Sidebar() {
           {/* Mobile Header */}
           <div className="flex items-center justify-between px-4 py-6">
             <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center">
+              <div className="relative w-12 h-12 overflow-hidden rounded-full">
                 <img
                   src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
                   alt="Logo"
-                  className="h-12 w-auto object-contain"
+                  className="absolute inset-0 w-full h-full object-contain scale-[1.3]"
+                  style={{ objectPosition: "center" }}
                 />
               </div>
               <div>

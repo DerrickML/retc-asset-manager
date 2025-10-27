@@ -8,6 +8,7 @@ import { GuestNavbar } from "./guest-navbar";
 import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { settingsService } from "../../lib/appwrite/provider.js";
 import { useToastContext } from "../providers/toast-provider";
+import { useInactivityLogout } from "../../lib/hooks/useInactivityLogout.js";
 
 export default function LayoutProvider({ children }) {
   const pathname = usePathname();
@@ -16,6 +17,18 @@ export default function LayoutProvider({ children }) {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Determine route types early for hook configuration
+  const isNoLayout =
+    pathname.startsWith("/login") || pathname.startsWith("/setup");
+  const isTopNavOnly = pathname.startsWith("/guest");
+
+  // Always call the hook (React hooks rule) but control enablement via config
+  const { WarningModal } = useInactivityLogout({
+    inactivityTimeout: 15 * 60 * 1000, // 15 minutes
+    warningTimeout: 2 * 60 * 1000, // 2 minutes warning before logout
+    enabled: !isNoLayout && !isTopNavOnly && staff !== null, // Only enable for authenticated staff
+  });
 
   const loadAppData = useCallback(async () => {
     try {
@@ -145,8 +158,11 @@ export default function LayoutProvider({ children }) {
     "/requests",
   ];
 
-  const isNoLayout = noLayoutRoutes.some((route) => pathname.startsWith(route));
-  const isTopNavOnly = topNavOnlyRoutes.some((route) =>
+  // Re-check route types now that we have data loaded
+  const finalIsNoLayout = noLayoutRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+  const finalIsTopNavOnly = topNavOnlyRoutes.some((route) =>
     pathname.startsWith(route)
   );
   const isSidebarRoute = sidebarRoutes.some((route) =>
@@ -154,16 +170,22 @@ export default function LayoutProvider({ children }) {
   );
 
   // No layout for login/setup pages
-  if (isNoLayout) {
-    return <>{children}</>;
+  if (finalIsNoLayout) {
+    return (
+      <>
+        {children}
+        <WarningModal />
+      </>
+    );
   }
 
   // Top navigation only (guest portal)
-  if (isTopNavOnly) {
+  if (finalIsTopNavOnly) {
     return (
       <div className="min-h-screen bg-gray-50">
         <GuestNavbar />
         <main>{children}</main>
+        <WarningModal />
       </div>
     );
   }
@@ -178,6 +200,7 @@ export default function LayoutProvider({ children }) {
             <div className="p-6">{children}</div>
           </main>
         </div>
+        <WarningModal />
       </div>
     );
   }
@@ -197,6 +220,7 @@ export default function LayoutProvider({ children }) {
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
+      <WarningModal />
     </div>
   );
 }

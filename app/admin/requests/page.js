@@ -262,7 +262,7 @@ export default function RequestQueue() {
               consumableItems.push(item);
             }
           } catch (error) {
-            console.warn(`Failed to load item ${itemId}:`, error);
+            // Failed to load item, skip
           }
         }
 
