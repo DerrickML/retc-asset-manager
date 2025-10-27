@@ -219,10 +219,10 @@ export default function LoginPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-white">
-                      Smart Management
+                      Asset Management
                     </h3>
                     <p className="text-primary-100 text-sm">
-                      AI-powered asset tracking and analytics
+                      Complete asset tracking and lifecycle management
                     </p>
                   </div>
                 </div>
