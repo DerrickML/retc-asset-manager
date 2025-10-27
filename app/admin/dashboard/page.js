@@ -18,7 +18,6 @@ import {
 import { Button } from "../../../components/ui/button";
 import { Progress } from "../../../components/ui/progress";
 import { Badge } from "../../../components/ui/badge";
-import { Alert, AlertDescription } from "../../../components/ui/alert";
 import {
   Download,
   Users,
@@ -758,7 +757,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Modern Content Tabs */}
+        {/*Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-8">
           <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-2 relative overflow-hidden">
             {/* Animated background gradient */}
@@ -840,7 +839,7 @@ export default function AdminDashboard() {
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Modern Asset Distribution by Category */}
+              {/*Asset Distribution by Category */}
               <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardHeader className="pb-6">
                   <div className="flex items-center space-x-3">
@@ -902,7 +901,7 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Modern Department Utilization */}
+              {/*Department Utilization */}
               <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardHeader className="pb-6">
                   <div className="flex items-center space-x-3">
@@ -972,7 +971,7 @@ export default function AdminDashboard() {
               </Card>
             </div>
 
-            {/* Modern System Overview */}
+            {/*System Overview */}
             <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
               <CardHeader className="pb-6">
                 <div className="flex items-center space-x-3">
