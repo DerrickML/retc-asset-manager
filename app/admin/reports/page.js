@@ -311,21 +311,88 @@ export default function AdminReports() {
     });
   };
 
-  const exportToCSV = (data, filename) => {
-    if (!data || data.length === 0) return;
+  const exportToCSV = (
+    data,
+    filename,
+    formatData = null,
+    summaryMatrix = null,
+    breakdowns = null
+  ) => {
+    if (!data || data.length === 0) {
+      alert("No data to export");
+      return;
+    }
 
-    const headers = Object.keys(data[0]).join(",");
-    const csvContent = [
-      headers,
-      ...data.map((row) => Object.values(row).join(",")),
-    ].join("\n");
+    // Use custom formatter if provided, otherwise use default
+    const formattedData = formatData ? formatData(data) : data;
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
+    // Escape values that contain commas or quotes
+    const escapeCSVValue = (value) => {
+      if (value === null || value === undefined) return "";
+      const stringValue = String(value);
+      if (
+        stringValue.includes(",") ||
+        stringValue.includes('"') ||
+        stringValue.includes("\n")
+      ) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
+    // Build CSV content
+    let csvContent = "";
+
+    // Add report metadata header
+    csvContent += `Report: ${filename}\n`;
+    csvContent += `Generated: ${new Date().toLocaleString()}\n`;
+    csvContent += `Total Records: ${data.length}\n`;
+    csvContent += `\n`;
+
+    // Add summary statistics
+    if (summaryMatrix) {
+      csvContent += `=== SUMMARY STATISTICS ===\n`;
+      Object.entries(summaryMatrix).forEach(([key, value]) => {
+        csvContent += `${escapeCSVValue(key)},${escapeCSVValue(value)}\n`;
+      });
+      csvContent += `\n`;
+    }
+
+    // Add breakdown matrices
+    if (breakdowns) {
+      Object.entries(breakdowns).forEach(([title, breakdown]) => {
+        csvContent += `=== ${title.toUpperCase()} ===\n`;
+        csvContent += `Category,Count\n`;
+        Object.entries(breakdown).forEach(([category, count]) => {
+          csvContent += `${escapeCSVValue(category)},${escapeCSVValue(
+            count
+          )}\n`;
+        });
+        csvContent += `\n`;
+      });
+    }
+
+    // Add detailed data table
+    if (formattedData.length > 0) {
+      const headers = Object.keys(formattedData[0]);
+      csvContent += `=== DETAILED DATA ===\n`;
+      csvContent += headers.join(",") + "\n";
+      csvContent += formattedData
+        .map((row) =>
+          headers.map((header) => escapeCSVValue(row[header])).join(",")
+        )
+        .join("\n");
+    }
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
+    a.download = `${filename}_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   };
 
@@ -334,6 +401,175 @@ export default function AdminReports() {
       style: "currency",
       currency: "USD",
     }).format(amount);
+  };
+
+  // Data formatters for CSV export
+  const formatAssetsForCSV = (assets) => {
+    return assets.map((asset) => ({
+      "Asset Name": asset.name || "",
+      "Asset Tag": asset.assetTag || "",
+      Category: asset.category || "",
+      Status: asset.availableStatus || "",
+      Condition: asset.currentCondition || "",
+      Value: asset.currentValue || 0,
+      Location: asset.location || "",
+      Department: asset.departmentId || "",
+      "Created Date": asset.$createdAt
+        ? new Date(asset.$createdAt).toLocaleDateString()
+        : "",
+    }));
+  };
+
+  const formatConsumablesForCSV = (consumables) => {
+    return consumables.map((consumable) => ({
+      "Consumable Name": consumable.name || "",
+      "Asset Tag": consumable.assetTag || "",
+      Category: consumable.category || "",
+      "Current Stock": getCurrentStock(consumable),
+      "Min Stock": getMinStock(consumable),
+      "Max Stock": getMaxStock(consumable),
+      Status: getConsumableStatus(consumable),
+      Unit: getConsumableUnit(consumable),
+      Location: consumable.locationName || "",
+      "Room/Area": consumable.roomOrArea || "",
+      "Created Date": consumable.$createdAt
+        ? new Date(consumable.$createdAt).toLocaleDateString()
+        : "",
+    }));
+  };
+
+  const formatRequestsForCSV = (requests) => {
+    return requests.map((request) => ({
+      "Request ID": request.$id || "",
+      Requester: request.requesterStaffId || "",
+      Status: request.status || "",
+      Purpose: request.purpose || "",
+      "Created Date": request.$createdAt
+        ? new Date(request.$createdAt).toLocaleDateString()
+        : "",
+      "Issue Date": request.issueDate
+        ? new Date(request.issueDate).toLocaleDateString()
+        : "",
+      "Expected Return Date": request.expectedReturnDate
+        ? new Date(request.expectedReturnDate).toLocaleDateString()
+        : "",
+    }));
+  };
+
+  const formatUsersForCSV = (users) => {
+    return users.map((user) => ({
+      Name: user.name || "",
+      Email: user.email || "",
+      Role: user.role || "",
+      Department: user.department_id || "",
+      Status: user.active ? "Active" : "Inactive",
+      "Created Date": user.$createdAt
+        ? new Date(user.$createdAt).toLocaleDateString()
+        : "",
+    }));
+  };
+
+  // Helper functions to generate summary matrices
+  const generateAssetSummary = (assets) => {
+    const totalValue = assets.reduce(
+      (sum, asset) => sum + (asset.currentValue || 0),
+      0
+    );
+    const assetsByCategory = {};
+    const assetsByStatus = {};
+    const assetsByCondition = {};
+
+    assets.forEach((asset) => {
+      assetsByCategory[asset.category || "Unknown"] =
+        (assetsByCategory[asset.category || "Unknown"] || 0) + 1;
+      assetsByStatus[asset.availableStatus || "Unknown"] =
+        (assetsByStatus[asset.availableStatus || "Unknown"] || 0) + 1;
+      assetsByCondition[asset.currentCondition || "Unknown"] =
+        (assetsByCondition[asset.currentCondition || "Unknown"] || 0) + 1;
+    });
+
+    return {
+      summary: {
+        "Total Assets": assets.length,
+        "Total Asset Value": formatCurrency(totalValue),
+        "Average Asset Value": formatCurrency(
+          totalValue / (assets.length || 1)
+        ),
+      },
+      breakdowns: {
+        "Assets by Category": assetsByCategory,
+        "Assets by Status": assetsByStatus,
+        "Assets by Condition": assetsByCondition,
+      },
+    };
+  };
+
+  const generateConsumableSummary = (consumables) => {
+    const totalStock = consumables.reduce(
+      (sum, c) => sum + getCurrentStock(c),
+      0
+    );
+    const inStock = consumables.filter(
+      (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+    ).length;
+    const lowStock = consumables.filter(
+      (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+    ).length;
+    const outOfStock = consumables.filter(
+      (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+    ).length;
+
+    const consumablesByCategory = {};
+    const consumablesByStatus = {};
+
+    consumables.forEach((consumable) => {
+      const category = consumable.category || "Unknown";
+      consumablesByCategory[category] =
+        (consumablesByCategory[category] || 0) + 1;
+
+      const status = getConsumableStatus(consumable);
+      consumablesByStatus[status] = (consumablesByStatus[status] || 0) + 1;
+    });
+
+    return {
+      summary: {
+        "Total Consumables": consumables.length,
+        "Total Stock Units": totalStock,
+        "In Stock Items": inStock,
+        "Low Stock Items": lowStock,
+        "Out of Stock Items": outOfStock,
+      },
+      breakdowns: {
+        "Consumables by Category": consumablesByCategory,
+        "Consumables by Status": consumablesByStatus,
+      },
+    };
+  };
+
+  const generateRequestSummary = (requests) => {
+    const requestsByStatus = {};
+    const requestsByMonth = {};
+
+    requests.forEach((request) => {
+      const status = request.status || "Unknown";
+      requestsByStatus[status] = (requestsByStatus[status] || 0) + 1;
+
+      if (request.$createdAt) {
+        const month = new Date(request.$createdAt).toISOString().slice(0, 7);
+        requestsByMonth[month] = (requestsByMonth[month] || 0) + 1;
+      }
+    });
+
+    return {
+      summary: {
+        "Total Requests": requests.length,
+        "Date Range": getDateRangeText(),
+      },
+      breakdowns: {
+        "Requests by Status": requestsByStatus,
+        "Requests by Month": requestsByMonth,
+      },
+    };
   };
 
   const getDateRangeText = () => {
@@ -857,9 +1093,23 @@ export default function AdminReports() {
                       </div>
                     </div>
                     <Button
-                      onClick={() =>
-                        exportToCSV(reportData.assets, "assets-report.csv")
-                      }
+                      onClick={() => {
+                        const filteredAssets = reportData.assets.filter(
+                          (item) =>
+                            item.itemType === "ASSET" ||
+                            !item.itemType ||
+                            item.itemType === undefined
+                        );
+                        const assetSummary =
+                          generateAssetSummary(filteredAssets);
+                        exportToCSV(
+                          filteredAssets,
+                          "assets-report",
+                          formatAssetsForCSV,
+                          assetSummary.summary,
+                          assetSummary.breakdowns
+                        );
+                      }}
                       className="relative bg-gradient-to-r from-sidebar-500 to-sidebar-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 group"
                     >
                       <div className="flex items-center space-x-2">
@@ -972,14 +1222,20 @@ export default function AdminReports() {
                     </div>
                     <div className="flex space-x-3">
                       <Button
-                        onClick={() =>
+                        onClick={() => {
+                          const filteredConsumables = reportData.assets.filter(
+                            (item) => item.itemType === "CONSUMABLE"
+                          );
+                          const consumableSummary =
+                            generateConsumableSummary(filteredConsumables);
                           exportToCSV(
-                            reportData.assets.filter(
-                              (item) => item.itemType === "CONSUMABLE"
-                            ),
-                            "consumable-report"
-                          )
-                        }
+                            filteredConsumables,
+                            "consumables-report",
+                            formatConsumablesForCSV,
+                            consumableSummary.summary,
+                            consumableSummary.breakdowns
+                          );
+                        }}
                         className="bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                       >
                         <Download className="w-4 h-4 mr-2" />
@@ -1247,9 +1503,18 @@ export default function AdminReports() {
                       </div>
                     </div>
                     <Button
-                      onClick={() =>
-                        exportToCSV(reportData.requests, "requests-report.csv")
-                      }
+                      onClick={() => {
+                        const requestSummary = generateRequestSummary(
+                          reportData.requests
+                        );
+                        exportToCSV(
+                          reportData.requests,
+                          "requests-report",
+                          formatRequestsForCSV,
+                          requestSummary.summary,
+                          requestSummary.breakdowns
+                        );
+                      }}
                       className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 group"
                     >
                       <div className="flex items-center space-x-2">
@@ -1360,7 +1625,11 @@ export default function AdminReports() {
                     </div>
                     <Button
                       onClick={() =>
-                        exportToCSV(reportData.users, "users-report.csv")
+                        exportToCSV(
+                          reportData.users,
+                          "users-report",
+                          formatUsersForCSV
+                        )
                       }
                       className="relative bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 group"
                     >

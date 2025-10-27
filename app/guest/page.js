@@ -8,13 +8,7 @@ import { Badge } from "../../components/ui/badge";
 import { Input } from "../../components/ui/input";
 import { settingsService, assetsService } from "../../lib/appwrite/provider.js";
 import { assetImageService } from "../../lib/appwrite/image-service.js";
-import {
-  formatCategory,
-  getConsumableStatus,
-  getCurrentStock,
-  getConsumableCategory,
-  getConsumableUnit,
-} from "../../lib/utils/mappings.js";
+import { formatCategory } from "../../lib/utils/mappings.js";
 import { Query } from "appwrite";
 import {
   Search,
@@ -25,7 +19,6 @@ import {
   Users,
   Shield,
   Zap,
-  ShoppingCart,
   Filter,
   Grid3X3,
   List,
@@ -37,12 +30,8 @@ import {
   Star,
 } from "lucide-react";
 
-// Masonry Card Component
+// Masonry Card Component (for assets only - consumables are internal)
 const MasonryCard = ({ item }) => {
-  const isConsumable = item.itemType === "CONSUMABLE";
-  const isAsset =
-    item.itemType === "ASSET" || !item.itemType || item.itemType === undefined;
-
   return (
     <div className="break-inside-avoid mb-8 group">
       <Card className="relative bg-white/80 backdrop-blur-sm border border-gray-200/40 hover:border-gray-300/60 hover:shadow-2xl hover:shadow-primary-200/20 transition-all duration-500 hover:scale-105 group overflow-hidden h-full flex flex-col rounded-2xl">
@@ -58,17 +47,7 @@ const MasonryCard = ({ item }) => {
           {/* Image Section */}
           <div className="relative overflow-hidden rounded-t-2xl">
             <div className="aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-              {isConsumable && item.assetImage ? (
-                <img
-                  src={item.assetImage}
-                  alt={item.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                    e.target.nextSibling.style.display = "flex";
-                  }}
-                />
-              ) : isAsset && item.assetImage ? (
+              {item.assetImage ? (
                 <img
                   src={
                     item.assetImage.startsWith("http")
@@ -86,18 +65,10 @@ const MasonryCard = ({ item }) => {
               <div
                 className="w-full h-full flex items-center justify-center text-gray-400 group-hover:text-gray-500 transition-colors duration-300"
                 style={{
-                  display:
-                    (isConsumable && item.assetImage) ||
-                    (isAsset && item.assetImage)
-                      ? "none"
-                      : "flex",
+                  display: item.assetImage ? "none" : "flex",
                 }}
               >
-                {isConsumable ? (
-                  <ShoppingCart className="w-16 h-16 group-hover:scale-110 transition-transform duration-300" />
-                ) : (
-                  <Package className="w-16 h-16 group-hover:scale-110 transition-transform duration-300" />
-                )}
+                <Package className="w-16 h-16 group-hover:scale-110 transition-transform duration-300" />
               </div>
             </div>
 
@@ -106,14 +77,8 @@ const MasonryCard = ({ item }) => {
 
             {/* Type Badge */}
             <div className="absolute top-4 left-4">
-              <Badge
-                className={`${
-                  isConsumable
-                    ? "bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-lg"
-                    : "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg"
-                } font-semibold px-4 py-2 rounded-full border-0 backdrop-blur-sm`}
-              >
-                {isConsumable ? "Consumable" : "Asset"}
+              <Badge className="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg font-semibold px-4 py-2 rounded-full border-0 backdrop-blur-sm">
+                Asset
               </Badge>
             </div>
 
@@ -121,26 +86,12 @@ const MasonryCard = ({ item }) => {
             <div className="absolute top-4 right-4">
               <Badge
                 className={`${
-                  isConsumable
-                    ? getConsumableStatus(item) === "IN_STOCK"
-                      ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg"
-                      : getConsumableStatus(item) === "LOW_STOCK"
-                      ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg"
-                      : "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg"
-                    : item.availableStatus === "AVAILABLE"
+                  item.availableStatus === "AVAILABLE"
                     ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg"
                     : "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
                 } font-semibold px-4 py-2 rounded-full border-0 backdrop-blur-sm`}
               >
-                {isConsumable
-                  ? getConsumableStatus(item) === "IN_STOCK"
-                    ? "In Stock"
-                    : getConsumableStatus(item) === "LOW_STOCK"
-                    ? "Low Stock"
-                    : "Out of Stock"
-                  : item.availableStatus === "AVAILABLE"
-                  ? "Available"
-                  : "On Loan"}
+                {item.availableStatus === "AVAILABLE" ? "Available" : "On Loan"}
               </Badge>
             </div>
           </div>
@@ -152,24 +103,8 @@ const MasonryCard = ({ item }) => {
             </h3>
 
             <p className="text-sm font-semibold text-primary-600 mb-5 bg-gradient-to-r from-primary-50 to-blue-50 px-4 py-2 rounded-full inline-block self-start border border-primary-200/50">
-              {isConsumable
-                ? formatCategory(getConsumableCategory(item))
-                : formatCategory(item.category)}
+              {formatCategory(item.category)}
             </p>
-
-            {isConsumable && (
-              <div className="flex items-center justify-between mb-5 bg-gradient-to-r from-cyan-50 to-teal-50 px-4 py-3 rounded-xl border border-cyan-200/50">
-                <span className="text-sm text-gray-700 font-semibold">
-                  Stock:
-                </span>
-                <span className="font-bold text-xl text-cyan-600">
-                  {getCurrentStock(item)}{" "}
-                  <span className="text-sm font-medium text-cyan-500">
-                    {getConsumableUnit(item)?.toLowerCase()}
-                  </span>
-                </span>
-              </div>
-            )}
 
             {item.description && (
               <p className="text-sm text-gray-600 mb-5 line-clamp-3 leading-relaxed flex-grow">
@@ -251,36 +186,18 @@ export default function GuestHomePage() {
       );
     }
 
-    // Tab filter
-    if (activeTab === "assets") {
-      filtered = filtered.filter(
-        (item) =>
-          item.itemType === "ASSET" ||
-          !item.itemType ||
-          item.itemType === undefined
-      );
-    } else if (activeTab === "consumables") {
-      filtered = filtered.filter((item) => item.itemType === "CONSUMABLE");
-    }
+    // Note: No tab filtering needed as only assets are shown (consumables filtered out)
 
     // Category filter
     if (categoryFilter) {
-      filtered = filtered.filter((item) => {
-        if (item.itemType === "CONSUMABLE") {
-          return getConsumableCategory(item) === categoryFilter;
-        }
-        return item.category === categoryFilter;
-      });
+      filtered = filtered.filter((item) => item.category === categoryFilter);
     }
 
     // Status filter
     if (statusFilter) {
-      filtered = filtered.filter((item) => {
-        if (item.itemType === "CONSUMABLE") {
-          return getConsumableStatus(item) === statusFilter;
-        }
-        return item.availableStatus === statusFilter;
-      });
+      filtered = filtered.filter(
+        (item) => item.availableStatus === statusFilter
+      );
     }
 
     // Sort
@@ -331,44 +248,30 @@ export default function GuestHomePage() {
     // Search is handled by the useEffect that watches searchQuery
   };
 
-  // Helper function to calculate statistics
-  const calculateStats = (assets, consumables) => {
-    // Separate assets and consumables from the mixed data
+  // Helper function to calculate statistics (only for assets, consumables are internal)
+  const calculateStats = (assets) => {
+    // Only show assets in guest portal (consumables are internal company items)
     const actualAssets = assets.filter(
       (item) =>
         item.itemType === "ASSET" ||
         !item.itemType ||
         item.itemType === undefined
     );
-    const actualConsumables = assets.filter(
-      (item) => item.itemType === "CONSUMABLE"
-    );
 
     const assetCategories = new Set(
       actualAssets.map((asset) => asset.category)
     );
-    const consumableCategories = new Set(
-      actualConsumables.map((consumable) => getConsumableCategory(consumable))
-    );
-    const allCategories = new Set([
-      ...assetCategories,
-      ...consumableCategories,
-    ]);
 
     const availableAssets = actualAssets.filter(
       (asset) => asset.availableStatus === "AVAILABLE"
     ).length;
 
-    const inStockConsumables = actualConsumables.filter(
-      (consumable) => getConsumableStatus(consumable) === "IN_STOCK"
-    ).length;
-
     return {
       totalAssets: actualAssets.length,
       availableAssets,
-      totalConsumables: actualConsumables.length,
-      inStockConsumables,
-      categories: allCategories.size,
+      totalConsumables: 0, // Not shown in guest portal
+      inStockConsumables: 0, // Not shown in guest portal
+      categories: assetCategories.size,
     };
   };
 
@@ -565,15 +468,20 @@ export default function GuestHomePage() {
           return { documents: [] };
         });
 
-        const calculatedStats = calculateStats(
-          allPublicItems.documents,
-          [] // Pass empty array since we're processing unified data
+        // Filter out consumables - they're internal company items
+        const publicAssets = allPublicItems.documents.filter(
+          (item) =>
+            item.itemType !== "CONSUMABLE" ||
+            !item.itemType ||
+            item.itemType === undefined
         );
+
+        const calculatedStats = calculateStats(publicAssets);
         setStats(calculatedStats);
 
-        // Set all items for filtering and pagination
-        setAllItems(allPublicItems.documents);
-        setFilteredItems(allPublicItems.documents);
+        // Set all items for filtering and pagination (only assets, no consumables)
+        setAllItems(publicAssets);
+        setFilteredItems(publicAssets);
       } catch (statsError) {
         console.warn(
           "Stats loading failed, using defaults:",
@@ -709,7 +617,7 @@ export default function GuestHomePage() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
             <StatsCard
               icon={Package}
               title="Total Assets"
@@ -721,12 +629,6 @@ export default function GuestHomePage() {
               title="Available Assets"
               value={stats.availableAssets}
               color="primary"
-            />
-            <StatsCard
-              icon={ShoppingCart}
-              title="Consumables"
-              value={stats.totalConsumables}
-              color="cyan"
             />
             <StatsCard
               icon={Tag}
@@ -782,21 +684,6 @@ export default function GuestHomePage() {
                       !item.itemType ||
                       item.itemType === undefined
                   ).length
-                }
-                )
-              </button>
-              <button
-                onClick={() => setActiveTab("consumables")}
-                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
-                  activeTab === "consumables"
-                    ? "bg-gradient-to-r from-primary-600 to-blue-600 text-white shadow-lg transform scale-105"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                }`}
-              >
-                Consumables (
-                {
-                  filteredItems.filter((item) => item.itemType === "CONSUMABLE")
-                    .length
                 }
                 )
               </button>
@@ -876,9 +763,6 @@ export default function GuestHomePage() {
               <option value="">All Status</option>
               <option value="AVAILABLE">Available</option>
               <option value="IN_USE">In Use</option>
-              <option value="IN_STOCK">In Stock</option>
-              <option value="LOW_STOCK">Low Stock</option>
-              <option value="OUT_OF_STOCK">Out of Stock</option>
             </select>
 
             {(categoryFilter || statusFilter) && (

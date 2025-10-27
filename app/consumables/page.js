@@ -318,55 +318,25 @@ export default function ConsumablesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredConsumables.map((consumable) => {
-            const hasImage =
-              consumable.assetImage && consumable.assetImage.trim() !== "";
-            const imageUrl = hasImage ? consumable.assetImage : null;
-
             return (
               <Card
                 key={consumable.$id}
                 className="bg-white border border-gray-200 hover:shadow-lg transition-all duration-300 overflow-hidden group"
               >
                 <CardContent className="p-0">
-                  {/* Consumable Image */}
-                  {hasImage && imageUrl ? (
-                    <div className="aspect-video relative overflow-hidden">
-                      <img
-                        src={imageUrl}
-                        alt={consumable.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                          e.target.nextSibling.style.display = "flex";
-                        }}
-                      />
-                      <div className="hidden w-full h-full bg-gradient-to-br from-green-100 to-green-200 items-center justify-center">
-                        <div className="text-center">
-                          <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="text-white font-bold text-lg">
-                              {consumable.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <p className="text-green-700 font-semibold text-sm">
-                            Consumable Image
-                          </p>
-                        </div>
+                  {/* Consumable Icon Placeholder - Consumables don't have images */}
+                  <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <span className="text-white font-bold text-xl">
+                          {consumable.name.charAt(0).toUpperCase()}
+                        </span>
                       </div>
+                      <p className="text-gray-600 font-medium text-sm">
+                        Consumable
+                      </p>
                     </div>
-                  ) : (
-                    <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <span className="text-white font-bold text-xl">
-                            {consumable.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <p className="text-gray-600 font-medium text-sm">
-                          No Image
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  </div>
 
                   <div className="p-5">
                     <div className="flex items-start justify-between mb-3">

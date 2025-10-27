@@ -37,7 +37,6 @@ import {
   assetsService,
   assetEventsService,
 } from "../../../../../lib/appwrite/provider.js";
-import { assetImageService } from "../../../../../lib/appwrite/image-service.js";
 import { getCurrentStaff, permissions } from "../../../../../lib/utils/auth.js";
 import { useToastContext } from "../../../../../components/providers/toast-provider";
 // Removed useConfirmation import - using custom dialog instead
@@ -221,7 +220,7 @@ export default function EditConsumable() {
         retirementDate: null, // Empty for consumables
         disposalDate: null, // Empty for consumables
         attachmentFileIds: [], // Empty array for consumables
-        assetImage: consumable.assetImage || "", // Use existing image or empty string
+        assetImage: "", // Consumables don't have images
       };
 
       // Log the data being sent for debugging
@@ -714,132 +713,85 @@ export default function EditConsumable() {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Enhanced Location Information */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 p-6">
-              <h3 className="text-xl font-bold text-white flex items-center">
-                <Package className="w-5 h-5 mr-3" />
-                Location Information
-              </h3>
-              <p className="text-sidebar-100 text-sm mt-1">
-                Storage and visibility settings
-              </p>
+        {/* Enhanced Location Information */}
+        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
+          <div className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 p-6">
+            <h3 className="text-xl font-bold text-white flex items-center">
+              <Package className="w-5 h-5 mr-3" />
+              Location Information
+            </h3>
+            <p className="text-sidebar-100 text-sm mt-1">
+              Storage and visibility settings
+            </p>
+          </div>
+          <div className="p-6 space-y-6">
+            <div className="space-y-3">
+              <Label
+                htmlFor="locationName"
+                className="text-sm font-semibold text-gray-700"
+              >
+                Location Name
+              </Label>
+              <Input
+                id="locationName"
+                value={consumable.locationName || ""}
+                onChange={(e) =>
+                  setConsumable({
+                    ...consumable,
+                    locationName: e.target.value,
+                  })
+                }
+                placeholder="e.g., Main Store, Warehouse A"
+                className="h-12 border-2 border-gray-200 focus:border-gray-500 focus:ring-4 focus:ring-gray-500/20 transition-all duration-200 rounded-xl"
+              />
             </div>
-            <div className="p-6 space-y-6">
-              <div className="space-y-3">
-                <Label
-                  htmlFor="locationName"
-                  className="text-sm font-semibold text-gray-700"
-                >
-                  Location Name
-                </Label>
-                <Input
-                  id="locationName"
-                  value={consumable.locationName || ""}
+
+            <div className="space-y-3">
+              <Label
+                htmlFor="roomOrArea"
+                className="text-sm font-semibold text-gray-700"
+              >
+                Room/Area
+              </Label>
+              <Input
+                id="roomOrArea"
+                value={consumable.roomOrArea || ""}
+                onChange={(e) =>
+                  setConsumable({ ...consumable, roomOrArea: e.target.value })
+                }
+                placeholder="e.g., Shelf 1, Cabinet B"
+                className="h-12 border-2 border-gray-200 focus:border-gray-500 focus:ring-4 focus:ring-gray-500/20 transition-all duration-200 rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <Label
+                htmlFor="isPublic"
+                className="text-sm font-semibold text-gray-700"
+              >
+                Public Visibility
+              </Label>
+              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl border-2 border-gray-200">
+                <input
+                  type="checkbox"
+                  id="isPublic"
+                  checked={consumable.isPublic || false}
                   onChange={(e) =>
                     setConsumable({
                       ...consumable,
-                      locationName: e.target.value,
+                      isPublic: e.target.checked,
                     })
                   }
-                  placeholder="e.g., Main Store, Warehouse A"
-                  className="h-12 border-2 border-gray-200 focus:border-gray-500 focus:ring-4 focus:ring-gray-500/20 transition-all duration-200 rounded-xl"
+                  className="w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
                 />
-              </div>
-
-              <div className="space-y-3">
-                <Label
-                  htmlFor="roomOrArea"
-                  className="text-sm font-semibold text-gray-700"
-                >
-                  Room/Area
-                </Label>
-                <Input
-                  id="roomOrArea"
-                  value={consumable.roomOrArea || ""}
-                  onChange={(e) =>
-                    setConsumable({ ...consumable, roomOrArea: e.target.value })
-                  }
-                  placeholder="e.g., Shelf 1, Cabinet B"
-                  className="h-12 border-2 border-gray-200 focus:border-gray-500 focus:ring-4 focus:ring-gray-500/20 transition-all duration-200 rounded-xl"
-                />
-              </div>
-
-              <div className="space-y-3">
                 <Label
                   htmlFor="isPublic"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-medium text-gray-700 cursor-pointer"
                 >
-                  Public Visibility
+                  Make this consumable visible in guest portal
                 </Label>
-                <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl border-2 border-gray-200">
-                  <input
-                    type="checkbox"
-                    id="isPublic"
-                    checked={consumable.isPublic || false}
-                    onChange={(e) =>
-                      setConsumable({
-                        ...consumable,
-                        isPublic: e.target.checked,
-                      })
-                    }
-                    className="w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-                  />
-                  <Label
-                    htmlFor="isPublic"
-                    className="text-sm font-medium text-gray-700 cursor-pointer"
-                  >
-                    Make this consumable visible in guest portal
-                  </Label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Enhanced Image Management */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-gray-500 to-gray-600 p-6">
-              <h3 className="text-xl font-bold text-white flex items-center">
-                <Image className="w-5 h-5 mr-3" />
-                Image Management
-              </h3>
-              <p className="text-gray-100 text-sm mt-1">
-                Visual representation
-              </p>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold text-gray-700">
-                  Current Image
-                </Label>
-                {consumable.assetImage ? (
-                  <div className="flex items-center space-x-4 p-4 bg-green-50 rounded-xl border-2 border-green-200">
-                    <img
-                      src={consumable.assetImage}
-                      alt={consumable.name}
-                      className="w-20 h-20 rounded-xl object-cover border-2 border-green-300 shadow-lg"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
-                    />
-                    <div className="hidden w-20 h-20 bg-gray-100 rounded-xl border-2 border-gray-200 items-center justify-center">
-                      <Image className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <div className="text-sm text-green-700 font-medium">
-                      ✓ Image uploaded successfully
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-20 h-20 bg-gray-100 rounded-xl border-2 border-gray-200 flex items-center justify-center">
-                    <Image className="w-8 h-8 text-gray-400" />
-                  </div>
-                )}
-              </div>
-              <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                💡 To update the image, please use the main consumable
-                management page.
               </div>
             </div>
           </div>

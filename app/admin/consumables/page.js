@@ -59,14 +59,9 @@ import {
   Users,
   CheckCircle,
   Clock,
-  Image,
   ShoppingCart,
 } from "lucide-react";
-import {
-  assetsService,
-  departmentsService,
-} from "../../../lib/appwrite/provider.js";
-import { assetImageService } from "../../../lib/appwrite/image-service.js";
+import { assetsService } from "../../../lib/appwrite/provider.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
 import { useConfirmation } from "../../../components/ui/confirmation-dialog";
@@ -142,16 +137,16 @@ export default function AdminConsumablesPage() {
   const getConsumableCategory = (consumable) => {
     if (consumable.subcategory && consumable.subcategory.includes("|")) {
       const parts = consumable.subcategory.split("|");
-      return parts[2] || ENUMS.CATEGORY.OFFICE_SUPPLIES;
+      return parts[2] || ENUMS.CONSUMABLE_CATEGORY.FLIERS;
     }
-    return ENUMS.CATEGORY.OFFICE_SUPPLIES;
+    return ENUMS.CONSUMABLE_CATEGORY.FLIERS;
   };
 
   // New consumable form state - matching Appwrite collection attributes
   const [newConsumable, setNewConsumable] = useState({
     name: "",
     category: ENUMS.CATEGORY.CONSUMABLE,
-    consumableCategory: ENUMS.CATEGORY.OFFICE_SUPPLIES,
+    consumableCategory: ENUMS.CONSUMABLE_CATEGORY.FLIERS,
     currentStock: 0,
     minStock: 0,
     maxStock: 0,
@@ -162,8 +157,6 @@ export default function AdminConsumablesPage() {
     isPublic: false,
     publicSummary: "",
     itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
-    assetImage: "", // Will store the uploaded image URL
-    selectedFile: null, // Store the selected file
   });
 
   useEffect(() => {
@@ -197,24 +190,8 @@ export default function AdminConsumablesPage() {
 
   const handleCreateConsumable = async () => {
     try {
-      let imageUrl = "";
-
-      // Upload image if one is selected
-      if (newConsumable.selectedFile) {
-        try {
-          const uploadResult = await assetImageService.uploadImage(
-            newConsumable.selectedFile,
-            `consumable-${Date.now()}` // Use a temporary ID for the upload
-          );
-          imageUrl = assetImageService.getPublicImageUrl(uploadResult.$id);
-        } catch (uploadError) {
-          console.error("Failed to upload image:", uploadError);
-          toast.error("Failed to upload image. Please try again.");
-          return;
-        }
-      }
-
       // Prepare consumable data matching Appwrite collection schema
+      // Note: Consumables do not have images - they are internal inventory items
       const consumableData = {
         // Basic information - use existing ASSETS collection fields
         assetTag: `CONS-${Date.now()}`, // Generate unique tag for consumables
@@ -253,7 +230,7 @@ export default function AdminConsumablesPage() {
         retirementDate: null, // Empty for consumables
         disposalDate: null, // Empty for consumables
         attachmentFileIds: [], // Empty array for consumables
-        assetImage: imageUrl, // Use uploaded image URL or empty string
+        assetImage: "https://via.placeholder.com/400?text=Consumable", // Placeholder for consumables (no images)
       };
 
       const result = await assetsService.create(consumableData, staff.$id);
@@ -262,7 +239,7 @@ export default function AdminConsumablesPage() {
       setNewConsumable({
         name: "",
         category: ENUMS.CATEGORY.CONSUMABLE,
-        consumableCategory: ENUMS.CATEGORY.OFFICE_SUPPLIES,
+        consumableCategory: ENUMS.CONSUMABLE_CATEGORY.FLIERS,
         currentStock: 0,
         minStock: 0,
         maxStock: 0,
@@ -273,8 +250,6 @@ export default function AdminConsumablesPage() {
         isPublic: false,
         publicSummary: "",
         itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
-        assetImage: "",
-        selectedFile: null,
       });
 
       setShowAddDialog(false);
@@ -557,11 +532,13 @@ export default function AdminConsumablesPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {Object.values(ENUMS.CATEGORY).map((category) => (
-                                <SelectItem key={category} value={category}>
-                                  {formatCategory(category)}
-                                </SelectItem>
-                              ))}
+                              {Object.values(ENUMS.CONSUMABLE_CATEGORY).map(
+                                (category) => (
+                                  <SelectItem key={category} value={category}>
+                                    {formatCategory(category)}
+                                  </SelectItem>
+                                )
+                              )}
                             </SelectContent>
                           </Select>
                         </div>
@@ -735,44 +712,6 @@ export default function AdminConsumablesPage() {
                           placeholder="e.g., Shelf 1, Cabinet B"
                           className="h-11"
                         />
-                      </div>
-                    </div>
-
-                    {/* Image Upload */}
-                    <div className="bg-green-50 p-6 rounded-lg space-y-6">
-                      <div className="flex items-center space-x-2">
-                        <Image className="h-5 w-5 text-green-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Image
-                        </h3>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label
-                          htmlFor="assetImage"
-                          className="text-sm font-medium text-gray-700"
-                        >
-                          Consumable Image
-                        </Label>
-                        <Input
-                          id="assetImage"
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              setNewConsumable({
-                                ...newConsumable,
-                                selectedFile: file,
-                                assetImage: file.name, // Show file name in UI
-                              });
-                            }
-                          }}
-                          className="h-11"
-                        />
-                        <p className="text-xs text-gray-500">
-                          Upload an image for this consumable (optional)
-                        </p>
                       </div>
                     </div>
 
@@ -1051,11 +990,13 @@ export default function AdminConsumablesPage() {
                   </SelectTrigger>
                   <SelectContent className="z-30">
                     <SelectItem value="all">All Categories</SelectItem>
-                    {Object.values(ENUMS.CATEGORY).map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {formatCategory(category)}
-                      </SelectItem>
-                    ))}
+                    {Object.values(ENUMS.CONSUMABLE_CATEGORY).map(
+                      (category) => (
+                        <SelectItem key={category} value={category}>
+                          {formatCategory(category)}
+                        </SelectItem>
+                      )
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1115,9 +1056,6 @@ export default function AdminConsumablesPage() {
                       Consumable
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
-                      Image
-                    </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
                       Category
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
@@ -1155,28 +1093,6 @@ export default function AdminConsumablesPage() {
                               </p>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell className="py-4 px-6">
-                          {consumable.assetImage ? (
-                            <div className="flex items-center space-x-1">
-                              <img
-                                src={consumable.assetImage}
-                                alt={consumable.name}
-                                className="w-8 h-8 rounded object-cover border border-gray-200"
-                                onError={(e) => {
-                                  e.target.style.display = "none";
-                                  e.target.nextSibling.style.display = "flex";
-                                }}
-                              />
-                              <div className="hidden w-8 h-8 bg-gray-100 rounded border border-gray-200 items-center justify-center">
-                                <Image className="w-4 h-4 text-gray-400" />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="w-8 h-8 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                              <Image className="w-4 h-4 text-gray-400" />
-                            </div>
-                          )}
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           <Badge
@@ -1266,7 +1182,7 @@ export default function AdminConsumablesPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={6} className="text-center py-12">
                         <div className="flex flex-col items-center space-y-4">
                           <div className="p-4 bg-gray-100 rounded-full">
                             <Package className="h-8 w-8 text-gray-400" />
