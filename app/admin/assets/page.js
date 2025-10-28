@@ -90,6 +90,9 @@ export default function AdminAssetManagement() {
   // Export functionality state
   const [exporting, setExporting] = useState(false);
 
+  // Manual ID assignment state
+  const [manualIdAssignment, setManualIdAssignment] = useState(false);
+
   // New asset form state - matching Appwrite collection attributes
   const [newAsset, setNewAsset] = useState({
     assetTag: "",
@@ -160,8 +163,10 @@ export default function AdminAssetManagement() {
 
   const handleCreateAsset = async () => {
     try {
-      // Generate asset tag if not provided
-      const assetTag = newAsset.assetTag || `RETC-${Date.now()}`;
+      // Generate asset tag if not manually provided
+      const assetTag = manualIdAssignment && newAsset.assetTag
+        ? newAsset.assetTag
+        : `RETC-${Date.now()}`;
 
       // Prepare asset data matching Appwrite collection schema
       const assetData = {
@@ -232,6 +237,7 @@ export default function AdminAssetManagement() {
         publicLocationLabel: "",
         publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW,
       });
+      setManualIdAssignment(false);
 
       setShowAddDialog(false);
       await loadAssets();
@@ -496,11 +502,31 @@ export default function AdminAssetManagement() {
 
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="space-y-3">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <input
+                              type="checkbox"
+                              id="manualIdAssignment"
+                              checked={manualIdAssignment}
+                              onChange={(e) => {
+                                setManualIdAssignment(e.target.checked);
+                                if (!e.target.checked) {
+                                  setNewAsset({ ...newAsset, assetTag: "" });
+                                }
+                              }}
+                              className="rounded"
+                            />
+                            <Label
+                              htmlFor="manualIdAssignment"
+                              className="text-sm font-medium text-gray-700 cursor-pointer"
+                            >
+                              Manually assign ID
+                            </Label>
+                          </div>
                           <Label
                             htmlFor="assetTag"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Asset Tag
+                            Asset Tag {manualIdAssignment && "*"}
                           </Label>
                           <Input
                             id="assetTag"
@@ -511,8 +537,14 @@ export default function AdminAssetManagement() {
                                 assetTag: e.target.value,
                               })
                             }
-                            placeholder="Auto-generated if empty"
+                            placeholder={
+                              manualIdAssignment
+                                ? "Enter custom asset tag (e.g., RETC-LAP-001)"
+                                : "Auto-generated (e.g., RETC-1234567890)"
+                            }
                             className="h-11"
+                            disabled={!manualIdAssignment}
+                            required={manualIdAssignment}
                           />
                         </div>
                         <div className="space-y-3">
@@ -586,7 +618,7 @@ export default function AdminAssetManagement() {
                             htmlFor="serialNumber"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Serial Number
+                            Manufacturer Serial Number
                           </Label>
                           <Input
                             id="serialNumber"
@@ -968,7 +1000,11 @@ export default function AdminAssetManagement() {
                         </DialogClose>
                         <Button
                           onClick={handleCreateAsset}
-                          disabled={!newAsset.name || !newAsset.category}
+                          disabled={
+                            !newAsset.name ||
+                            !newAsset.category ||
+                            (manualIdAssignment && !newAsset.assetTag)
+                          }
                           className="px-6 bg-blue-600 hover:bg-blue-700"
                         >
                           <Plus className="w-4 h-4 mr-2" />

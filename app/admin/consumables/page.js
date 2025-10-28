@@ -91,6 +91,9 @@ export default function AdminConsumablesPage() {
   // Export functionality state
   const [exporting, setExporting] = useState(false);
 
+  // Manual ID assignment state
+  const [manualIdAssignment, setManualIdAssignment] = useState(false);
+
   // Helper functions to extract stock data from stored fields
   const getCurrentStock = (consumable) => {
     if (
@@ -144,6 +147,7 @@ export default function AdminConsumablesPage() {
 
   // New consumable form state - matching Appwrite collection attributes
   const [newConsumable, setNewConsumable] = useState({
+    assetTag: "",
     name: "",
     category: ENUMS.CATEGORY.CONSUMABLE,
     consumableCategory: ENUMS.CONSUMABLE_CATEGORY.FLIERS,
@@ -194,7 +198,9 @@ export default function AdminConsumablesPage() {
       // Note: Consumables do not have images - they are internal inventory items
       const consumableData = {
         // Basic information - use existing ASSETS collection fields
-        assetTag: `CONS-${Date.now()}`, // Generate unique tag for consumables
+        assetTag: manualIdAssignment && newConsumable.assetTag
+          ? newConsumable.assetTag
+          : `CONS-${Date.now()}`, // Generate unique tag for consumables
         name: newConsumable.name,
         category: ENUMS.CATEGORY.CONSUMABLE, // Use the correct CONSUMABLE category
         subcategory: `${newConsumable.unit}|${newConsumable.status}|${newConsumable.consumableCategory}`, // Store unit, status, and consumable category in subcategory
@@ -237,6 +243,7 @@ export default function AdminConsumablesPage() {
 
       // Reset form and refresh consumables
       setNewConsumable({
+        assetTag: "",
         name: "",
         category: ENUMS.CATEGORY.CONSUMABLE,
         consumableCategory: ENUMS.CONSUMABLE_CATEGORY.FLIERS,
@@ -251,6 +258,7 @@ export default function AdminConsumablesPage() {
         publicSummary: "",
         itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
       });
+      setManualIdAssignment(false);
 
       setShowAddDialog(false);
       await loadConsumables();
@@ -491,6 +499,55 @@ export default function AdminConsumablesPage() {
                       </div>
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-3">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <input
+                              type="checkbox"
+                              id="manualIdAssignmentConsumable"
+                              checked={manualIdAssignment}
+                              onChange={(e) => {
+                                setManualIdAssignment(e.target.checked);
+                                if (!e.target.checked) {
+                                  setNewConsumable({
+                                    ...newConsumable,
+                                    assetTag: "",
+                                  });
+                                }
+                              }}
+                              className="rounded"
+                            />
+                            <Label
+                              htmlFor="manualIdAssignmentConsumable"
+                              className="text-sm font-medium text-gray-700 cursor-pointer"
+                            >
+                              Manually assign ID
+                            </Label>
+                          </div>
+                          <Label
+                            htmlFor="assetTag"
+                            className="text-sm font-medium text-gray-700"
+                          >
+                            Consumable ID {manualIdAssignment && "*"}
+                          </Label>
+                          <Input
+                            id="assetTag"
+                            value={newConsumable.assetTag}
+                            onChange={(e) =>
+                              setNewConsumable({
+                                ...newConsumable,
+                                assetTag: e.target.value,
+                              })
+                            }
+                            placeholder={
+                              manualIdAssignment
+                                ? "Enter custom ID (e.g., CONS-PAPER-001)"
+                                : "Auto-generated (e.g., CONS-1234567890)"
+                            }
+                            className="h-11"
+                            disabled={!manualIdAssignment}
+                            required={manualIdAssignment}
+                          />
+                        </div>
                         <div className="space-y-3">
                           <Label
                             htmlFor="name"
@@ -786,7 +843,8 @@ export default function AdminConsumablesPage() {
                           onClick={handleCreateConsumable}
                           disabled={
                             !newConsumable.name ||
-                            !newConsumable.consumableCategory
+                            !newConsumable.consumableCategory ||
+                            (manualIdAssignment && !newConsumable.assetTag)
                           }
                           className="px-6 bg-blue-600 hover:bg-blue-700"
                         >
