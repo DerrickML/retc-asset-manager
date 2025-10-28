@@ -25,6 +25,7 @@ import {
   Clock,
   AlertTriangle,
   TrendingUp,
+  TrendingDown,
   Activity,
   FileText,
   RefreshCw,
@@ -42,6 +43,13 @@ import {
   Pause,
   Archive,
   ShoppingCart,
+  DollarSign,
+  Percent,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  Lightbulb,
+  Bell,
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
@@ -92,7 +100,11 @@ export default function AdminDashboard() {
       fulfilledRequests: 0,
       totalStaff: 0,
       totalDepartments: 0,
+      utilizationRate: 0,
+      assetHealthScore: 0,
+      totalValue: 0,
     },
+    insights: [],
     assetsByCategory: [],
     assetsByDepartment: [],
     assetsByStatus: [],
@@ -100,6 +112,7 @@ export default function AdminDashboard() {
     consumablesByStatus: [],
     requestsByStatus: [],
     recentEvents: [],
+    criticalAlerts: [],
   });
 
   useEffect(() => {
@@ -137,21 +150,37 @@ export default function AdminDashboard() {
       const assets = assetsResult.documents;
       const consumables = consumablesResult.documents;
       const requests = requestsResult.documents;
-      const consumableRequests = []; // No separate consumable requests in unified approach
       const allStaff = staffResult.documents;
       const departments = departmentsResult.documents;
       const events = recentEventsResult.documents;
-      const consumableEvents = []; // No separate consumable events in unified approach
 
-      // Calculate real metrics from actual data
       // Filter assets to only include actual assets (not consumables)
-      // Use same logic as Asset Management page
       const actualAssets = assets.filter(
         (item) =>
           item.itemType === ENUMS.ITEM_TYPE.ASSET ||
           !item.itemType ||
           item.itemType === undefined
       );
+
+      // Calculate utilization rate
+      const utilizationRate = actualAssets.length > 0
+        ? ((actualAssets.filter(a => a.availableStatus === ENUMS.AVAILABLE_STATUS.IN_USE).length / actualAssets.length) * 100).toFixed(1)
+        : 0;
+
+      // Calculate asset health score (based on condition)
+      const healthyAssets = actualAssets.filter(a =>
+        a.currentCondition === ENUMS.CURRENT_CONDITION.NEW ||
+        a.currentCondition === ENUMS.CURRENT_CONDITION.EXCELLENT ||
+        a.currentCondition === ENUMS.CURRENT_CONDITION.GOOD
+      ).length;
+      const assetHealthScore = actualAssets.length > 0
+        ? ((healthyAssets / actualAssets.length) * 100).toFixed(1)
+        : 0;
+
+      // Calculate total asset value (if purchaseCost is available)
+      const totalValue = actualAssets.reduce((sum, asset) => {
+        return sum + (parseFloat(asset.purchaseCost) || 0);
+      }, 0);
 
       const metrics = {
         totalAssets: actualAssets.length,
@@ -181,29 +210,23 @@ export default function AdminDashboard() {
         outOfStockConsumables: consumables.filter(
           (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
         ).length,
-        pendingRequests:
-          requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.PENDING)
-            .length +
-          consumableRequests.filter(
-            (r) => r.status === ENUMS.DISTRIBUTION_STATUS.PENDING
-          ).length,
-        approvedRequests:
-          requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.APPROVED)
-            .length +
-          consumableRequests.filter(
-            (r) => r.status === ENUMS.DISTRIBUTION_STATUS.APPROVED
-          ).length,
-        fulfilledRequests:
-          requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.FULFILLED)
-            .length +
-          consumableRequests.filter(
-            (r) => r.status === ENUMS.DISTRIBUTION_STATUS.DISTRIBUTED
-          ).length,
+        pendingRequests: requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.PENDING).length,
+        approvedRequests: requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.APPROVED).length,
+        fulfilledRequests: requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.FULFILLED).length,
         totalStaff: allStaff.length,
         totalDepartments: departments.length,
+        utilizationRate: parseFloat(utilizationRate),
+        assetHealthScore: parseFloat(assetHealthScore),
+        totalValue: totalValue,
       };
 
-      // Process assets by category (real data)
+      // Generate insights
+      const insights = generateInsights(metrics, actualAssets, consumables, requests);
+
+      // Generate critical alerts
+      const criticalAlerts = generateCriticalAlerts(metrics, consumables);
+
+      // Process assets by category
       const categoryMap = {};
       actualAssets.forEach((asset) => {
         const category = asset.category || "UNCATEGORIZED";
@@ -224,7 +247,7 @@ export default function AdminDashboard() {
         })
       );
 
-      // Process assets by status (real data)
+      // Process assets by status
       const statusMap = {};
       Object.values(ENUMS.AVAILABLE_STATUS).forEach((status) => {
         statusMap[status] = actualAssets.filter(
@@ -247,7 +270,7 @@ export default function AdminDashboard() {
           status: status,
         }));
 
-      // Process requests by status (real data)
+      // Process requests by status
       const requestStatusMap = {};
       Object.values(ENUMS.REQUEST_STATUS).forEach((status) => {
         requestStatusMap[status] = requests.filter(
@@ -270,7 +293,7 @@ export default function AdminDashboard() {
           status: status,
         }));
 
-      // Process assets by department (real data)
+      // Process assets by department
       const deptAssetsMap = {};
       departments.forEach((dept) => {
         const deptAssets = actualAssets.filter(
@@ -306,10 +329,10 @@ export default function AdminDashboard() {
         })
       );
 
-      // Process consumables by category (real data)
+      // Process consumables by category
       const consumableCategoryMap = {};
       consumables.forEach((consumable) => {
-        const category = consumable.category || "UNCATEGORIZED";
+        const category = consumable.subcategory || "UNCATEGORIZED";
         consumableCategoryMap[category] =
           (consumableCategoryMap[category] || 0) + 1;
       });
@@ -328,7 +351,7 @@ export default function AdminDashboard() {
         })
       );
 
-      // Process consumables by status (real data)
+      // Process consumables by status
       const consumableStatusMap = {};
       Object.values(ENUMS.CONSUMABLE_STATUS).forEach((status) => {
         consumableStatusMap[status] = consumables.filter(
@@ -351,36 +374,176 @@ export default function AdminDashboard() {
           status: status,
         }));
 
-      // Combine recent events from both assets and consumables
-      const allRecentEvents = [...events, ...consumableEvents]
-        .sort((a, b) => new Date(b.at) - new Date(a.at))
-        .slice(0, 10);
-
       setDashboardData({
         metrics,
+        insights,
+        criticalAlerts,
         assetsByCategory,
         assetsByDepartment,
         assetsByStatus,
         consumablesByCategory,
         consumablesByStatus,
         requestsByStatus,
-        recentEvents: allRecentEvents,
+        recentEvents: events,
       });
 
       setLastUpdated(new Date());
     } catch (error) {
-      // Silent fail for dashboard data loading
+      console.error("Dashboard load error:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-  // function to refresh the dashboard data
+
+  // Generate insights based on data
+  const generateInsights = (metrics, assets, consumables, requests) => {
+    const insights = [];
+
+    // Critical stock insights (highest priority)
+    if (metrics.outOfStockConsumables > 0) {
+      insights.push({
+        type: "urgent",
+        title: "Critical: Items Out of Stock",
+        message: `${metrics.outOfStockConsumables} consumable items are completely out of stock. Immediate reordering required to prevent disruption.`,
+        icon: "alert",
+      });
+    }
+
+    // Pending requests insight
+    if (metrics.pendingRequests > 5) {
+      insights.push({
+        type: "urgent",
+        title: "Multiple Pending Requests",
+        message: `${metrics.pendingRequests} requests await your approval. Timely processing improves user satisfaction.`,
+        icon: "clock",
+      });
+    }
+
+    // Low stock warning
+    if (metrics.lowStockConsumables > 0) {
+      insights.push({
+        type: "warning",
+        title: "Low Stock Alert",
+        message: `${metrics.lowStockConsumables} consumable items are running low. Plan replenishment to avoid stockouts.`,
+        icon: "shopping",
+      });
+    }
+
+    // Asset utilization insight
+    if (metrics.utilizationRate > 80) {
+      insights.push({
+        type: "warning",
+        title: "High Asset Utilization",
+        message: `Asset utilization is at ${metrics.utilizationRate}%. Consider acquiring more assets to meet growing demand.`,
+        icon: "alert",
+      });
+    } else if (metrics.utilizationRate < 40 && metrics.totalAssets > 0) {
+      insights.push({
+        type: "info",
+        title: "Low Asset Utilization",
+        message: `Only ${metrics.utilizationRate}% of assets are actively in use. Review allocation to optimize resource efficiency.`,
+        icon: "info",
+      });
+    }
+
+    // Consumable stock health
+    const stockHealthPercent = metrics.totalConsumables > 0
+      ? ((metrics.inStockConsumables / metrics.totalConsumables) * 100).toFixed(1)
+      : 0;
+
+    if (stockHealthPercent < 50 && metrics.totalConsumables > 0) {
+      insights.push({
+        type: "warning",
+        title: "Poor Consumable Stock Health",
+        message: `Only ${stockHealthPercent}% of consumables are adequately stocked. Review inventory management processes.`,
+        icon: "shopping",
+      });
+    } else if (stockHealthPercent > 90 && metrics.totalConsumables > 0) {
+      insights.push({
+        type: "info",
+        title: "Excellent Stock Management",
+        message: `${stockHealthPercent}% of consumables are well-stocked. Your inventory management is working effectively.`,
+        icon: "shopping",
+      });
+    }
+
+    // Asset health score insight
+    if (metrics.assetHealthScore < 60 && metrics.totalAssets > 0) {
+      insights.push({
+        type: "warning",
+        title: "Asset Health Needs Attention",
+        message: `Asset health score is ${metrics.assetHealthScore}%. Consider maintenance schedule or replacement for aging assets.`,
+        icon: "alert",
+      });
+    }
+
+    // Maintenance backlog
+    if (metrics.maintenanceAssets > 3) {
+      insights.push({
+        type: "warning",
+        title: "Maintenance Backlog",
+        message: `${metrics.maintenanceAssets} assets require maintenance or repair. Address this to prevent extended downtime.`,
+        icon: "alert",
+      });
+    }
+
+    // Overall inventory health
+    const totalItems = metrics.totalAssets + metrics.totalConsumables;
+    if (totalItems > 0) {
+      insights.push({
+        type: "info",
+        title: "Inventory Overview",
+        message: `Managing ${totalItems} total items: ${metrics.totalAssets} assets and ${metrics.totalConsumables} consumable items.`,
+        icon: "info",
+      });
+    }
+
+    return insights;
+  };
+
+  // Generate critical alerts
+  const generateCriticalAlerts = (metrics, consumables) => {
+    const alerts = [];
+
+    // Out of stock items
+    if (metrics.outOfStockConsumables > 0) {
+      alerts.push({
+        severity: "critical",
+        message: `${metrics.outOfStockConsumables} items are out of stock`,
+        action: "View Consumables",
+        link: "/admin/consumables",
+      });
+    }
+
+    // Low stock items
+    if (metrics.lowStockConsumables > 0) {
+      alerts.push({
+        severity: "warning",
+        message: `${metrics.lowStockConsumables} items are running low`,
+        action: "Check Stock",
+        link: "/admin/consumables",
+      });
+    }
+
+    // Pending requests
+    if (metrics.pendingRequests > 3) {
+      alerts.push({
+        severity: "info",
+        message: `${metrics.pendingRequests} requests pending approval`,
+        action: "Review Requests",
+        link: "/admin/requests",
+      });
+    }
+
+    return alerts;
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadDashboardData();
   };
-  // function to export the dashboard data
+
   const exportData = async (type) => {
     try {
       let data = {};
@@ -401,7 +564,6 @@ export default function AdminDashboard() {
         default:
           data = dashboardData;
       }
-      // function to export the dashboard data in a json format to the user
       const jsonData = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonData], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -414,6 +576,7 @@ export default function AdminDashboard() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      toast.success(`${type} data exported successfully!`);
     } catch (error) {
       toast.error("Export failed. Please try again.");
     }
@@ -421,50 +584,29 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="flex flex-col items-center space-y-6">
-          <div className="relative">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200"></div>
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-500 border-t-transparent absolute top-0 left-0"></div>
-          </div>
-          <div className="text-center">
-            <p className="text-slate-700 font-medium">Loading Dashboard</p>
-            <p className="text-slate-500 text-sm">Fetching real-time data...</p>
-          </div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
         </div>
+        <p className="mt-4 text-slate-600 font-medium">Loading Dashboard...</p>
+        <p className="mt-2 text-sm text-slate-500">Fetching real-time analytics</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40 -mx-6 -my-6 px-6 py-6">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div
-          className="w-full h-full"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.3'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            backgroundSize: "60px 60px",
-          }}
-        ></div>
-      </div>
-
-      <div className="relative container mx-auto p-6 space-y-8 max-w-7xl">
-        {/* Modern Header */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg shadow-blue-500/5 p-6">
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Clean Header */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
             <div className="space-y-1">
-              <div className="flex items-center space-x-3">
-                <div>
-                  {staff && (
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
-                      {getTimeBasedGreeting()},
-                      <span className="text-green-600">{staff.name}</span>! 👋
-                    </h1>
-                  )}
-                </div>
-              </div>
-              <p className="text-slate-600 font-medium">
+              {staff && (
+                <h1 className="text-3xl font-bold text-slate-900">
+                  {getTimeBasedGreeting()}, <span className="text-blue-600">{staff.name}</span>!
+                </h1>
+              )}
+              <p className="text-slate-600">
                 Real-time system analytics & insights
               </p>
               <div className="flex items-center space-x-2 text-sm text-slate-500">
@@ -482,467 +624,652 @@ export default function AdminDashboard() {
                 onClick={handleRefresh}
                 variant="outline"
                 disabled={refreshing}
-                className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:hover:scale-100 disabled:opacity-60"
+                className="h-10 px-4 border-slate-300 hover:bg-slate-50"
               >
-                <div className="flex items-center justify-center relative z-10">
-                  <RefreshCw
-                    className={`w-4 h-4 mr-2 group-hover:rotate-180 transition-transform duration-500 ${
-                      refreshing ? "animate-spin" : ""
-                    }`}
-                  />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Refresh
-                  </span>
-                </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-gray-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-              </Button>
-              <Button
-                onClick={() => exportData("Assets")}
-                className="relative bg-gradient-to-r from-sidebar-500 to-sidebar-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
-              >
-                <div className="flex items-center justify-center relative z-10">
-                  <Download className="w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Export Data
-                  </span>
-                </div>
-                {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-r from-sidebar-400 to-sidebar-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-                {/* Shimmer effect */}
-                <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
+                <RefreshCw
+                  className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+                />
+                Refresh
               </Button>
               <Button
                 onClick={() => exportData("Dashboard")}
-                className="relative bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+                className="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <div className="flex items-center justify-center relative z-10">
-                  <FileText className="w-4 h-4 mr-2 group-hover:rotate-12 group-hover:scale-110 transition-all duration-300" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Generate Report
-                  </span>
-                </div>
-                {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-r from-primary-400 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-                {/* Shimmer effect */}
-                <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
+                <Download className="w-4 h-4 mr-2" />
+                Export Report
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Modern Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {/* Total Assets Card */}
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-0 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-300 group cursor-pointer">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
-                  <Package className="h-3 w-3 text-white" />
-                </div>
-                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-0 text-xs px-1.5 py-0.5">
-                  Total
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">
-                  {dashboardData.metrics.totalAssets}
-                </h3>
-                <p className="text-xs font-medium text-slate-600">
-                  Total Assets
-                </p>
-                <p className="text-xs text-blue-600">
-                  {dashboardData.metrics.availableAssets} available
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Available Assets Card */}
-          <Card className="bg-gradient-to-br from-emerald-50 to-green-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-1.5 bg-gradient-to-br from-emerald-500 to-green-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
-                  <CheckCircle2 className="h-3 w-3 text-white" />
-                </div>
-                <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-0 text-xs px-1.5 py-0.5">
-                  Ready
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">
-                  {dashboardData.metrics.availableAssets}
-                </h3>
-                <p className="text-xs font-medium text-slate-600">Available</p>
-                <p className="text-xs text-green-600">Ready to deploy</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Pending Requests Card */}
-          <Card className="bg-gradient-to-br from-amber-50 to-orange-100 border-0 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-300 group cursor-pointer">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-1.5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
-                  <Clock className="h-3 w-3 text-white" />
-                </div>
-                <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-0 text-xs px-1.5 py-0.5">
-                  Pending
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">
-                  {dashboardData.metrics.pendingRequests}
-                </h3>
-                <p className="text-xs font-medium text-slate-600">Requests</p>
-                <p className="text-xs text-orange-600">Awaiting approval</p>
-              </div>
-            </CardContent>
-          </Card>
-          {/* Maintenance Card */}
-          <Card className="bg-gradient-to-br from-red-50 to-rose-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-1.5 bg-gradient-to-br from-red-500 to-rose-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
-                  <AlertCircle className="h-3 w-3 text-white" />
-                </div>
-                <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-0 text-xs px-1.5 py-0.5">
-                  Alert
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">
-                  {dashboardData.metrics.maintenanceAssets}
-                </h3>
-                <p className="text-xs font-medium text-slate-600">
-                  Maintenance
-                </p>
-                <p className="text-xs text-red-600">Needs attention</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Staff & Departments Card */}
-          <Card className="bg-gradient-to-br from-purple-50 to-indigo-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-1.5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
-                  <Users className="h-3 w-3 text-white" />
-                </div>
-                <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-0 text-xs px-1.5 py-0.5">
-                  Team
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">
-                  {dashboardData.metrics.totalStaff}
-                </h3>
-                <p className="text-xs font-medium text-slate-600">Staff</p>
-                <p className="text-xs text-purple-600">
-                  {dashboardData.metrics.totalDepartments} departments
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total Consumables Card */}
-          <Card className="bg-gradient-to-br from-cyan-50 to-blue-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-1.5 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-md shadow-sm group-hover:scale-110 transition-transform duration-300">
-                  <ShoppingCart className="h-3 w-3 text-white" />
-                </div>
-                <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200 border-0 text-xs px-1.5 py-0.5">
-                  Stock
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">
-                  {dashboardData.metrics.totalConsumables}
-                </h3>
-                <p className="text-xs font-medium text-slate-600">
-                  Consumables
-                </p>
-                <p className="text-xs text-cyan-600">
-                  {dashboardData.metrics.inStockConsumables} in stock
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Alert Cards - Full Width Below Main Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-          {/* Low Stock Alert Card */}
-          {dashboardData.metrics.lowStockConsumables > 0 && (
-            <Card className="bg-gradient-to-br from-yellow-50 to-amber-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-1.5 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-md shadow-sm group-hover:scale-105 transition-transform duration-300">
-                    <AlertTriangle className="h-3 w-3 text-white" />
+        {/* Critical Alerts */}
+        {dashboardData.criticalAlerts.length > 0 && (
+          <div className="space-y-3">
+            {dashboardData.criticalAlerts.map((alert, index) => (
+              <div
+                key={index}
+                className={`p-4 rounded-lg border ${
+                  alert.severity === "critical"
+                    ? "bg-red-50 border-red-200"
+                    : alert.severity === "warning"
+                    ? "bg-yellow-50 border-yellow-200"
+                    : "bg-blue-50 border-blue-200"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Bell
+                      className={`w-5 h-5 ${
+                        alert.severity === "critical"
+                          ? "text-red-600"
+                          : alert.severity === "warning"
+                          ? "text-yellow-600"
+                          : "text-blue-600"
+                      }`}
+                    />
+                    <span
+                      className={`font-medium ${
+                        alert.severity === "critical"
+                          ? "text-red-900"
+                          : alert.severity === "warning"
+                          ? "text-yellow-900"
+                          : "text-blue-900"
+                      }`}
+                    >
+                      {alert.message}
+                    </span>
                   </div>
-                  <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-0 text-xs px-1.5 py-0.5">
-                    Alert
-                  </Badge>
+                  <Button
+                    asChild
+                    size="sm"
+                    className={
+                      alert.severity === "critical"
+                        ? "bg-red-600 hover:bg-red-700"
+                        : alert.severity === "warning"
+                        ? "bg-yellow-600 hover:bg-yellow-700"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }
+                  >
+                    <Link href={alert.link}>{alert.action} →</Link>
+                  </Button>
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-slate-900">
-                    {dashboardData.metrics.lowStockConsumables}
-                  </h3>
-                  <p className="text-xs font-medium text-slate-600">
-                    Low Stock Items
-                  </p>
-                  <p className="text-xs text-yellow-600">Needs reordering</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Out of Stock Alert Card */}
-          {dashboardData.metrics.outOfStockConsumables > 0 && (
-            <Card className="bg-gradient-to-br from-red-50 to-rose-100 border-0 shadow-sm hover:shadow-md transition-all duration-300 group">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-1.5 bg-gradient-to-br from-red-500 to-rose-600 rounded-md shadow-sm group-hover:scale-105 transition-transform duration-300">
-                    <XCircle className="h-3 w-3 text-white" />
-                  </div>
-                  <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-0 text-xs px-1.5 py-0.5">
-                    Critical
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-slate-900">
-                    {dashboardData.metrics.outOfStockConsumables}
-                  </h3>
-                  <p className="text-xs font-medium text-slate-600">
-                    Out of Stock
-                  </p>
-                  <p className="text-xs text-red-600">Urgent reorder needed</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Modern Alert for pending requests */}
-        {dashboardData.metrics.pendingRequests > 0 && (
-          <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/50 rounded-2xl p-6 shadow-lg">
-            <div className="flex items-start space-x-4">
-              <div className="p-2 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl shadow-lg">
-                <Clock className="h-5 w-5 text-white" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-orange-900 mb-1">
-                  Action Required
-                </h3>
-                <p className="text-orange-800 mb-3">
-                  You have{" "}
-                  <span className="font-bold text-orange-900">
-                    {dashboardData.metrics.pendingRequests}
-                  </span>{" "}
-                  pending requests that require approval.
-                </p>
-                <Button
-                  asChild
-                  className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
-                >
-                  <Link href="/admin/requests">Review Requests →</Link>
-                </Button>
-              </div>
-            </div>
+            ))}
           </div>
         )}
 
-        {/*Content Tabs */}
-        <Tabs defaultValue="overview" className="space-y-8">
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-2 relative overflow-hidden">
-            {/* Animated background gradient */}
-            <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-sidebar-500/5 rounded-2xl opacity-0 transition-opacity duration-500" />
-
-            <TabsList className="grid w-full grid-cols-5 bg-transparent gap-1 relative z-10">
-              <TabsTrigger
-                value="overview"
-                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary-500 data-[state=active]:to-primary-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-primary-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
-              >
-                <div className="flex items-center justify-center relative">
-                  <PieChart className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-primary-600 group-hover:text-primary-700" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Overview
+        {/* Key Metrics with Enhanced Design - Row 1: Unified Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Total Assets */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <Package className="h-6 w-6 text-blue-600" />
+                </div>
+                <Badge className="bg-blue-100 text-blue-700">Assets</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.totalAssets}
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Total Assets</p>
+                <div className="flex items-center space-x-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <span className="text-slate-600">
+                    {dashboardData.metrics.availableAssets} available
                   </span>
                 </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-              </TabsTrigger>
+              </div>
+            </CardContent>
+          </Card>
 
-              <TabsTrigger
-                value="assets"
-                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-sidebar-500 data-[state=active]:to-sidebar-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-sidebar-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
-              >
-                <div className="flex items-center justify-center relative">
-                  <Package className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-sidebar-600 group-hover:text-sidebar-700" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Assets
+          {/* Total Consumables */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-orange-100 rounded-lg">
+                  <ShoppingCart className="h-6 w-6 text-orange-600" />
+                </div>
+                <Badge className="bg-orange-100 text-orange-700">Consumables</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.totalConsumables}
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Total Consumables</p>
+                <div className="flex items-center space-x-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <span className="text-slate-600">
+                    {dashboardData.metrics.inStockConsumables} in stock
                   </span>
                 </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-              </TabsTrigger>
+              </div>
+            </CardContent>
+          </Card>
 
-              <TabsTrigger
-                value="requests"
-                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary-500 data-[state=active]:to-primary-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-primary-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
-              >
-                <div className="flex items-center justify-center relative">
-                  <Clock className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-primary-600 group-hover:text-primary-700" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Requests
-                  </span>
+          {/* Total Inventory Items */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <BarChart3 className="h-6 w-6 text-purple-600" />
                 </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="activity"
-                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-sidebar-500 data-[state=active]:to-sidebar-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-sidebar-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
-              >
-                <div className="flex items-center justify-center relative">
-                  <Activity className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-sidebar-600 group-hover:text-sidebar-700" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Activity
-                  </span>
+                <Badge className="bg-purple-100 text-purple-700">Combined</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.totalAssets + dashboardData.metrics.totalConsumables}
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Total Inventory</p>
+                <div className="flex items-center space-x-2 text-sm text-slate-600">
+                  <span>{dashboardData.metrics.totalAssets} assets</span>
+                  <span>•</span>
+                  <span>{dashboardData.metrics.totalConsumables} consumables</span>
                 </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-              </TabsTrigger>
+              </div>
+            </CardContent>
+          </Card>
 
-              <TabsTrigger
-                value="consumables"
-                className="relative data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-cyan-600 data-[state=active]:text-white data-[state=active]:shadow-xl data-[state=active]:scale-105 hover:bg-cyan-50 hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl font-medium group overflow-hidden"
-              >
-                <div className="flex items-center justify-center relative">
-                  <ShoppingCart className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300 data-[state=active]:text-white group-data-[state=active]:text-white text-cyan-600 group-hover:text-cyan-700" />
-                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    Consumables
-                  </span>
+          {/* Pending Requests */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-amber-100 rounded-lg">
+                  <Clock className="h-6 w-6 text-amber-600" />
                 </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-xl scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-              </TabsTrigger>
-            </TabsList>
-          </div>
+                <Badge className="bg-amber-100 text-amber-700">Pending</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.pendingRequests}
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Pending Requests</p>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="w-full mt-2"
+                >
+                  <Link href="/admin/requests">Review →</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/*Asset Distribution by Category */}
-              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-                <CardHeader className="pb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-lg">
-                      <PieChart className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        Asset Distribution by Category
-                      </CardTitle>
-                      <CardDescription className="text-slate-600">
-                        Real data from your{" "}
-                        <span className="font-medium text-blue-600">
-                          {dashboardData.metrics.totalAssets}
-                        </span>{" "}
-                        assets
-                      </CardDescription>
+        {/* Key Metrics - Row 2: Specific Analytics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Asset Utilization Rate */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <Percent className="h-6 w-6 text-blue-600" />
+                </div>
+                <Badge className="bg-blue-100 text-blue-700">Assets</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.utilizationRate}%
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Asset Utilization</p>
+                <Progress
+                  value={dashboardData.metrics.utilizationRate}
+                  className="h-2"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Consumable Stock Health */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-orange-100 rounded-lg">
+                  <Target className="h-6 w-6 text-orange-600" />
+                </div>
+                <Badge className="bg-orange-100 text-orange-700">Stock</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.totalConsumables > 0
+                    ? ((dashboardData.metrics.inStockConsumables / dashboardData.metrics.totalConsumables) * 100).toFixed(1)
+                    : 0}%
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Stock Health</p>
+                <Progress
+                  value={dashboardData.metrics.totalConsumables > 0
+                    ? (dashboardData.metrics.inStockConsumables / dashboardData.metrics.totalConsumables) * 100
+                    : 0}
+                  className="h-2"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Asset Health Score */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <Shield className="h-6 w-6 text-green-600" />
+                </div>
+                <Badge className="bg-green-100 text-green-700">Health</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.assetHealthScore}%
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Asset Condition</p>
+                <Progress
+                  value={dashboardData.metrics.assetHealthScore}
+                  className="h-2"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Critical Items */}
+          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <Badge className="bg-red-100 text-red-700">Critical</Badge>
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-3xl font-bold text-slate-900">
+                  {dashboardData.metrics.maintenanceAssets + dashboardData.metrics.outOfStockConsumables}
+                </h3>
+                <p className="text-sm font-medium text-slate-600">Need Attention</p>
+                <div className="flex items-center space-x-2 text-sm text-slate-600">
+                  <span>{dashboardData.metrics.maintenanceAssets} assets</span>
+                  <span>•</span>
+                  <span>{dashboardData.metrics.outOfStockConsumables} stock</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Insights Section */}
+        {dashboardData.insights.length > 0 && (
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Lightbulb className="w-5 h-5 text-yellow-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Key Insights & Recommendations
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                {dashboardData.insights.map((insight, index) => (
+                  <div
+                    key={index}
+                    className={`p-4 rounded-lg border ${
+                      insight.type === "urgent"
+                        ? "bg-red-50 border-red-200"
+                        : insight.type === "warning"
+                        ? "bg-yellow-50 border-yellow-200"
+                        : "bg-blue-50 border-blue-200"
+                    }`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <Lightbulb
+                        className={`w-5 h-5 mt-0.5 ${
+                          insight.type === "urgent"
+                            ? "text-red-600"
+                            : insight.type === "warning"
+                            ? "text-yellow-600"
+                            : "text-blue-600"
+                        }`}
+                      />
+                      <div className="flex-1">
+                        <h4
+                          className={`font-semibold mb-1 ${
+                            insight.type === "urgent"
+                              ? "text-red-900"
+                              : insight.type === "warning"
+                              ? "text-yellow-900"
+                              : "text-blue-900"
+                          }`}
+                        >
+                          {insight.title}
+                        </h4>
+                        <p
+                          className={`text-sm ${
+                            insight.type === "urgent"
+                              ? "text-red-700"
+                              : insight.type === "warning"
+                              ? "text-yellow-700"
+                              : "text-blue-700"
+                          }`}
+                        >
+                          {insight.message}
+                        </p>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Additional Analytics Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Asset Status Breakdown */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Package className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Asset Status
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Available</span>
+                  <span className="text-lg font-bold text-green-700">
+                    {dashboardData.metrics.availableAssets}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">In Use</span>
+                  <span className="text-lg font-bold text-blue-700">
+                    {dashboardData.metrics.inUseAssets}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Maintenance</span>
+                  <span className="text-lg font-bold text-orange-700">
+                    {dashboardData.metrics.maintenanceAssets}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Retired</span>
+                  <span className="text-lg font-bold text-slate-700">
+                    {dashboardData.metrics.retiredAssets}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Consumables Stock */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <ShoppingCart className="w-5 h-5 text-orange-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Stock Status
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">In Stock</span>
+                  <span className="text-lg font-bold text-green-700">
+                    {dashboardData.metrics.inStockConsumables}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Low Stock</span>
+                  <span className="text-lg font-bold text-yellow-700">
+                    {dashboardData.metrics.lowStockConsumables}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Out of Stock</span>
+                  <span className="text-lg font-bold text-red-700">
+                    {dashboardData.metrics.outOfStockConsumables}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                  <span className="text-sm font-medium text-slate-700">Total Items</span>
+                  <span className="text-lg font-bold text-slate-900">
+                    {dashboardData.metrics.totalConsumables}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Request Summary */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Clock className="w-5 h-5 text-amber-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Requests
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Pending</span>
+                  <span className="text-lg font-bold text-orange-700">
+                    {dashboardData.metrics.pendingRequests}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Approved</span>
+                  <span className="text-lg font-bold text-green-700">
+                    {dashboardData.metrics.approvedRequests}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Fulfilled</span>
+                  <span className="text-lg font-bold text-blue-700">
+                    {dashboardData.metrics.fulfilledRequests}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Organization Summary */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <Briefcase className="w-5 h-5 text-purple-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Organization
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Departments</span>
+                  <span className="text-lg font-bold text-slate-900">
+                    {dashboardData.metrics.totalDepartments}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Staff Members</span>
+                  <span className="text-lg font-bold text-slate-900">
+                    {dashboardData.metrics.totalStaff}
+                  </span>
+                </div>
+                {dashboardData.metrics.totalValue > 0 && (
+                  <>
+                    <div className="pt-2 border-t border-slate-200" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">Asset Value</span>
+                      <span className="text-lg font-bold text-green-700">
+                        ${(dashboardData.metrics.totalValue / 1000).toFixed(0)}k
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Detailed Tabs */}
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5 bg-white border border-slate-200 p-1 rounded-lg">
+            <TabsTrigger value="overview" className="rounded-md">
+              <PieChart className="w-4 h-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="assets" className="rounded-md">
+              <Package className="w-4 h-4 mr-2" />
+              Assets
+            </TabsTrigger>
+            <TabsTrigger value="consumables" className="rounded-md">
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Consumables
+            </TabsTrigger>
+            <TabsTrigger value="requests" className="rounded-md">
+              <Clock className="w-4 h-4 mr-2" />
+              Requests
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="rounded-md">
+              <Activity className="w-4 h-4 mr-2" />
+              Activity
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Asset Distribution */}
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="border-b border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <Package className="w-5 h-5 text-blue-600" />
+                    <CardTitle className="text-lg font-semibold text-slate-900">
+                      Asset Distribution
+                    </CardTitle>
+                  </div>
+                  <CardDescription className="text-slate-600">
+                    By category
+                  </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   <div className="space-y-4">
                     {dashboardData.assetsByCategory.length > 0 ? (
                       dashboardData.assetsByCategory.map((category, index) => (
-                        <div
-                          key={category.name}
-                          className="group p-4 rounded-xl bg-slate-50/50 hover:bg-slate-100/50 transition-all duration-200"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold text-slate-700">
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-700">
                               {category.name}
                             </span>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center space-x-2">
                               <span className="text-sm font-bold text-slate-900">
                                 {category.value}
                               </span>
-                              <Badge className="bg-blue-100 text-blue-700 border-0 text-xs min-w-[50px]">
+                              <Badge className="bg-blue-100 text-blue-700">
                                 {category.percentage}%
                               </Badge>
                             </div>
                           </div>
-                          <div className="relative">
-                            <Progress
-                              value={parseFloat(category.percentage)}
-                              className="h-2 bg-slate-200"
-                            />
-                          </div>
+                          <Progress
+                            value={parseFloat(category.percentage)}
+                            className="h-2"
+                          />
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-12">
+                      <div className="text-center py-8">
                         <Package className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                        <p className="text-slate-500 font-medium">
-                          No assets found
-                        </p>
+                        <p className="text-slate-500">No assets found</p>
                       </div>
                     )}
                   </div>
                 </CardContent>
               </Card>
 
-              {/*Department Utilization */}
-              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-                <CardHeader className="pb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg shadow-lg">
-                      <Briefcase className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        Department Asset Utilization
-                      </CardTitle>
-                      <CardDescription className="text-slate-600">
-                        Asset usage efficiency by department
-                      </CardDescription>
-                    </div>
+              {/* Consumables Distribution */}
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="border-b border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <ShoppingCart className="w-5 h-5 text-orange-600" />
+                    <CardTitle className="text-lg font-semibold text-slate-900">
+                      Consumables Distribution
+                    </CardTitle>
                   </div>
+                  <CardDescription className="text-slate-600">
+                    By category
+                  </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   <div className="space-y-4">
+                    {dashboardData.consumablesByCategory.length > 0 ? (
+                      dashboardData.consumablesByCategory.map((category, index) => (
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-700">
+                              {category.name}
+                            </span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-bold text-slate-900">
+                                {category.value}
+                              </span>
+                              <Badge className="bg-orange-100 text-orange-700">
+                                {category.percentage}%
+                              </Badge>
+                            </div>
+                          </div>
+                          <Progress
+                            value={parseFloat(category.percentage)}
+                            className="h-2"
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <ShoppingCart className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                        <p className="text-slate-500">No consumables found</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Department Utilization */}
+              <Card className="border-slate-200 shadow-sm lg:col-span-2">
+                <CardHeader className="border-b border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <Briefcase className="w-5 h-5 text-green-600" />
+                    <CardTitle className="text-lg font-semibold text-slate-900">
+                      Department Asset Utilization
+                    </CardTitle>
+                  </div>
+                  <CardDescription className="text-slate-600">
+                    Asset usage by department
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {dashboardData.assetsByDepartment.length > 0 ? (
                       dashboardData.assetsByDepartment.map((dept, index) => (
-                        <div
-                          key={dept.name}
-                          className="group p-4 rounded-xl bg-slate-50/50 hover:bg-slate-100/50 transition-all duration-200"
-                        >
-                          <div className="flex justify-between items-center mb-3">
-                            <div className="flex items-center space-x-2">
-                              <Target className="w-4 h-4 text-emerald-600" />
-                              <span className="text-sm font-semibold text-slate-700">
-                                {dept.name}
-                              </span>
-                            </div>
+                        <div key={index} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-slate-700">
+                              {dept.name}
+                            </span>
                             <div className="text-right">
                               <div className="text-sm font-bold text-slate-900">
                                 {dept.inUse}/{dept.total}
                               </div>
                               <Badge
-                                className={`text-xs border-0 ${
+                                className={`text-xs ${
                                   parseFloat(dept.utilization) >= 80
                                     ? "bg-red-100 text-red-700"
                                     : parseFloat(dept.utilization) >= 60
-                                    ? "bg-orange-100 text-orange-700"
+                                    ? "bg-yellow-100 text-yellow-700"
                                     : "bg-green-100 text-green-700"
                                 }`}
                               >
@@ -950,188 +1277,78 @@ export default function AdminDashboard() {
                               </Badge>
                             </div>
                           </div>
-                          <div className="relative">
-                            <Progress
-                              value={parseFloat(dept.utilization)}
-                              className="h-3 bg-slate-200"
-                            />
-                          </div>
+                          <Progress
+                            value={parseFloat(dept.utilization)}
+                            className="h-2"
+                          />
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-12">
+                      <div className="text-center py-8 col-span-2">
                         <Briefcase className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                        <p className="text-slate-500 font-medium">
-                          No department assignments found
-                        </p>
+                        <p className="text-slate-500">No department assignments</p>
                       </div>
                     )}
                   </div>
                 </CardContent>
               </Card>
             </div>
-
-            {/*System Overview */}
-            <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-              <CardHeader className="pb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-lg">
-                    <BarChart3 className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg font-semibold text-slate-900">
-                      System Overview
-                    </CardTitle>
-                    <CardDescription className="text-slate-600">
-                      Current system status and utilization metrics
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 hover:from-green-100 hover:to-emerald-200 transition-all duration-200">
-                    <div className="flex items-center justify-center mb-2">
-                      <CheckCircle2 className="w-5 h-5 text-green-600 mr-2" />
-                      <Badge className="bg-green-100 text-green-700 border-0 text-xs">
-                        Available
-                      </Badge>
-                    </div>
-                    <div className="text-3xl font-bold text-green-700 mb-1">
-                      {dashboardData.metrics.availableAssets}
-                    </div>
-                    <div className="text-xs text-green-600 font-medium">
-                      {dashboardData.metrics.totalAssets > 0
-                        ? (
-                            (dashboardData.metrics.availableAssets /
-                              dashboardData.metrics.totalAssets) *
-                            100
-                          ).toFixed(1)
-                        : 0}
-                      % of total
-                    </div>
-                  </div>
-                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 hover:from-blue-100 hover:to-indigo-200 transition-all duration-200">
-                    <div className="flex items-center justify-center mb-2">
-                      <Zap className="w-5 h-5 text-blue-600 mr-2" />
-                      <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
-                        Active
-                      </Badge>
-                    </div>
-                    <div className="text-3xl font-bold text-blue-700 mb-1">
-                      {dashboardData.metrics.inUseAssets}
-                    </div>
-                    <div className="text-xs text-blue-600 font-medium">
-                      {dashboardData.metrics.totalAssets > 0
-                        ? (
-                            (dashboardData.metrics.inUseAssets /
-                              dashboardData.metrics.totalAssets) *
-                            100
-                          ).toFixed(1)
-                        : 0}
-                      % utilization
-                    </div>
-                  </div>
-                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 hover:from-orange-100 hover:to-amber-200 transition-all duration-200">
-                    <div className="flex items-center justify-center mb-2">
-                      <Settings className="w-5 h-5 text-orange-600 mr-2" />
-                      <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
-                        Service
-                      </Badge>
-                    </div>
-                    <div className="text-3xl font-bold text-orange-700 mb-1">
-                      {dashboardData.metrics.maintenanceAssets}
-                    </div>
-                    <div className="text-xs text-orange-600 font-medium">
-                      Offline assets
-                    </div>
-                  </div>
-                  <div className="text-center p-4 rounded-xl bg-gradient-to-br from-slate-50 to-gray-100 hover:from-slate-100 hover:to-gray-200 transition-all duration-200">
-                    <div className="flex items-center justify-center mb-2">
-                      <Archive className="w-5 h-5 text-slate-600 mr-2" />
-                      <Badge className="bg-slate-100 text-slate-700 border-0 text-xs">
-                        Retired
-                      </Badge>
-                    </div>
-                    <div className="text-3xl font-bold text-slate-700 mb-1">
-                      {dashboardData.metrics.retiredAssets}
-                    </div>
-                    <div className="text-xs text-slate-600 font-medium">
-                      End of life
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          {/* Modern Assets Tab */}
-          <TabsContent value="assets" className="space-y-8">
-            <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-              <CardHeader className="pb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg shadow-lg">
-                    <Package className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg font-semibold text-slate-900">
-                      Asset Status Breakdown
-                    </CardTitle>
-                    <CardDescription className="text-slate-600">
-                      Detailed status distribution of all assets
-                    </CardDescription>
-                  </div>
+          {/* Assets Tab */}
+          <TabsContent value="assets" className="space-y-6">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="border-b border-slate-100">
+                <div className="flex items-center space-x-2">
+                  <Package className="w-5 h-5 text-blue-600" />
+                  <CardTitle className="text-lg font-semibold text-slate-900">
+                    Asset Status Breakdown
+                  </CardTitle>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {dashboardData.assetsByStatus.map((statusGroup, index) => {
                     const getStatusColor = (status) => {
                       switch (status) {
                         case "AVAILABLE":
-                          return "from-green-50 to-emerald-100 border-green-200";
+                          return "border-green-200 bg-green-50";
                         case "IN_USE":
-                          return "from-blue-50 to-indigo-100 border-blue-200";
+                          return "border-blue-200 bg-blue-50";
                         case "MAINTENANCE":
                         case "REPAIR_REQUIRED":
-                          return "from-orange-50 to-amber-100 border-orange-200";
+                          return "border-orange-200 bg-orange-50";
                         case "RETIRED":
                         case "DISPOSED":
-                          return "from-slate-50 to-gray-100 border-slate-200";
+                          return "border-slate-200 bg-slate-50";
                         default:
-                          return "from-purple-50 to-violet-100 border-purple-200";
+                          return "border-purple-200 bg-purple-50";
                       }
                     };
 
                     const getStatusIcon = (status) => {
                       switch (status) {
                         case "AVAILABLE":
-                          return (
-                            <CheckCircle2 className="w-5 h-5 text-green-600" />
-                          );
+                          return <CheckCircle2 className="w-5 h-5 text-green-600" />;
                         case "IN_USE":
                           return <Zap className="w-5 h-5 text-blue-600" />;
                         case "MAINTENANCE":
                         case "REPAIR_REQUIRED":
-                          return (
-                            <Settings className="w-5 h-5 text-orange-600" />
-                          );
+                          return <Settings className="w-5 h-5 text-orange-600" />;
                         case "RETIRED":
                         case "DISPOSED":
                           return <Archive className="w-5 h-5 text-slate-600" />;
                         default:
-                          return (
-                            <AlertCircle className="w-5 h-5 text-purple-600" />
-                          );
+                          return <AlertCircle className="w-5 h-5 text-purple-600" />;
                       }
                     };
 
                     return (
                       <div
-                        key={statusGroup.name}
-                        className={`p-6 bg-gradient-to-br ${getStatusColor(
+                        key={index}
+                        className={`p-6 rounded-lg border ${getStatusColor(
                           statusGroup.status
-                        )} rounded-2xl border shadow-lg hover:shadow-xl transition-all duration-300 group`}
+                        )} hover:shadow-md transition-shadow`}
                       >
                         <div className="flex justify-between items-start mb-4">
                           <div className="flex items-center space-x-2">
@@ -1140,16 +1357,16 @@ export default function AdminDashboard() {
                               {statusGroup.name}
                             </h4>
                           </div>
-                          <Badge className="bg-white/80 text-slate-700 border-0 font-medium">
+                          <Badge className="bg-white/80 text-slate-700">
                             {statusGroup.percentage}%
                           </Badge>
                         </div>
-                        <div className="text-3xl font-bold text-slate-900 mb-3 group-hover:scale-105 transition-transform duration-200">
+                        <div className="text-3xl font-bold text-slate-900 mb-3">
                           {statusGroup.value}
                         </div>
                         <Progress
                           value={parseFloat(statusGroup.percentage)}
-                          className="h-2 bg-white/50"
+                          className="h-2"
                         />
                       </div>
                     );
@@ -1159,209 +1376,222 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          {/* Modern Requests Tab */}
-          <TabsContent value="requests" className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-                <CardHeader className="pb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gradient-to-br from-orange-500 to-amber-600 rounded-lg shadow-lg">
-                      <Clock className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        Request Status Summary
-                      </CardTitle>
-                      <CardDescription className="text-slate-600">
-                        Current status of all asset requests
-                      </CardDescription>
-                    </div>
+          {/* Consumables Tab */}
+          <TabsContent value="consumables" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="border-b border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <ShoppingCart className="w-5 h-5 text-orange-600" />
+                    <CardTitle className="text-lg font-semibold text-slate-900">
+                      Consumables by Category
+                    </CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   <div className="space-y-4">
-                    {dashboardData.requestsByStatus.length > 0 ? (
-                      dashboardData.requestsByStatus.map(
-                        (statusGroup, index) => {
-                          const getRequestStatusColor = (status) => {
-                            switch (status) {
-                              case "PENDING":
-                                return "from-orange-50 to-amber-100 border-orange-200";
-                              case "APPROVED":
-                                return "from-green-50 to-emerald-100 border-green-200";
-                              case "FULFILLED":
-                                return "from-blue-50 to-indigo-100 border-blue-200";
-                              case "REJECTED":
-                                return "from-red-50 to-rose-100 border-red-200";
-                              default:
-                                return "from-slate-50 to-gray-100 border-slate-200";
-                            }
-                          };
-
-                          const getRequestStatusIcon = (status) => {
-                            switch (status) {
-                              case "PENDING":
-                                return (
-                                  <Clock className="w-5 h-5 text-orange-600" />
-                                );
-                              case "APPROVED":
-                                return (
-                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                                );
-                              case "FULFILLED":
-                                return (
-                                  <Zap className="w-5 h-5 text-blue-600" />
-                                );
-                              case "REJECTED":
-                                return (
-                                  <XCircle className="w-5 h-5 text-red-600" />
-                                );
-                              default:
-                                return (
-                                  <Pause className="w-5 h-5 text-slate-600" />
-                                );
-                            }
-                          };
-
-                          return (
-                            <div
-                              key={statusGroup.name}
-                              className={`p-4 bg-gradient-to-r ${getRequestStatusColor(
-                                statusGroup.status
-                              )} rounded-xl border hover:shadow-md transition-all duration-200`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  {getRequestStatusIcon(statusGroup.status)}
-                                  <div>
-                                    <div className="font-semibold text-slate-800">
-                                      {statusGroup.name}
-                                    </div>
-                                    <div className="text-sm text-slate-600">
-                                      {statusGroup.percentage}% of total
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-2xl font-bold text-slate-900">
-                                  {statusGroup.value}
-                                </div>
-                              </div>
+                    {dashboardData.consumablesByCategory.length > 0 ? (
+                      dashboardData.consumablesByCategory.map((category, index) => (
+                        <div key={index} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-slate-700">
+                              {category.name}
+                            </span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-bold text-slate-900">
+                                {category.value}
+                              </span>
+                              <Badge className="bg-orange-100 text-orange-700">
+                                {category.percentage}%
+                              </Badge>
                             </div>
-                          );
-                        }
-                      )
+                          </div>
+                          <Progress
+                            value={parseFloat(category.percentage)}
+                            className="h-2"
+                          />
+                        </div>
+                      ))
                     ) : (
-                      <div className="text-center py-12">
-                        <Clock className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                        <p className="text-slate-500 font-medium">
-                          No requests found
-                        </p>
+                      <div className="text-center py-8">
+                        <ShoppingCart className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                        <p className="text-slate-500">No consumables found</p>
                       </div>
                     )}
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-                <CardHeader className="pb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg shadow-lg">
-                      <Target className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        Request Metrics
-                      </CardTitle>
-                      <CardDescription className="text-slate-600">
-                        Key request processing metrics
-                      </CardDescription>
-                    </div>
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="border-b border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <Target className="w-5 h-5 text-orange-600" />
+                    <CardTitle className="text-lg font-semibold text-slate-900">
+                      Stock Status
+                    </CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6">
                   <div className="space-y-4">
-                    <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-amber-100 rounded-2xl border border-orange-200">
-                      <div className="flex items-center justify-center mb-3">
-                        <Clock className="w-6 h-6 text-orange-600 mr-2" />
-                        <Badge className="bg-orange-100 text-orange-700 border-0">
-                          Urgent
-                        </Badge>
-                      </div>
-                      <div className="text-4xl font-bold text-orange-700 mb-2">
-                        {dashboardData.metrics.pendingRequests}
-                      </div>
-                      <div className="text-sm font-medium text-orange-600">
-                        Pending Approval
-                      </div>
-                      <div className="text-xs text-orange-500 mt-1">
-                        Require immediate attention
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200">
-                        <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto mb-2" />
-                        <div className="text-2xl font-bold text-green-700 mb-1">
-                          {dashboardData.metrics.approvedRequests}
+                    {dashboardData.consumablesByStatus.map((status, index) => {
+                      const getStatusColor = (statusName) => {
+                        if (statusName === "In Stock") return "border-green-200 bg-green-50";
+                        if (statusName === "Low Stock") return "border-yellow-200 bg-yellow-50";
+                        if (statusName === "Out Of Stock") return "border-red-200 bg-red-50";
+                        return "border-slate-200 bg-slate-50";
+                      };
+
+                      const getStatusIcon = (statusName) => {
+                        if (statusName === "In Stock")
+                          return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+                        if (statusName === "Low Stock")
+                          return <AlertTriangle className="h-5 w-5 text-yellow-600" />;
+                        if (statusName === "Out Of Stock")
+                          return <XCircle className="h-5 w-5 text-red-600" />;
+                        return <Package className="h-5 w-5 text-slate-600" />;
+                      };
+
+                      return (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg border ${getStatusColor(
+                            status.name
+                          )}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              {getStatusIcon(status.name)}
+                              <div>
+                                <div className="font-semibold text-slate-800">
+                                  {status.name}
+                                </div>
+                                <div className="text-sm text-slate-600">
+                                  {status.percentage}% of total
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-2xl font-bold text-slate-900">
+                              {status.value}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-xs font-medium text-green-600">
-                          Approved
-                        </div>
-                      </div>
-                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl border border-blue-200">
-                        <Zap className="w-5 h-5 text-blue-600 mx-auto mb-2" />
-                        <div className="text-2xl font-bold text-blue-700 mb-1">
-                          {dashboardData.metrics.fulfilledRequests}
-                        </div>
-                        <div className="text-xs font-medium text-blue-600">
-                          Fulfilled
-                        </div>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
-          {/* Modern Activity Tab */}
-          <TabsContent value="activity" className="space-y-8">
-            <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-              <CardHeader className="pb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg shadow-lg">
-                    <Activity className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg font-semibold text-slate-900">
-                      Recent System Activity
-                    </CardTitle>
-                    <CardDescription className="text-slate-600">
-                      Latest events from the audit trail
-                    </CardDescription>
-                  </div>
+          {/* Requests Tab */}
+          <TabsContent value="requests" className="space-y-6">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="border-b border-slate-100">
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-5 h-5 text-orange-600" />
+                  <CardTitle className="text-lg font-semibold text-slate-900">
+                    Request Status Summary
+                  </CardTitle>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {dashboardData.requestsByStatus.length > 0 ? (
+                    dashboardData.requestsByStatus.map((statusGroup, index) => {
+                      const getRequestStatusColor = (status) => {
+                        switch (status) {
+                          case "PENDING":
+                            return "border-orange-200 bg-orange-50";
+                          case "APPROVED":
+                            return "border-green-200 bg-green-50";
+                          case "FULFILLED":
+                            return "border-blue-200 bg-blue-50";
+                          case "REJECTED":
+                            return "border-red-200 bg-red-50";
+                          default:
+                            return "border-slate-200 bg-slate-50";
+                        }
+                      };
+
+                      const getRequestStatusIcon = (status) => {
+                        switch (status) {
+                          case "PENDING":
+                            return <Clock className="w-5 h-5 text-orange-600" />;
+                          case "APPROVED":
+                            return <CheckCircle2 className="w-5 h-5 text-green-600" />;
+                          case "FULFILLED":
+                            return <Zap className="w-5 h-5 text-blue-600" />;
+                          case "REJECTED":
+                            return <XCircle className="w-5 h-5 text-red-600" />;
+                          default:
+                            return <Pause className="w-5 h-5 text-slate-600" />;
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={index}
+                          className={`p-6 rounded-lg border ${getRequestStatusColor(
+                            statusGroup.status
+                          )}`}
+                        >
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center space-x-2">
+                              {getRequestStatusIcon(statusGroup.status)}
+                              <div className="font-semibold text-slate-800">
+                                {statusGroup.name}
+                              </div>
+                            </div>
+                            <Badge className="bg-white/80 text-slate-700">
+                              {statusGroup.percentage}%
+                            </Badge>
+                          </div>
+                          <div className="text-3xl font-bold text-slate-900">
+                            {statusGroup.value}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-12 col-span-3">
+                      <Clock className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                      <p className="text-slate-500 font-medium">No requests found</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Activity Tab */}
+          <TabsContent value="activity" className="space-y-6">
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader className="border-b border-slate-100">
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-5 h-5 text-purple-600" />
+                  <CardTitle className="text-lg font-semibold text-slate-900">
+                    Recent System Activity
+                  </CardTitle>
+                </div>
+                <CardDescription className="text-slate-600">
+                  Latest events from the audit trail
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
                 <div className="space-y-4">
                   {dashboardData.recentEvents.length > 0 ? (
                     dashboardData.recentEvents.map((event, index) => {
                       const getEventColor = (eventType) => {
-                        if (eventType.includes("CREATE"))
-                          return "from-green-50 to-emerald-100 border-green-200";
-                        if (eventType.includes("UPDATE"))
-                          return "from-blue-50 to-indigo-100 border-blue-200";
-                        if (eventType.includes("DELETE"))
-                          return "from-red-50 to-rose-100 border-red-200";
-                        if (eventType.includes("ASSIGN"))
-                          return "from-purple-50 to-violet-100 border-purple-200";
-                        return "from-slate-50 to-gray-100 border-slate-200";
+                        if (eventType.includes("CREATE")) return "border-green-200 bg-green-50";
+                        if (eventType.includes("UPDATE")) return "border-blue-200 bg-blue-50";
+                        if (eventType.includes("DELETE")) return "border-red-200 bg-red-50";
+                        if (eventType.includes("ASSIGN")) return "border-purple-200 bg-purple-50";
+                        return "border-slate-200 bg-slate-50";
                       };
 
                       const getEventIcon = (eventType) => {
                         if (eventType.includes("CREATE"))
-                          return (
-                            <CheckCircle2 className="h-5 w-5 text-green-600" />
-                          );
+                          return <CheckCircle2 className="h-5 w-5 text-green-600" />;
                         if (eventType.includes("UPDATE"))
                           return <Settings className="h-5 w-5 text-blue-600" />;
                         if (eventType.includes("DELETE"))
@@ -1374,20 +1604,20 @@ export default function AdminDashboard() {
                       return (
                         <div
                           key={event.$id}
-                          className={`p-4 bg-gradient-to-r ${getEventColor(
+                          className={`p-4 rounded-lg border ${getEventColor(
                             event.eventType
-                          )} rounded-xl border hover:shadow-md transition-all duration-200 group`}
+                          )}`}
                         >
                           <div className="flex items-start space-x-4">
-                            <div className="p-2 bg-white rounded-lg shadow-sm group-hover:shadow-md transition-shadow duration-200">
+                            <div className="p-2 bg-white rounded-lg shadow-sm">
                               {getEventIcon(event.eventType)}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center space-x-2 mb-2">
-                                <Badge className="bg-white/80 text-slate-700 border-0 text-xs font-medium">
+                                <Badge className="bg-white/80 text-slate-700 text-xs">
                                   {event.eventType.replace(/_/g, " ")}
                                 </Badge>
-                                <span className="text-xs text-slate-500 font-medium">
+                                <span className="text-xs text-slate-500">
                                   {new Date(event.at).toLocaleDateString()} •{" "}
                                   {new Date(event.at).toLocaleTimeString()}
                                 </span>
@@ -1411,9 +1641,7 @@ export default function AdminDashboard() {
                     })
                   ) : (
                     <div className="text-center py-16">
-                      <div className="p-4 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                        <Activity className="h-12 w-12 text-slate-400" />
-                      </div>
+                      <Activity className="h-12 w-12 text-slate-400 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-slate-600 mb-2">
                         No Recent Activity
                       </h3>
@@ -1422,195 +1650,6 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Consumables Tab */}
-          <TabsContent value="consumables" className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Consumables Summary Cards */}
-              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-                <CardHeader className="pb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg shadow-lg">
-                      <ShoppingCart className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        Consumables Overview
-                      </CardTitle>
-                      <CardDescription className="text-slate-600">
-                        Current consumable inventory status
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl border border-cyan-200">
-                      <div className="text-2xl font-bold text-cyan-700">
-                        {dashboardData.metrics.totalConsumables}
-                      </div>
-                      <div className="text-sm text-cyan-600 font-medium">
-                        Total Items
-                      </div>
-                    </div>
-                    <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
-                      <div className="text-2xl font-bold text-green-700">
-                        {dashboardData.metrics.inStockConsumables}
-                      </div>
-                      <div className="text-sm text-green-600 font-medium">
-                        In Stock
-                      </div>
-                    </div>
-                    <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl border border-yellow-200">
-                      <div className="text-2xl font-bold text-yellow-700">
-                        {dashboardData.metrics.lowStockConsumables}
-                      </div>
-                      <div className="text-sm text-yellow-600 font-medium">
-                        Low Stock
-                      </div>
-                    </div>
-                    <div className="text-center p-4 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200">
-                      <div className="text-2xl font-bold text-red-700">
-                        {dashboardData.metrics.outOfStockConsumables}
-                      </div>
-                      <div className="text-sm text-red-600 font-medium">
-                        Out of Stock
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Consumables by Category */}
-              <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-                <CardHeader className="pb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg shadow-lg">
-                      <BarChart3 className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        Consumables by Category
-                      </CardTitle>
-                      <CardDescription className="text-slate-600">
-                        Distribution across different categories
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {dashboardData.consumablesByCategory.length > 0 ? (
-                      dashboardData.consumablesByCategory.map(
-                        (category, index) => (
-                          <div key={index} className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium text-slate-700">
-                                {category.name}
-                              </span>
-                              <span className="text-sm text-slate-500">
-                                {category.count} ({category.percentage}%)
-                              </span>
-                            </div>
-                            <Progress
-                              value={parseFloat(category.percentage)}
-                              className="h-2 bg-slate-100"
-                            />
-                          </div>
-                        )
-                      )
-                    ) : (
-                      <div className="text-center py-8">
-                        <ShoppingCart className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                        <p className="text-slate-500">No consumables found</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Consumables by Status */}
-            <Card className="bg-white/70 backdrop-blur-sm border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300">
-              <CardHeader className="pb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg">
-                    <Target className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg font-semibold text-slate-900">
-                      Consumables by Status
-                    </CardTitle>
-                    <CardDescription className="text-slate-600">
-                      Current status distribution
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {dashboardData.consumablesByStatus.map((status, index) => {
-                    const getStatusColor = (statusName) => {
-                      if (statusName === "In Stock")
-                        return "from-green-500 to-green-600";
-                      if (statusName === "Low Stock")
-                        return "from-yellow-500 to-yellow-600";
-                      if (statusName === "Out of Stock")
-                        return "from-red-500 to-red-600";
-                      return "from-slate-500 to-slate-600";
-                    };
-
-                    const getStatusIcon = (statusName) => {
-                      if (statusName === "In Stock")
-                        return <CheckCircle2 className="h-6 w-6" />;
-                      if (statusName === "Low Stock")
-                        return <AlertTriangle className="h-6 w-6" />;
-                      if (statusName === "Out of Stock")
-                        return <XCircle className="h-6 w-6" />;
-                      return <Package className="h-6 w-6" />;
-                    };
-
-                    return (
-                      <div
-                        key={index}
-                        className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200 hover:shadow-lg transition-all duration-300"
-                      >
-                        <div className="flex items-center space-x-3 mb-4">
-                          <div
-                            className={`p-3 bg-gradient-to-br ${getStatusColor(
-                              status.name
-                            )} rounded-lg shadow-lg`}
-                          >
-                            {getStatusIcon(status.name)}
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-slate-900">
-                              {status.count}
-                            </div>
-                            <div className="text-sm text-slate-600 font-medium">
-                              {status.name}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-slate-600">Percentage</span>
-                            <span className="font-medium text-slate-900">
-                              {status.percentage}%
-                            </span>
-                          </div>
-                          <Progress
-                            value={parseFloat(status.percentage)}
-                            className="h-2 bg-slate-100"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </CardContent>
             </Card>
