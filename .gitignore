@@ -273,3 +273,7 @@ $RECYCLE.BIN/
 
 # Claude
 .claude/
+
+# Deployment
+deploy.sh
+deploy.log
