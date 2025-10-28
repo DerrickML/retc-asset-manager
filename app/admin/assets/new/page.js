@@ -25,13 +25,14 @@ import {
   ArrowLeft,
   Package,
   Save,
-  Layers,
+  Info,
   MapPin,
   Calendar,
   Shield,
   Users,
   Image,
-  FileText,
+  Eye,
+  Sparkles,
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../../lib/utils/auth.js";
 import {
@@ -176,9 +177,11 @@ export default function NewAssetPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Loading...</span>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+        </div>
+        <p className="mt-4 text-slate-600 font-medium">Loading...</p>
       </div>
     );
   }
@@ -188,34 +191,33 @@ export default function NewAssetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Enhanced Header */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              <Button
-                asChild
-                variant="ghost"
-                className="bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-200"
-              >
-                <Link href="/admin/assets">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Assets
-                </Link>
-              </Button>
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <Package className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    Add New Asset
-                  </h1>
-                  <p className="text-gray-600 mt-1">
-                    Create a new asset for tracking and management
-                  </p>
-                </div>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Clean Header */}
+        <div className="space-y-6">
+          <Button
+            asChild
+            variant="ghost"
+            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 -ml-2"
+          >
+            <Link href="/admin/assets">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Assets
+            </Link>
+          </Button>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900">
+                  Add New Asset
+                </h1>
+                <p className="text-slate-600 mt-1">
+                  Create a new asset record for tracking and management
+                </p>
               </div>
             </div>
           </div>
@@ -223,17 +225,19 @@ export default function NewAssetPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
-          <Card className="border-blue-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white">
-              <CardTitle className="flex items-center">
-                <Package className="w-5 h-5 mr-2" />
-                Basic Information
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Info className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Basic Information
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
+            <CardContent className="p-6 space-y-6 bg-white">
               {/* Manual ID Assignment */}
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <input
                     type="checkbox"
                     id="manualIdAssignment"
@@ -244,18 +248,19 @@ export default function NewAssetPage() {
                         setAsset({ ...asset, assetTag: "" });
                       }
                     }}
-                    className="rounded"
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                   />
                   <Label
                     htmlFor="manualIdAssignment"
-                    className="text-sm font-medium cursor-pointer"
+                    className="text-sm font-medium text-slate-700 cursor-pointer"
                   >
-                    Manually assign ID
+                    Manually assign asset ID
                   </Label>
                 </div>
+
                 {manualIdAssignment && (
-                  <div>
-                    <Label htmlFor="assetTag">
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <Label htmlFor="assetTag" className="text-sm font-medium text-slate-700">
                       Asset Tag <span className="text-red-500">*</span>
                     </Label>
                     <Input
@@ -265,29 +270,32 @@ export default function NewAssetPage() {
                         setAsset({ ...asset, assetTag: e.target.value })
                       }
                       placeholder="e.g., RETC-LAP-001"
-                      className="mt-2"
+                      className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                       required={manualIdAssignment}
                     />
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name">
+                  <Label htmlFor="name" className="text-sm font-medium text-slate-700">
                     Asset Name <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     id="name"
                     value={asset.name}
                     onChange={(e) => setAsset({ ...asset, name: e.target.value })}
-                    placeholder="e.g., Dell Laptop, Office Chair"
+                    placeholder="e.g., Dell Laptop XPS 15"
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serialNumber">Serial Number</Label>
+                  <Label htmlFor="serialNumber" className="text-sm font-medium text-slate-700">
+                    Serial Number
+                  </Label>
                   <Input
                     id="serialNumber"
                     value={asset.serialNumber}
@@ -295,11 +303,12 @@ export default function NewAssetPage() {
                       setAsset({ ...asset, serialNumber: e.target.value })
                     }
                     placeholder="Manufacturer serial number"
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category">
+                  <Label htmlFor="category" className="text-sm font-medium text-slate-700">
                     Category <span className="text-red-500">*</span>
                   </Label>
                   <Select
@@ -308,7 +317,7 @@ export default function NewAssetPage() {
                       setAsset({ ...asset, category: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -324,7 +333,9 @@ export default function NewAssetPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="subcategory">Subcategory</Label>
+                  <Label htmlFor="subcategory" className="text-sm font-medium text-slate-700">
+                    Subcategory
+                  </Label>
                   <Input
                     id="subcategory"
                     value={asset.subcategory}
@@ -332,11 +343,14 @@ export default function NewAssetPage() {
                       setAsset({ ...asset, subcategory: e.target.value })
                     }
                     placeholder="Asset subcategory"
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manufacturer">Manufacturer</Label>
+                  <Label htmlFor="manufacturer" className="text-sm font-medium text-slate-700">
+                    Manufacturer
+                  </Label>
                   <Input
                     id="manufacturer"
                     value={asset.manufacturer}
@@ -344,16 +358,20 @@ export default function NewAssetPage() {
                       setAsset({ ...asset, manufacturer: e.target.value })
                     }
                     placeholder="e.g., Dell, HP, Apple"
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="model">Model</Label>
+                  <Label htmlFor="model" className="text-sm font-medium text-slate-700">
+                    Model
+                  </Label>
                   <Input
                     id="model"
                     value={asset.model}
                     onChange={(e) => setAsset({ ...asset, model: e.target.value })}
                     placeholder="Model number or name"
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -361,24 +379,28 @@ export default function NewAssetPage() {
           </Card>
 
           {/* Status & Condition */}
-          <Card className="border-green-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-green-500 to-green-600 text-white">
-              <CardTitle className="flex items-center">
-                <Shield className="w-5 h-5 mr-2" />
-                Status & Condition
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Shield className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Status & Condition
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="availableStatus">Availability Status</Label>
+                  <Label htmlFor="availableStatus" className="text-sm font-medium text-slate-700">
+                    Availability Status
+                  </Label>
                   <Select
                     value={asset.availableStatus}
                     onValueChange={(value) =>
                       setAsset({ ...asset, availableStatus: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -392,14 +414,16 @@ export default function NewAssetPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="currentCondition">Current Condition</Label>
+                  <Label htmlFor="currentCondition" className="text-sm font-medium text-slate-700">
+                    Current Condition
+                  </Label>
                   <Select
                     value={asset.currentCondition}
                     onValueChange={(value) =>
                       setAsset({ ...asset, currentCondition: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -415,25 +439,29 @@ export default function NewAssetPage() {
             </CardContent>
           </Card>
 
-          {/* Assignment */}
-          <Card className="border-purple-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-              <CardTitle className="flex items-center">
-                <Users className="w-5 h-5 mr-2" />
-                Department & Assignment
-              </CardTitle>
+          {/* Department & Assignment */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Department & Assignment
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="departmentId">Department</Label>
+                  <Label htmlFor="departmentId" className="text-sm font-medium text-slate-700">
+                    Department
+                  </Label>
                   <Select
                     value={asset.departmentId}
                     onValueChange={(value) =>
                       setAsset({ ...asset, departmentId: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
@@ -448,14 +476,16 @@ export default function NewAssetPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="custodianStaffId">Custodian</Label>
+                  <Label htmlFor="custodianStaffId" className="text-sm font-medium text-slate-700">
+                    Custodian
+                  </Label>
                   <Select
                     value={asset.custodianStaffId}
                     onValueChange={(value) =>
                       setAsset({ ...asset, custodianStaffId: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                       <SelectValue placeholder="Select custodian" />
                     </SelectTrigger>
                     <SelectContent>
@@ -473,17 +503,21 @@ export default function NewAssetPage() {
           </Card>
 
           {/* Location Information */}
-          <Card className="border-orange-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
-              <CardTitle className="flex items-center">
-                <MapPin className="w-5 h-5 mr-2" />
-                Location Information
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <MapPin className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Location Information
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="locationName">Location Name</Label>
+                  <Label htmlFor="locationName" className="text-sm font-medium text-slate-700">
+                    Location Name
+                  </Label>
                   <Input
                     id="locationName"
                     value={asset.locationName}
@@ -491,11 +525,14 @@ export default function NewAssetPage() {
                       setAsset({ ...asset, locationName: e.target.value })
                     }
                     placeholder="e.g., Building A, Office Block"
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="roomOrArea">Room/Area</Label>
+                  <Label htmlFor="roomOrArea" className="text-sm font-medium text-slate-700">
+                    Room/Area
+                  </Label>
                   <Input
                     id="roomOrArea"
                     value={asset.roomOrArea}
@@ -503,24 +540,29 @@ export default function NewAssetPage() {
                       setAsset({ ...asset, roomOrArea: e.target.value })
                     }
                     placeholder="e.g., Room 301, Floor 3"
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Dates */}
-          <Card className="border-yellow-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
-              <CardTitle className="flex items-center">
-                <Calendar className="w-5 h-5 mr-2" />
-                Important Dates
-              </CardTitle>
+          {/* Important Dates */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Important Dates
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="purchaseDate">Purchase Date</Label>
+                  <Label htmlFor="purchaseDate" className="text-sm font-medium text-slate-700">
+                    Purchase Date
+                  </Label>
                   <Input
                     id="purchaseDate"
                     type="date"
@@ -528,11 +570,14 @@ export default function NewAssetPage() {
                     onChange={(e) =>
                       setAsset({ ...asset, purchaseDate: e.target.value })
                     }
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="warrantyExpiryDate">Warranty Expiry Date</Label>
+                  <Label htmlFor="warrantyExpiryDate" className="text-sm font-medium text-slate-700">
+                    Warranty Expiry Date
+                  </Label>
                   <Input
                     id="warrantyExpiryDate"
                     type="date"
@@ -540,6 +585,7 @@ export default function NewAssetPage() {
                     onChange={(e) =>
                       setAsset({ ...asset, warrantyExpiryDate: e.target.value })
                     }
+                    className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -547,15 +593,17 @@ export default function NewAssetPage() {
           </Card>
 
           {/* Public Visibility */}
-          <Card className="border-gray-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-gray-500 to-gray-600 text-white">
-              <CardTitle className="flex items-center">
-                <Layers className="w-5 h-5 mr-2" />
-                Public Visibility
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Eye className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Public Visibility
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="flex items-center space-x-3">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <input
                   type="checkbox"
                   id="isPublic"
@@ -563,15 +611,17 @@ export default function NewAssetPage() {
                   onChange={(e) =>
                     setAsset({ ...asset, isPublic: e.target.checked })
                   }
-                  className="w-4 h-4 text-blue-600"
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                 />
-                <Label htmlFor="isPublic" className="cursor-pointer">
+                <Label htmlFor="isPublic" className="text-sm font-medium text-slate-700 cursor-pointer">
                   Make this asset visible in guest portal
                 </Label>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="publicSummary">Public Summary</Label>
+                <Label htmlFor="publicSummary" className="text-sm font-medium text-slate-700">
+                  Public Summary
+                </Label>
                 <Textarea
                   id="publicSummary"
                   value={asset.publicSummary}
@@ -580,11 +630,14 @@ export default function NewAssetPage() {
                   }
                   placeholder="Brief description visible to guests"
                   rows={3}
+                  className="border-slate-300 focus:border-blue-500 focus:ring-blue-500 resize-none"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="publicLocationLabel">Public Location Label</Label>
+                <Label htmlFor="publicLocationLabel" className="text-sm font-medium text-slate-700">
+                  Public Location Label
+                </Label>
                 <Input
                   id="publicLocationLabel"
                   value={asset.publicLocationLabel}
@@ -592,20 +645,23 @@ export default function NewAssetPage() {
                     setAsset({ ...asset, publicLocationLabel: e.target.value })
                   }
                   placeholder="Simplified location for public view"
+                  className="h-11 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Images */}
-          <Card className="border-indigo-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white">
-              <CardTitle className="flex items-center">
-                <Image className="w-5 h-5 mr-2" />
-                Asset Images
-              </CardTitle>
+          {/* Asset Images */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Image className="w-5 h-5 text-blue-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Asset Images
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-6 bg-white">
               <ImageUpload
                 assetId={asset.assetTag || `temp-${Date.now()}`}
                 existingImages={asset.publicImages || []}
@@ -618,12 +674,13 @@ export default function NewAssetPage() {
           </Card>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end space-x-4 sticky bottom-0 bg-white p-4 rounded-xl shadow-lg border border-gray-200">
+          <div className="flex items-center justify-end space-x-3 pt-6 pb-8">
             <Button
               type="button"
               variant="outline"
               onClick={() => router.push("/admin/assets")}
               disabled={saving}
+              className="h-11 px-6 border-slate-300 hover:bg-slate-50"
             >
               Cancel
             </Button>
@@ -634,12 +691,12 @@ export default function NewAssetPage() {
                 !asset.name ||
                 (manualIdAssignment && !asset.assetTag)
               }
-              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg"
+              className="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white"
             >
               {saving ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Creating...
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Creating Asset...
                 </>
               ) : (
                 <>

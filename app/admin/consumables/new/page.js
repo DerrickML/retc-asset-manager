@@ -25,11 +25,11 @@ import {
   ArrowLeft,
   Package,
   Save,
-  Layers,
+  Info,
   MapPin,
   BarChart3,
   Image,
-  CheckCircle,
+  Eye,
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../../lib/utils/auth.js";
 import { assetsService } from "../../../../lib/appwrite/provider.js";
@@ -160,9 +160,11 @@ export default function NewConsumablePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-        <span className="ml-2 text-gray-600">Loading...</span>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-orange-600 rounded-full animate-spin"></div>
+        </div>
+        <p className="mt-4 text-slate-600 font-medium">Loading...</p>
       </div>
     );
   }
@@ -172,34 +174,33 @@ export default function NewConsumablePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
-      <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Enhanced Header */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              <Button
-                asChild
-                variant="ghost"
-                className="bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-200"
-              >
-                <Link href="/admin/consumables">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Consumables
-                </Link>
-              </Button>
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <Package className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-orange-600 to-amber-600 bg-clip-text text-transparent">
-                    Add New Consumable
-                  </h1>
-                  <p className="text-gray-600 mt-1">
-                    Create a new consumable item for inventory management
-                  </p>
-                </div>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Clean Header */}
+        <div className="space-y-6">
+          <Button
+            asChild
+            variant="ghost"
+            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 -ml-2"
+          >
+            <Link href="/admin/consumables">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Consumables
+            </Link>
+          </Button>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900">
+                  Add New Consumable
+                </h1>
+                <p className="text-slate-600 mt-1">
+                  Create a new consumable item for inventory management
+                </p>
               </div>
             </div>
           </div>
@@ -207,17 +208,19 @@ export default function NewConsumablePage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}
-          <Card className="border-orange-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-orange-500 to-amber-500 text-white">
-              <CardTitle className="flex items-center">
-                <Package className="w-5 h-5 mr-2" />
-                Basic Information
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Info className="w-5 h-5 text-orange-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Basic Information
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
+            <CardContent className="p-6 space-y-6 bg-white">
               {/* Manual ID Assignment */}
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <input
                     type="checkbox"
                     id="manualIdAssignment"
@@ -228,18 +231,19 @@ export default function NewConsumablePage() {
                         setConsumable({ ...consumable, assetTag: "" });
                       }
                     }}
-                    className="rounded"
+                    className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
                   />
                   <Label
                     htmlFor="manualIdAssignment"
-                    className="text-sm font-medium cursor-pointer"
+                    className="text-sm font-medium text-slate-700 cursor-pointer"
                   >
-                    Manually assign ID
+                    Manually assign consumable ID
                   </Label>
                 </div>
+
                 {manualIdAssignment && (
-                  <div>
-                    <Label htmlFor="assetTag">
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <Label htmlFor="assetTag" className="text-sm font-medium text-slate-700">
                       Consumable ID <span className="text-red-500">*</span>
                     </Label>
                     <Input
@@ -249,16 +253,16 @@ export default function NewConsumablePage() {
                         setConsumable({ ...consumable, assetTag: e.target.value })
                       }
                       placeholder="e.g., CONS-PAPER-001"
-                      className="mt-2"
+                      className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500"
                       required={manualIdAssignment}
                     />
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name">
+                  <Label htmlFor="name" className="text-sm font-medium text-slate-700">
                     Consumable Name <span className="text-red-500">*</span>
                   </Label>
                   <Input
@@ -268,12 +272,13 @@ export default function NewConsumablePage() {
                       setConsumable({ ...consumable, name: e.target.value })
                     }
                     placeholder="e.g., A4 Paper, Office Pens"
+                    className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="consumableCategory">
+                  <Label htmlFor="consumableCategory" className="text-sm font-medium text-slate-700">
                     Category <span className="text-red-500">*</span>
                   </Label>
                   <Select
@@ -282,7 +287,7 @@ export default function NewConsumablePage() {
                       setConsumable({ ...consumable, consumableCategory: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -296,7 +301,7 @@ export default function NewConsumablePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="unit">
+                  <Label htmlFor="unit" className="text-sm font-medium text-slate-700">
                     Unit <span className="text-red-500">*</span>
                   </Label>
                   <Select
@@ -305,7 +310,7 @@ export default function NewConsumablePage() {
                       setConsumable({ ...consumable, unit: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -322,17 +327,21 @@ export default function NewConsumablePage() {
           </Card>
 
           {/* Stock Management */}
-          <Card className="border-blue-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-              <CardTitle className="flex items-center">
-                <BarChart3 className="w-5 h-5 mr-2" />
-                Stock Management
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="w-5 h-5 text-orange-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Stock Management
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="currentStock">Current Stock</Label>
+                  <Label htmlFor="currentStock" className="text-sm font-medium text-slate-700">
+                    Current Stock
+                  </Label>
                   <Input
                     id="currentStock"
                     type="number"
@@ -345,11 +354,14 @@ export default function NewConsumablePage() {
                       })
                     }
                     placeholder="0"
+                    className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="minStock">Minimum Stock</Label>
+                  <Label htmlFor="minStock" className="text-sm font-medium text-slate-700">
+                    Minimum Stock
+                  </Label>
                   <Input
                     id="minStock"
                     type="number"
@@ -362,12 +374,15 @@ export default function NewConsumablePage() {
                       })
                     }
                     placeholder="0"
+                    className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500"
                   />
-                  <p className="text-xs text-gray-500">Reorder threshold</p>
+                  <p className="text-xs text-slate-500">Reorder threshold</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="maxStock">Maximum Stock</Label>
+                  <Label htmlFor="maxStock" className="text-sm font-medium text-slate-700">
+                    Maximum Stock
+                  </Label>
                   <Input
                     id="maxStock"
                     type="number"
@@ -380,25 +395,30 @@ export default function NewConsumablePage() {
                       })
                     }
                     placeholder="0"
+                    className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500"
                   />
-                  <p className="text-xs text-gray-500">Maximum capacity</p>
+                  <p className="text-xs text-slate-500">Maximum capacity</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Location Information */}
-          <Card className="border-purple-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-              <CardTitle className="flex items-center">
-                <MapPin className="w-5 h-5 mr-2" />
-                Location Information
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <MapPin className="w-5 h-5 text-orange-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Location Information
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="locationName">Location Name</Label>
+                  <Label htmlFor="locationName" className="text-sm font-medium text-slate-700">
+                    Location Name
+                  </Label>
                   <Input
                     id="locationName"
                     value={consumable.locationName}
@@ -409,11 +429,14 @@ export default function NewConsumablePage() {
                       })
                     }
                     placeholder="e.g., Storage Room A, Main Warehouse"
+                    className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="roomOrArea">Room/Area</Label>
+                  <Label htmlFor="roomOrArea" className="text-sm font-medium text-slate-700">
+                    Room/Area
+                  </Label>
                   <Input
                     id="roomOrArea"
                     value={consumable.roomOrArea}
@@ -421,6 +444,7 @@ export default function NewConsumablePage() {
                       setConsumable({ ...consumable, roomOrArea: e.target.value })
                     }
                     placeholder="e.g., Shelf 1, Cabinet B"
+                    className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500"
                   />
                 </div>
               </div>
@@ -428,15 +452,17 @@ export default function NewConsumablePage() {
           </Card>
 
           {/* Public Visibility */}
-          <Card className="border-gray-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-gray-500 to-gray-600 text-white">
-              <CardTitle className="flex items-center">
-                <Layers className="w-5 h-5 mr-2" />
-                Public Visibility
-              </CardTitle>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Eye className="w-5 h-5 text-orange-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Public Visibility
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="flex items-center space-x-3">
+            <CardContent className="p-6 space-y-6 bg-white">
+              <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <input
                   type="checkbox"
                   id="isPublic"
@@ -444,15 +470,17 @@ export default function NewConsumablePage() {
                   onChange={(e) =>
                     setConsumable({ ...consumable, isPublic: e.target.checked })
                   }
-                  className="w-4 h-4 text-orange-600"
+                  className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
                 />
-                <Label htmlFor="isPublic" className="cursor-pointer">
+                <Label htmlFor="isPublic" className="text-sm font-medium text-slate-700 cursor-pointer">
                   Make this consumable visible in guest portal
                 </Label>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="publicSummary">Public Summary</Label>
+                <Label htmlFor="publicSummary" className="text-sm font-medium text-slate-700">
+                  Public Summary
+                </Label>
                 <Textarea
                   id="publicSummary"
                   value={consumable.publicSummary}
@@ -464,20 +492,23 @@ export default function NewConsumablePage() {
                   }
                   placeholder="Brief description visible to guests"
                   rows={3}
+                  className="border-slate-300 focus:border-orange-500 focus:ring-orange-500 resize-none"
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Images */}
-          <Card className="border-amber-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-amber-500 to-amber-600 text-white">
-              <CardTitle className="flex items-center">
-                <Image className="w-5 h-5 mr-2" />
-                Consumable Images
-              </CardTitle>
+          {/* Consumable Images */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-white">
+              <div className="flex items-center space-x-2">
+                <Image className="w-5 h-5 text-orange-600" />
+                <CardTitle className="text-lg font-semibold text-slate-900">
+                  Consumable Images
+                </CardTitle>
+              </div>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-6 bg-white">
               <ImageUpload
                 assetId={consumable.assetTag || `temp-${Date.now()}`}
                 existingImages={consumable.publicImages || []}
@@ -490,24 +521,29 @@ export default function NewConsumablePage() {
           </Card>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end space-x-4 sticky bottom-0 bg-white p-4 rounded-xl shadow-lg border border-gray-200">
+          <div className="flex items-center justify-end space-x-3 pt-6 pb-8">
             <Button
               type="button"
               variant="outline"
               onClick={() => router.push("/admin/consumables")}
               disabled={saving}
+              className="h-11 px-6 border-slate-300 hover:bg-slate-50"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={saving || !consumable.name || (manualIdAssignment && !consumable.assetTag)}
-              className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg"
+              disabled={
+                saving ||
+                !consumable.name ||
+                (manualIdAssignment && !consumable.assetTag)
+              }
+              className="h-11 px-6 bg-orange-600 hover:bg-orange-700 text-white"
             >
               {saving ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Creating...
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Creating Consumable...
                 </>
               ) : (
                 <>
@@ -522,6 +558,3 @@ export default function NewConsumablePage() {
     </div>
   );
 }
-
-
-
