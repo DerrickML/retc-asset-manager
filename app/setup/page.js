@@ -1,22 +1,32 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card"
-import { Button } from "../../components/ui/button"
-import { Input } from "../../components/ui/input"
-import { Label } from "../../components/ui/label"
-import { Alert, AlertDescription } from "../../components/ui/alert"
-import { Progress } from "../../components/ui/progress"
-import { settingsService, departmentsService, staffService } from "../../lib/appwrite/provider.js"
-import { register } from "../../lib/utils/auth.js"
-import { DEFAULT_SETTINGS, ENUMS } from "../../lib/appwrite/config.js"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Alert, AlertDescription } from "../../components/ui/alert";
+import { Progress } from "../../components/ui/progress";
+import {
+  settingsService,
+  departmentsService,
+  staffService,
+} from "../../lib/appwrite/provider.js";
+import { register } from "../../lib/utils/auth.js";
+import { DEFAULT_SETTINGS, ENUMS } from "../../lib/appwrite/config.js";
 
 export default function SetupPage() {
-  const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const router = useRouter()
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
 
   // Form data
   const [orgData, setOrgData] = useState({
@@ -24,84 +34,78 @@ export default function SetupPage() {
     brandColor: "#2563eb",
     accentColor: "#16a34a",
     emailFromName: "RETC Asset Management",
-  })
+  });
 
   const [adminData, setAdminData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
-  })
+  });
 
   // Check if setup is already completed
   useEffect(() => {
     const checkSetup = async () => {
       try {
-        const settings = await settingsService.get()
+        const settings = await settingsService.get();
         if (settings) {
-          router.push("/login")
+          router.push("/login");
         }
       } catch (error) {
         // Setup not completed, continue
       }
-    }
-    checkSetup()
-  }, [router])
+    };
+    checkSetup();
+  }, [router]);
 
   const handleStep1Submit = (e) => {
-    e.preventDefault()
-    setStep(2)
-  }
+    e.preventDefault();
+    setStep(2);
+  };
 
   const handleStep2Submit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
     // Validate passwords match
     if (adminData.password !== adminData.confirmPassword) {
-      setError("Passwords do not match")
-      setLoading(false)
-      return
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
     }
 
     if (adminData.password.length < 8) {
-      setError("Password must be at least 8 characters long")
-      setLoading(false)
-      return
+      setError("Password must be at least 8 characters long");
+      setLoading(false);
+      return;
     }
 
     try {
-      console.log("🚀 Starting setup process...")
-      console.log("📝 Admin data:", { ...adminData, password: "[HIDDEN]", confirmPassword: "[HIDDEN]" })
-      console.log("🏢 Organization data:", orgData)
-      
       // Create admin user account
-      console.log("👤 Creating admin user account...")
-      const user = await register(adminData.email, adminData.password, adminData.name)
-      console.log("✅ Admin user created:", user)
+      const user = await register(
+        adminData.email,
+        adminData.password,
+        adminData.name
+      );
 
       // Create default settings
-      const defaultBranding = JSON.parse(DEFAULT_SETTINGS.branding)
+      const defaultBranding = JSON.parse(DEFAULT_SETTINGS.branding);
       const settings = {
         ...DEFAULT_SETTINGS,
         branding: JSON.stringify({
           ...defaultBranding,
           ...orgData,
         }),
-      }
-      
-      console.log("⚙️ Creating settings with data:")
-      console.log("📊 Settings object (before service):", JSON.stringify(settings, null, 2))
-      
-      const createdSettings = await settingsService.create(settings)
-      console.log("✅ Settings created:", createdSettings)
+      };
+
+      const createdSettings = await settingsService.create(settings);
 
       // Create Administration department
       const adminDept = await departmentsService.create({
         name: "Administration",
         description: "Administrative department for asset management",
-      })
+      });
 
       // Create staff record for admin user
       await staffService.create({
@@ -110,21 +114,21 @@ export default function SetupPage() {
         email: adminData.email,
         departmentId: adminDept.$id,
         roles: [ENUMS.ROLES.SYSTEM_ADMIN, ENUMS.ROLES.ASSET_ADMIN],
-      })
+      });
 
-      setStep(3)
+      setStep(3);
     } catch (err) {
-      setError(err.message || "Setup failed. Please try again.")
+      setError(err.message || "Setup failed. Please try again.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleComplete = () => {
-    router.push("/login")
-  }
+    router.push("/login");
+  };
 
-  const progress = (step / 3) * 100
+  const progress = (step / 3) * 100;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-green-50 p-4">
@@ -135,7 +139,9 @@ export default function SetupPage() {
             <span className="text-white font-bold text-xl">RETC</span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900">System Setup</h1>
-          <p className="text-gray-600">Configure your RETC Asset Management System</p>
+          <p className="text-gray-600">
+            Configure your RETC Asset Management System
+          </p>
         </div>
 
         {/* Progress */}
@@ -143,7 +149,9 @@ export default function SetupPage() {
           <Progress value={progress} className="h-2" />
           <div className="flex justify-between text-sm text-gray-600 mt-2">
             <span className={step >= 1 ? "font-medium" : ""}>Organization</span>
-            <span className={step >= 2 ? "font-medium" : ""}>Administrator</span>
+            <span className={step >= 2 ? "font-medium" : ""}>
+              Administrator
+            </span>
             <span className={step >= 3 ? "font-medium" : ""}>Complete</span>
           </div>
         </div>
@@ -153,7 +161,9 @@ export default function SetupPage() {
           <Card>
             <CardHeader>
               <CardTitle>Organization Information</CardTitle>
-              <CardDescription>Configure your organization's branding and basic settings</CardDescription>
+              <CardDescription>
+                Configure your organization's branding and basic settings
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleStep1Submit} className="space-y-4">
@@ -162,7 +172,9 @@ export default function SetupPage() {
                   <Input
                     id="orgName"
                     value={orgData.orgName}
-                    onChange={(e) => setOrgData({ ...orgData, orgName: e.target.value })}
+                    onChange={(e) =>
+                      setOrgData({ ...orgData, orgName: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -175,12 +187,16 @@ export default function SetupPage() {
                         id="brandColor"
                         type="color"
                         value={orgData.brandColor}
-                        onChange={(e) => setOrgData({ ...orgData, brandColor: e.target.value })}
+                        onChange={(e) =>
+                          setOrgData({ ...orgData, brandColor: e.target.value })
+                        }
                         className="w-16 h-10"
                       />
                       <Input
                         value={orgData.brandColor}
-                        onChange={(e) => setOrgData({ ...orgData, brandColor: e.target.value })}
+                        onChange={(e) =>
+                          setOrgData({ ...orgData, brandColor: e.target.value })
+                        }
                         placeholder="#2563eb"
                       />
                     </div>
@@ -193,12 +209,22 @@ export default function SetupPage() {
                         id="accentColor"
                         type="color"
                         value={orgData.accentColor}
-                        onChange={(e) => setOrgData({ ...orgData, accentColor: e.target.value })}
+                        onChange={(e) =>
+                          setOrgData({
+                            ...orgData,
+                            accentColor: e.target.value,
+                          })
+                        }
                         className="w-16 h-10"
                       />
                       <Input
                         value={orgData.accentColor}
-                        onChange={(e) => setOrgData({ ...orgData, accentColor: e.target.value })}
+                        onChange={(e) =>
+                          setOrgData({
+                            ...orgData,
+                            accentColor: e.target.value,
+                          })
+                        }
                         placeholder="#16a34a"
                       />
                     </div>
@@ -210,7 +236,9 @@ export default function SetupPage() {
                   <Input
                     id="emailFromName"
                     value={orgData.emailFromName}
-                    onChange={(e) => setOrgData({ ...orgData, emailFromName: e.target.value })}
+                    onChange={(e) =>
+                      setOrgData({ ...orgData, emailFromName: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -228,7 +256,9 @@ export default function SetupPage() {
           <Card>
             <CardHeader>
               <CardTitle>System Administrator</CardTitle>
-              <CardDescription>Create the first administrator account for your system</CardDescription>
+              <CardDescription>
+                Create the first administrator account for your system
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleStep2Submit} className="space-y-4">
@@ -243,7 +273,9 @@ export default function SetupPage() {
                   <Input
                     id="adminName"
                     value={adminData.name}
-                    onChange={(e) => setAdminData({ ...adminData, name: e.target.value })}
+                    onChange={(e) =>
+                      setAdminData({ ...adminData, name: e.target.value })
+                    }
                     required
                     disabled={loading}
                   />
@@ -255,7 +287,9 @@ export default function SetupPage() {
                     id="adminEmail"
                     type="email"
                     value={adminData.email}
-                    onChange={(e) => setAdminData({ ...adminData, email: e.target.value })}
+                    onChange={(e) =>
+                      setAdminData({ ...adminData, email: e.target.value })
+                    }
                     required
                     disabled={loading}
                   />
@@ -267,7 +301,9 @@ export default function SetupPage() {
                     id="adminPassword"
                     type="password"
                     value={adminData.password}
-                    onChange={(e) => setAdminData({ ...adminData, password: e.target.value })}
+                    onChange={(e) =>
+                      setAdminData({ ...adminData, password: e.target.value })
+                    }
                     required
                     disabled={loading}
                     minLength={8}
@@ -280,7 +316,12 @@ export default function SetupPage() {
                     id="confirmPassword"
                     type="password"
                     value={adminData.confirmPassword}
-                    onChange={(e) => setAdminData({ ...adminData, confirmPassword: e.target.value })}
+                    onChange={(e) =>
+                      setAdminData({
+                        ...adminData,
+                        confirmPassword: e.target.value,
+                      })
+                    }
                     required
                     disabled={loading}
                     minLength={8}
@@ -288,7 +329,12 @@ export default function SetupPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={() => setStep(1)} disabled={loading}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setStep(1)}
+                    disabled={loading}
+                  >
                     Back
                   </Button>
                   <Button type="submit" className="flex-1" disabled={loading}>
@@ -305,19 +351,34 @@ export default function SetupPage() {
           <Card>
             <CardHeader>
               <CardTitle>Setup Complete!</CardTitle>
-              <CardDescription>Your RETC Asset Management System is ready to use</CardDescription>
+              <CardDescription>
+                Your RETC Asset Management System is ready to use
+              </CardDescription>
             </CardHeader>
             <CardContent className="text-center space-y-4">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <svg
+                  className="w-8 h-8 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
 
               <div>
-                <h3 className="text-lg font-medium text-gray-900">System Configured Successfully</h3>
+                <h3 className="text-lg font-medium text-gray-900">
+                  System Configured Successfully
+                </h3>
                 <p className="text-gray-600 mt-2">
-                  Your administrator account has been created and the system is ready for use.
+                  Your administrator account has been created and the system is
+                  ready for use.
                 </p>
               </div>
 
@@ -339,5 +400,5 @@ export default function SetupPage() {
         )}
       </div>
     </div>
-  )
+  );
 }

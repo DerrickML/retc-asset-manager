@@ -1,60 +1,63 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
-import Link from "next/link"
-import { Button } from "../ui/button"
+import { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import { Button } from "../ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "../ui/avatar"
-import { Badge } from "../ui/badge"
-import { 
-  Package, 
-  FileText, 
-  Users, 
-  BarChart3, 
-  Settings, 
-  LogOut, 
+} from "../ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "../ui/avatar";
+import { Badge } from "../ui/badge";
+import {
+  Package,
+  FileText,
+  Users,
+  BarChart3,
+  Settings,
+  LogOut,
   ChevronDown,
   Menu,
-  X
-} from "lucide-react"
-import { getCurrentStaff, logout, permissions } from "../../lib/utils/auth.js"
-import { settingsService } from "../../lib/appwrite/provider.js"
+  X,
+} from "lucide-react";
+import { getCurrentStaff, logout, permissions } from "../../lib/utils/auth.js";
+import { settingsService } from "../../lib/appwrite/provider.js";
 
 export function Navbar() {
-  const [staff, setStaff] = useState(null)
-  const [settings, setSettings] = useState(null)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const router = useRouter()
-  const pathname = usePathname()
+  const [staff, setStaff] = useState(null);
+  const [settings, setSettings] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [currentStaff, systemSettings] = await Promise.all([getCurrentStaff(), settingsService.get()])
-        setStaff(currentStaff)
-        setSettings(systemSettings)
+        const [currentStaff, systemSettings] = await Promise.all([
+          getCurrentStaff(),
+          settingsService.get(),
+        ]);
+        setStaff(currentStaff);
+        setSettings(systemSettings);
       } catch (error) {
-        console.error("Failed to load navbar data:", error)
+        console.error("Failed to load navbar data:", error);
       }
-    }
-    loadData()
-  }, [])
+    };
+    loadData();
+  }, []);
 
   const handleLogout = async () => {
     try {
-      await logout()
-      router.push("/login")
+      await logout();
+      router.push("/login");
     } catch (error) {
-      console.error("Logout failed:", error)
+      console.error("Logout failed:", error);
     }
-  }
+  };
 
   const getInitials = (name) => {
     return name
@@ -62,8 +65,8 @@ export function Navbar() {
       .map((n) => n[0])
       .join("")
       .toUpperCase()
-      .slice(0, 2)
-  }
+      .slice(0, 2);
+  };
 
   if (!staff || !settings) {
     return (
@@ -77,19 +80,47 @@ export function Navbar() {
           </div>
         </div>
       </nav>
-    )
+    );
   }
 
-  const canManageAssets = permissions.canManageAssets(staff)
-  const canManageUsers = permissions.canManageUsers(staff)
-  const canViewReports = permissions.canViewReports(staff)
+  const canManageAssets = permissions.canManageAssets(staff);
+  const canManageUsers = permissions.canManageUsers(staff);
+  const canViewReports = permissions.canViewReports(staff);
 
   const navigation = [
-    { name: 'Assets', href: '/assets', icon: Package, current: pathname === '/assets' },
-    { name: 'My Requests', href: '/requests', icon: FileText, current: pathname === '/requests' },
-    ...(canManageAssets ? [{ name: 'Admin Queue', href: '/admin/requests', icon: Users, current: pathname === '/admin/requests' }] : []),
-    ...(canViewReports ? [{ name: 'Dashboard', href: '/admin/dashboard', icon: BarChart3, current: pathname === '/admin/dashboard' }] : []),
-  ]
+    {
+      name: "Assets",
+      href: "/assets",
+      icon: Package,
+      current: pathname === "/assets",
+    },
+    {
+      name: "My Requests",
+      href: "/requests",
+      icon: FileText,
+      current: pathname === "/requests",
+    },
+    ...(canManageAssets
+      ? [
+          {
+            name: "Admin Queue",
+            href: "/admin/requests",
+            icon: Users,
+            current: pathname === "/admin/requests",
+          },
+        ]
+      : []),
+    ...(canViewReports
+      ? [
+          {
+            name: "Dashboard",
+            href: "/admin/dashboard",
+            icon: BarChart3,
+            current: pathname === "/admin/dashboard",
+          },
+        ]
+      : []),
+  ];
 
   return (
     <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-50 shadow-sm transition-all duration-300">
@@ -101,8 +132,8 @@ export function Navbar() {
               <div className="relative">
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105"
-                  style={{ 
-                    background: `linear-gradient(135deg, ${settings.branding.brandColor}ee, ${settings.branding.brandColor})` 
+                  style={{
+                    background: `linear-gradient(135deg, ${settings.branding.brandColor}ee, ${settings.branding.brandColor})`,
                   }}
                 >
                   <img
@@ -110,8 +141,8 @@ export function Navbar() {
                     alt="RETC Logo"
                     className="w-6 h-6 object-cover rounded-lg"
                     onError={(e) => {
-                      e.target.style.display = 'none'
-                      e.target.nextSibling.style.display = 'block'
+                      e.target.style.display = "none";
+                      e.target.nextSibling.style.display = "block";
                     }}
                   />
                   <span className="hidden">RETC</span>
@@ -119,8 +150,12 @@ export function Navbar() {
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
               </div>
               <div>
-                <h1 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">Asset Management</h1>
-                <p className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors duration-200">{settings.branding.orgName}</p>
+                <h1 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
+                  Asset Management
+                </h1>
+                <p className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors duration-200">
+                  {settings.branding.orgName}
+                </p>
               </div>
             </Link>
           </div>
@@ -128,26 +163,31 @@ export function Navbar() {
           {/* Desktop Navigation Links */}
           <div className="hidden lg:flex items-center space-x-1 animate-fade-in">
             {navigation.map((item) => {
-              const Icon = item.icon
+              const Icon = item.icon;
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={`
                     flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105
-                    ${item.current 
-                      ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-200/50' 
-                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50/80'
+                    ${
+                      item.current
+                        ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-200/50"
+                        : "text-gray-700 hover:text-gray-900 hover:bg-gray-50/80"
                     }
                   `}
                 >
-                  <Icon className={`w-4 h-4 ${item.current ? 'text-blue-600' : 'text-gray-500'} transition-colors duration-200`} />
+                  <Icon
+                    className={`w-4 h-4 ${
+                      item.current ? "text-blue-600" : "text-gray-500"
+                    } transition-colors duration-200`}
+                  />
                   <span>{item.name}</span>
                   {item.current && (
                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
                   )}
                 </Link>
-              )
+              );
             })}
           </div>
 
@@ -158,7 +198,11 @@ export function Navbar() {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100/80 rounded-xl transition-all duration-200"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
             </button>
 
             {/* User Menu */}
@@ -174,7 +218,9 @@ export function Navbar() {
                     <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
                   </div>
                   <div className="text-left hidden xl:block">
-                    <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">{staff.name.split(' ')[0]}</p>
+                    <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
+                      {staff.name.split(" ")[0]}
+                    </p>
                     {permissions.isAdmin(staff) && (
                       <Badge className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs px-2 py-0.5">
                         Admin
@@ -184,7 +230,10 @@ export function Navbar() {
                   <ChevronDown className="w-4 h-4 text-gray-500 hidden xl:block transition-transform duration-200 group-hover:rotate-180" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-64 bg-white/95 backdrop-blur-sm border border-gray-200/50 shadow-2xl rounded-2xl overflow-hidden animate-fade-in-up" align="end">
+              <DropdownMenuContent
+                className="w-64 bg-white/95 backdrop-blur-sm border border-gray-200/50 shadow-2xl rounded-2xl overflow-hidden animate-fade-in-up"
+                align="end"
+              >
                 {/* User Info Header */}
                 <div className="px-4 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200/50">
                   <div className="flex items-center space-x-3">
@@ -194,7 +243,9 @@ export function Navbar() {
                       </span>
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">{staff.name}</p>
+                      <p className="font-semibold text-gray-900">
+                        {staff.name}
+                      </p>
                       <p className="text-sm text-gray-600">{staff.email}</p>
                       {permissions.isAdmin(staff) && (
                         <Badge className="bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs px-2 py-1 shadow-sm mt-1">
@@ -207,23 +258,18 @@ export function Navbar() {
 
                 {/* Menu Items */}
                 <div className="py-2">
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile" className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50/80 hover:text-gray-900 transition-all duration-200 group">
-                      <Settings className="w-5 h-5 mr-3 text-gray-500 group-hover:text-gray-600 transition-colors duration-200" />
-                      <div>
-                        <p className="font-medium">Profile Settings</p>
-                        <p className="text-xs text-gray-500">Manage your account</p>
-                      </div>
-                    </Link>
-                  </DropdownMenuItem>
-                  
                   {canManageUsers && (
                     <DropdownMenuItem asChild>
-                      <Link href="/admin/settings" className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-purple-50/80 hover:text-purple-700 transition-all duration-200 group">
+                      <Link
+                        href="/admin/settings"
+                        className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-purple-50/80 hover:text-purple-700 transition-all duration-200 group"
+                      >
                         <Settings className="w-5 h-5 mr-3 text-gray-500 group-hover:text-purple-600 transition-colors duration-200" />
                         <div>
                           <p className="font-medium">System Settings</p>
-                          <p className="text-xs text-gray-500">Admin configuration</p>
+                          <p className="text-xs text-gray-500">
+                            Admin configuration
+                          </p>
                         </div>
                       </Link>
                     </DropdownMenuItem>
@@ -231,8 +277,8 @@ export function Navbar() {
                 </div>
 
                 <div className="border-t border-gray-200/50 bg-gray-50/50">
-                  <DropdownMenuItem 
-                    onClick={handleLogout} 
+                  <DropdownMenuItem
+                    onClick={handleLogout}
                     className="flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50/80 hover:text-red-700 transition-all duration-200 group cursor-pointer"
                   >
                     <LogOut className="w-5 h-5 mr-3 group-hover:text-red-700 transition-colors duration-200" />
@@ -253,7 +299,7 @@ export function Navbar() {
         <div className="lg:hidden border-t border-gray-200/50 bg-white/95 backdrop-blur-sm animate-fade-in">
           <div className="px-4 py-3 space-y-2">
             {navigation.map((item) => {
-              const Icon = item.icon
+              const Icon = item.icon;
               return (
                 <Link
                   key={item.name}
@@ -261,23 +307,28 @@ export function Navbar() {
                   onClick={() => setMobileMenuOpen(false)}
                   className={`
                     flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200
-                    ${item.current 
-                      ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-200/50' 
-                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50/80'
+                    ${
+                      item.current
+                        ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-200/50"
+                        : "text-gray-700 hover:text-gray-900 hover:bg-gray-50/80"
                     }
                   `}
                 >
-                  <Icon className={`w-5 h-5 ${item.current ? 'text-blue-600' : 'text-gray-500'}`} />
+                  <Icon
+                    className={`w-5 h-5 ${
+                      item.current ? "text-blue-600" : "text-gray-500"
+                    }`}
+                  />
                   <span>{item.name}</span>
                   {item.current && (
                     <div className="ml-auto w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                   )}
                 </Link>
-              )
+              );
             })}
           </div>
         </div>
       )}
     </nav>
-  )
+  );
 }

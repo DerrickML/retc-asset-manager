@@ -1,504 +1,852 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { MainLayout } from "../../../components/layout/main-layout"
-import { Button } from "../../../components/ui/button"
-import { Card, CardContent } from "../../../components/ui/card"
-import { Badge } from "../../../components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
-import { Textarea } from "../../../components/ui/textarea"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogFooter, DialogDescription } from "../../../components/ui/dialog"
-import { Check, X, FileText } from "lucide-react"
-import { assetRequestsService, assetsService, staffService, settingsService } from "../../../lib/appwrite/provider.js"
-import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js"
-import { ENUMS } from "../../../lib/appwrite/config.js"
-import { Query } from "appwrite"
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../../../components/ui/card";
+import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Badge } from "../../../components/ui/badge";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../../../components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../../components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
+import { Label } from "../../../components/ui/label";
+import { Textarea } from "../../../components/ui/textarea";
+import { Checkbox } from "../../../components/ui/checkbox";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  UserCheck,
+  UserX,
+  User,
+  Mail,
+  Shield,
+  Building,
+  Phone,
+  Hash,
+  AlertCircle,
+  X,
+  Loader2,
+  CheckCircle,
+  Copy,
+  Users,
+  Filter,
+  RefreshCw,
+  Eye,
+  AlertTriangle,
+  Clock,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  Pause,
+  Archive,
+  Zap,
+  Target,
+  Briefcase,
+  Settings,
+} from "lucide-react";
+import {
+  assetRequestsService,
+  assetsService,
+  staffService,
+  departmentsService,
+} from "../../../lib/appwrite/provider.js";
+// import {
+//   NotificationTriggers,
+//   notifyRequestApproved,
+//   notifyRequestRejected,
+// } from "../../../lib/services/notification-triggers.js";
+import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
+import { ENUMS } from "../../../lib/appwrite/config.js";
+import { Query } from "appwrite";
+import Link from "next/link";
 
-export default function AdminRequestsPage() {
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [staff, setStaff] = useState(null)
-  const [settings, setSettings] = useState(null)
-  const [statusFilter, setStatusFilter] = useState("PENDING")
+// Helper function to format date
+const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
-  // Decision dialog state
-  const [selectedRequest, setSelectedRequest] = useState(null)
-  const [decisionNotes, setDecisionNotes] = useState("")
-  const [decisionLoading, setDecisionLoading] = useState(false)
-
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  useEffect(() => {
-    loadRequests()
-  }, [statusFilter])
-
-  const loadData = async () => {
-    try {
-      const [currentStaff, systemSettings] = await Promise.all([getCurrentStaff(), settingsService.get()])
-      setStaff(currentStaff)
-      setSettings(systemSettings)
-    } catch (error) {
-      console.error("Failed to load data:", error)
-    }
+// Helper function to get status badge color
+const getStatusBadgeColor = (status) => {
+  switch (status) {
+    case ENUMS.REQUEST_STATUS.PENDING:
+      return "bg-orange-100 text-orange-800";
+    case ENUMS.REQUEST_STATUS.APPROVED:
+      return "bg-primary-100 text-primary-800";
+    case ENUMS.REQUEST_STATUS.DENIED:
+      return "bg-red-100 text-red-800";
+    case ENUMS.REQUEST_STATUS.FULFILLED:
+      return "bg-sidebar-100 text-sidebar-800";
+    default:
+      return "bg-gray-100 text-gray-800";
   }
+};
+
+// Helper function to get priority level
+const getPriorityLevel = (priority) => {
+  switch (priority) {
+    case "HIGH":
+      return "bg-red-100 text-red-800";
+    case "MEDIUM":
+      return "bg-orange-100 text-orange-800";
+    case "LOW":
+      return "bg-primary-100 text-primary-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
+export default function RequestQueue() {
+  const [currentStaff, setCurrentStaff] = useState(null);
+  const [requests, setRequests] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedRequester, setSelectedRequester] = useState("all");
+  const [selectedPriority, setSelectedPriority] = useState("all");
+  const [dateRange, setDateRange] = useState("all");
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [decisionLoading, setDecisionLoading] = useState(false);
+
+  useEffect(() => {
+    initializeData();
+  }, []);
+
+  // Load requester names when both requests and staff data are available
+  useEffect(() => {
+    if (requests.length > 0 && staff.length > 0) {
+      // Both requests and staff loaded, requester names will be resolved
+    }
+  }, [requests, staff]);
+
+  const initializeData = async () => {
+    try {
+      setError(null); // Clear any existing errors
+      // Get current staff for permission checking
+      const staff = await getCurrentStaff();
+      if (!staff || !permissions.canManageRequests(staff)) {
+        window.location.href = "/unauthorized";
+        return;
+      }
+      setCurrentStaff(staff);
+
+      // Load all data
+      await Promise.all([
+        loadRequests(),
+        loadAssets(),
+        loadStaff(),
+        loadDepartments(),
+      ]);
+    } catch (error) {
+      setError("Failed to load data. Please refresh the page.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadRequests = async () => {
-    setLoading(true)
     try {
-      const queries = [Query.orderDesc("$createdAt")]
+      // Sort by creation date descending (newest first)
+      const queries = [Query.orderDesc("$createdAt")];
+      const response = await assetRequestsService.list(queries);
+      const requests = response.documents || [];
+      setRequests(requests);
+    } catch (error) {
+      throw error;
+    }
+  };
 
-      if (statusFilter !== "all") {
-        queries.push(Query.equal("status", statusFilter))
+  const loadAssets = async () => {
+    try {
+      const response = await assetsService.list();
+      setAssets(response.documents || []);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const loadStaff = async () => {
+    try {
+      const response = await staffService.list();
+      const staff = response.documents || [];
+      setStaff(staff);
+      setStaffList(staff);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      const response = await departmentsService.list();
+      setDepartments(response.documents || []);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const handleDecision = async (requestId, status) => {
+    setDecisionLoading(true);
+    setError(null); // Clear any existing errors
+    try {
+      // Get the request details first
+      const request = requests.find((r) => r.$id === requestId);
+      if (!request) {
+        throw new Error("Request not found");
       }
 
-      const result = await assetRequestsService.list(queries)
+      // Get requester details
+      const requester = staff.find((s) => s.$id === request.requesterStaffId);
+      if (!requester) {
+        throw new Error("Requester not found");
+      }
 
-      // Load additional details for each request
-      const requestsWithDetails = await Promise.all(
-        result.documents.map(async (request) => {
-          try {
-            const [requester, assets] = await Promise.all([
-              staffService.get(request.requesterStaffId),
-              Promise.all(
-                request.requestedItems.map(async (itemId) => {
-                  try {
-                    return await assetsService.get(itemId)
-                  } catch {
-                    return { name: "Asset not found", $id: itemId }
-                  }
-                }),
-              ),
-            ])
+      // Get asset details (assuming request has assets array)
+      const asset =
+        request.assets && request.assets[0] ? request.assets[0] : null;
 
-            return { ...request, requester, assets }
-          } catch {
-            return { ...request, requester: { name: "Unknown" }, assets: [] }
-          }
-        }),
-      )
-
-      setRequests(requestsWithDetails)
-    } catch (error) {
-      console.error("Failed to load requests:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDecision = async (requestId, decision) => {
-    setDecisionLoading(true)
-    try {
+      // Update the request status - use only fields that exist in the schema
       const updateData = {
-        status: decision,
-        decisionNotes,
-        decisionByStaffId: staff.$id,
+        status,
+      };
+
+      // For consumables, automatically issue them when approved
+      if (status === ENUMS.REQUEST_STATUS.APPROVED) {
+        // Check if this request contains consumables
+        const requestedItems = request.requestedItems || [];
+        const consumableItems = [];
+
+        // Load each requested item to check if it's a consumable
+        for (const itemId of requestedItems) {
+          try {
+            const item = await assetsService.get(itemId);
+            if (item.itemType === ENUMS.ITEM_TYPE.CONSUMABLE) {
+              consumableItems.push(item);
+            }
+          } catch (error) {
+            // Failed to load item, skip
+          }
+        }
+
+        // If there are consumables, automatically issue them
+        if (consumableItems.length > 0) {
+          for (const consumable of consumableItems) {
+            try {
+              await assetsService.adjustConsumableStock(
+                consumable.$id,
+                -1, // Reduce stock by 1
+                currentStaff.$id,
+                `Consumable auto-issued for approved request #${requestId.slice(
+                  -8
+                )}`
+              );
+            } catch (error) {
+              console.error(
+                `Failed to adjust stock for ${consumable.name}:`,
+                error
+              );
+            }
+          }
+
+          // Mark request as fulfilled since consumables are automatically issued
+          updateData.status = ENUMS.REQUEST_STATUS.FULFILLED;
+        }
       }
 
-      await assetRequestsService.update(requestId, updateData)
+      // Update the request
+      await assetRequestsService.update(requestId, updateData);
 
-      // Reload requests
-      await loadRequests()
+      // Send notification using the new notification triggers
+      const updatedRequest = { ...request, ...updateData };
+      if (status === ENUMS.REQUEST_STATUS.APPROVED) {
+        // TODO: Implement notifyRequestApproved function
+        // await notifyRequestApproved(updatedRequest, currentStaff.$id);
+      } else if (status === ENUMS.REQUEST_STATUS.DENIED) {
+        // TODO: Implement notifyRequestRejected function
+        // await notifyRequestRejected(updatedRequest, currentStaff.$id);
+      }
 
-      // Close dialog
-      setSelectedRequest(null)
-      setDecisionNotes("")
+      await loadRequests();
+      setSelectedRequest(null);
     } catch (error) {
-      console.error("Failed to update request:", error)
+      setError("Failed to update request. Please try again.");
+      console.error("Decision error:", error);
     } finally {
-      setDecisionLoading(false)
+      setDecisionLoading(false);
     }
-  }
+  };
 
-  const getStatusBadgeColor = (status) => {
-    const colors = {
-      [ENUMS.REQUEST_STATUS.PENDING]: "bg-yellow-100 text-yellow-800",
-      [ENUMS.REQUEST_STATUS.APPROVED]: "bg-green-100 text-green-800",
-      [ENUMS.REQUEST_STATUS.DENIED]: "bg-red-100 text-red-800",
-      [ENUMS.REQUEST_STATUS.CANCELLED]: "bg-gray-100 text-gray-800",
-      [ENUMS.REQUEST_STATUS.FULFILLED]: "bg-blue-100 text-blue-800",
-    }
-    return colors[status] || "bg-gray-100 text-gray-800"
-  }
+  const getRequesterName = (requesterStaffId) => {
+    if (!requesterStaffId) return "Unknown User";
+    const requester = staff.find((s) => s.$id === requesterStaffId);
+    return requester ? requester.name : "Unknown User";
+  };
 
-  const getPriorityLevel = (request) => {
-    // Simple priority calculation based on request duration and asset count
-    const duration = new Date(request.expectedReturnDate) - new Date(request.issueDate)
-    const durationDays = duration / (1000 * 60 * 60 * 24)
-    const assetCount = request.requestedItems.length
+  const getDepartmentName = (departmentId) => {
+    if (!departmentId) return "Unassigned";
+    const dept = departments.find((d) => d.$id === departmentId);
+    return dept ? dept.name : "Unknown Department";
+  };
 
-    if (durationDays > 30 || assetCount > 5) {
-      return { level: "High", color: "bg-red-100 text-red-800" }
-    } else if (durationDays > 7 || assetCount > 2) {
-      return { level: "Medium", color: "bg-yellow-100 text-yellow-800" }
-    }
-    return { level: "Low", color: "bg-green-100 text-green-800" }
-  }
+  // Filter requests based on all filters
+  const filteredRequests = requests.filter((request) => {
+    // Search term filter
+    const matchesSearch =
+      !searchTerm ||
+      request.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getRequesterName(request.requesterStaffId)
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      request.assets?.some((asset) =>
+        asset.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      ) ||
+      request.$id.toLowerCase().includes(searchTerm.toLowerCase());
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString()
-  }
+    // Status filter
+    const matchesStatus =
+      selectedStatus === "all" || request.status === selectedStatus;
 
-  const formatDateTime = (dateString) => {
-    return new Date(dateString).toLocaleString()
-  }
+    // Requester filter
+    const matchesRequester =
+      selectedRequester === "all" ||
+      request.requesterStaffId === selectedRequester;
 
-  const canApproveRequests = staff && permissions.canApproveRequests(staff)
+    // Priority filter (assuming priority is stored in request.priority)
+    const matchesPriority =
+      selectedPriority === "all" || request.priority === selectedPriority;
 
-  if (!canApproveRequests) {
+    // Date range filter
+    const matchesDateRange = (() => {
+      if (dateRange === "all") return true;
+
+      const requestDate = new Date(request.$createdAt);
+      const now = new Date();
+
+      switch (dateRange) {
+        case "today":
+          return requestDate.toDateString() === now.toDateString();
+        case "week":
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return requestDate >= weekAgo;
+        case "month":
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return requestDate >= monthAgo;
+        case "quarter":
+          const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          return requestDate >= quarterAgo;
+        case "year":
+          const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          return requestDate >= yearAgo;
+        default:
+          return true;
+      }
+    })();
+
     return (
-      <MainLayout>
-        <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
-          <p className="text-gray-600">You don't have permission to manage requests.</p>
+      matchesSearch &&
+      matchesStatus &&
+      matchesRequester &&
+      matchesPriority &&
+      matchesDateRange
+    );
+  });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="flex flex-col items-center space-y-6">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200"></div>
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-500 border-t-transparent absolute top-0 left-0"></div>
+            </div>
+            <div className="text-center">
+              <p className="text-slate-700 font-medium">Loading Requests</p>
+              <p className="text-slate-500 text-sm">Fetching request data...</p>
+            </div>
+          </div>
         </div>
-      </MainLayout>
-    )
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="text-red-600 mb-4">Error loading requests</div>
+            <div className="text-gray-600 mb-4">{error}</div>
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                initializeData();
+              }}
+              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <MainLayout requiredPermission="canApproveRequests">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Request Queue</h1>
-            <p className="text-gray-600">Review and manage asset requests</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
+        <div
+          className="w-full h-full"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.3'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundSize: "60px 60px",
+          }}
+        ></div>
+      </div>
+
+      <div className="relative container mx-auto p-6 space-y-8 max-w-7xl">
+        {/* Enhanced Header */}
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-8">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
+            <div className="space-y-2">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+                  <Clock className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent">
+                    Request Queue
+                  </h1>
+                  <p className="text-gray-700 font-medium text-lg">
+                    Manage and process asset requests
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={() => loadRequests()}
+                variant="outline"
+                disabled={loading}
+                className="bg-white/90 border-2 border-gray-300 hover:bg-gradient-to-r hover:from-gray-50 hover:to-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all duration-300 disabled:opacity-60 rounded-xl shadow-sm hover:shadow-md"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by status" />
+        {/* Enhanced Filters */}
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+                <Filter className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Filter Requests
+                </h2>
+                <p className="text-sm text-slate-600">
+                  Refine your search with advanced filters
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => {
+                setSearchTerm("");
+                setSelectedStatus("all");
+                setSelectedPriority("all");
+              }}
+              variant="outline"
+              className="text-slate-600 hover:text-slate-800 hover:bg-slate-50 border-slate-200"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Clear All
+            </Button>
+          </div>
+
+          {/* Primary Filters Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            {/* Search Input */}
+            <div className="lg:col-span-2">
+              <Label className="text-sm font-semibold text-slate-700 mb-2 block">
+                Search Requests
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search by ID, purpose, or requester..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm"
+                />
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <Label className="text-sm font-semibold text-slate-700 mb-2 block">
+                Status
+              </Label>
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
+                  <SelectValue placeholder="All Status" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  {Object.values(ENUMS.REQUEST_STATUS).map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status.replace(/_/g, " ")}
-                    </SelectItem>
-                  ))}
+                <SelectContent className="z-30">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value={ENUMS.REQUEST_STATUS.PENDING}>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      <span>Pending</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={ENUMS.REQUEST_STATUS.APPROVED}>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>Approved</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={ENUMS.REQUEST_STATUS.DENIED}>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span>Denied</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value={ENUMS.REQUEST_STATUS.FULFILLED}>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span>Fulfilled</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </CardContent>
-        </Card>
+
+            {/* Priority Filter */}
+            <div>
+              <Label className="text-sm font-semibold text-slate-700 mb-2 block">
+                Priority
+              </Label>
+              <Select
+                value={selectedPriority}
+                onValueChange={setSelectedPriority}
+              >
+                <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
+                  <SelectValue placeholder="All Priority" />
+                </SelectTrigger>
+                <SelectContent className="z-30">
+                  <SelectItem value="all">All Priority</SelectItem>
+                  <SelectItem value="high">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span>High</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="medium">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      <span>Medium</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="low">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>Low</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Active Filters Display */}
+          {(searchTerm ||
+            selectedStatus !== "all" ||
+            selectedPriority !== "all") && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center space-x-2 flex-wrap gap-2">
+                <span className="text-sm font-medium text-slate-600">
+                  Active filters:
+                </span>
+                {searchTerm && (
+                  <Badge className="bg-primary-100 text-primary-700 border-primary-200">
+                    Search: "{searchTerm}"
+                    <button
+                      onClick={() => setSearchTerm("")}
+                      className="ml-2 hover:bg-primary-200 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                )}
+                {selectedStatus !== "all" && (
+                  <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                    Status: {selectedStatus}
+                    <button
+                      onClick={() => setSelectedStatus("all")}
+                      className="ml-2 hover:bg-orange-200 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                )}
+                {selectedPriority !== "all" && (
+                  <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                    Priority: {selectedPriority}
+                    <button
+                      onClick={() => setSelectedPriority("all")}
+                      className="ml-2 hover:bg-purple-200 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="space-y-6">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 animate-pulse"
+              >
+                <div className="space-y-4">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Loading Staff State */}
+        {!loading && staff.length === 0 && (
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto mb-4"></div>
+              <p className="text-slate-600">Loading staff data...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && staff.length > 0 && filteredRequests.length === 0 && (
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-12">
+            <div className="text-center">
+              <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                No Requests Found
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm || selectedStatus !== "all"
+                  ? "No requests match your current filters."
+                  : "No asset requests have been submitted yet."}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Requests List */}
-        {loading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Card key={i} className="animate-pulse">
+        {!loading && staff.length > 0 && filteredRequests.length > 0 && (
+          <div className="space-y-6">
+            {filteredRequests.map((request) => (
+              <Card
+                key={request.$id}
+                className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl hover:shadow-2xl transition-shadow duration-200"
+              >
                 <CardContent className="p-6">
-                  <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded mb-4 w-2/3"></div>
-                  <div className="flex gap-2">
-                    <div className="h-6 bg-gray-200 rounded w-20"></div>
-                    <div className="h-6 bg-gray-200 rounded w-24"></div>
+                  <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start space-y-4 lg:space-y-0">
+                    <div className="flex-1 space-y-4">
+                      {/* Request Header */}
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
+                            Request #{request.$id.slice(-8).toUpperCase()}
+                          </h3>
+                          <p className="text-sm bg-gradient-to-r from-sidebar-600 to-sidebar-700 bg-clip-text text-transparent font-medium">
+                            by {getRequesterName(request.requesterStaffId)}
+                          </p>
+                        </div>
+                        <Badge className={getStatusBadgeColor(request.status)}>
+                          {request.status}
+                        </Badge>
+                      </div>
+
+                      {/* Request Details */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <h4 className="text-sm font-medium text-slate-700 mb-2">
+                            Purpose
+                          </h4>
+                          <p className="text-sm text-slate-600">
+                            {request.purpose}
+                          </p>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-slate-700 mb-2">
+                            Duration
+                          </h4>
+                          <p className="text-sm text-slate-600">
+                            {formatDate(request.issueDate)} -{" "}
+                            {formatDate(request.expectedReturnDate)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Requested Assets */}
+                      <div className="mb-4">
+                        <h4 className="text-sm font-medium text-slate-700 mb-2">
+                          Requested Assets
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {request.assets?.map((asset) => (
+                            <Badge
+                              key={asset.$id}
+                              className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
+                            >
+                              {asset.name}
+                            </Badge>
+                          )) ||
+                            request.requestedItems?.map((assetId, index) => (
+                              <Badge
+                                key={assetId}
+                                className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
+                              >
+                                Asset {index + 1}
+                              </Badge>
+                            )) || (
+                              <span className="text-sm text-gray-500">
+                                No assets specified
+                              </span>
+                            )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="hover:bg-sidebar-100 hover:text-sidebar-700"
+                      >
+                        <Link href={`/requests/${request.$id}`}>
+                          View Details
+                        </Link>
+                      </Button>
+
+                      {request.status === ENUMS.REQUEST_STATUS.PENDING && (
+                        <>
+                          <Button
+                            size="sm"
+                            disabled={decisionLoading}
+                            onClick={() =>
+                              handleDecision(
+                                request.$id,
+                                ENUMS.REQUEST_STATUS.APPROVED
+                              )
+                            }
+                            className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                          >
+                            {decisionLoading ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                            )}
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={decisionLoading}
+                            onClick={() =>
+                              handleDecision(
+                                request.$id,
+                                ENUMS.REQUEST_STATUS.DENIED
+                              )
+                            }
+                            className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                          >
+                            {decisionLoading ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <XCircle className="w-4 h-4 mr-2" />
+                            )}
+                            Deny
+                          </Button>
+                        </>
+                      )}
+
+                      {request.status === ENUMS.REQUEST_STATUS.APPROVED && (
+                        <Button
+                          asChild
+                          size="sm"
+                          className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
+                        >
+                          <Link href={`/admin/issue/${request.$id}`}>
+                            <Zap className="w-4 h-4 mr-2" />
+                            Issue Assets
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        ) : requests.length === 0 ? (
-          <Card>
-            <CardContent className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
-              <p className="text-gray-600">
-                {statusFilter !== "all" ? "No requests match the selected filter." : "No requests to review."}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {requests.map((request) => {
-              const priority = getPriorityLevel(request)
-              return (
-                <Card key={request.$id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-medium text-gray-900">Request #{request.$id.slice(-8)}</h3>
-                          <Badge className={getStatusBadgeColor(request.status)}>{request.status}</Badge>
-                          <Badge className={priority.color}>{priority.level} Priority</Badge>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-2">
-                          <strong>Requester:</strong> {request.requester.name}
-                        </p>
-                        <p className="text-sm text-gray-600 mb-2">
-                          <strong>Purpose:</strong> {request.purpose}
-                        </p>
-                        <div className="text-xs text-gray-500">
-                          <p>Requested: {formatDateTime(request.$createdAt)}</p>
-                          <p>
-                            Period: {formatDate(request.issueDate)} to {formatDate(request.expectedReturnDate)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Requested Assets */}
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Requested Assets:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {request.assets.map((asset) => (
-                          <Badge key={asset.$id} variant="outline" className="text-xs">
-                            {asset.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Decision Notes */}
-                    {request.decisionNotes && (
-                      <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                        <h4 className="text-sm font-medium text-gray-700 mb-1">Decision Notes:</h4>
-                        <p className="text-sm text-gray-600">{request.decisionNotes}</p>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/requests/${request.$id}`}>View Details</Link>
-                      </Button>
-
-                      {request.status === ENUMS.REQUEST_STATUS.PENDING && (
-                        <>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700"
-                                onClick={() => setSelectedRequest(request)}
-                              >
-                                Approve
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto">
-                              <DialogHeader className="sticky top-0 bg-white border-b pb-4 mb-4">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <DialogTitle className="text-xl font-semibold flex items-center space-x-2">
-                                      <Check className="h-5 w-5 text-green-600" />
-                                      <span>Approve Request</span>
-                                    </DialogTitle>
-                                    <DialogDescription className="text-gray-600 mt-1">Review and approve this asset request</DialogDescription>
-                                  </div>
-                                  <DialogClose asChild>
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                                      <X className="h-4 w-4" />
-                                      <span className="sr-only">Close</span>
-                                    </Button>
-                                  </DialogClose>
-                                </div>
-                              </DialogHeader>
-                              
-                              <div className="space-y-6 pb-4">
-                                {/* Request Summary */}
-                                <div className="bg-green-50 p-6 rounded-lg space-y-4">
-                                  <h3 className="text-lg font-semibold text-gray-900">Request Details</h3>
-                                  <div className="space-y-2">
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Requester:</span> {request.requester.name}
-                                    </p>
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Purpose:</span> {request.purpose}
-                                    </p>
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Duration:</span> {formatDate(request.issueDate)} to {formatDate(request.expectedReturnDate)}
-                                    </p>
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Assets:</span> {request.assets.map(a => a.name).join(', ')}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Decision Notes */}
-                                <div className="bg-gray-50 p-6 rounded-lg space-y-4">
-                                  <div className="flex items-center space-x-2">
-                                    <FileText className="h-5 w-5 text-blue-600" />
-                                    <h3 className="text-lg font-semibold text-gray-900">Decision Notes</h3>
-                                  </div>
-                                  <div className="space-y-3">
-                                    <label className="text-sm font-medium text-gray-700">Additional Notes (Optional)</label>
-                                    <Textarea
-                                      value={decisionNotes}
-                                      onChange={(e) => setDecisionNotes(e.target.value)}
-                                      placeholder="Add any notes about this approval decision..."
-                                      rows={4}
-                                      className="resize-none"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <DialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
-                                <div className="flex items-center justify-between w-full">
-                                  <p className="text-sm text-green-600 font-medium">
-                                    ✓ This will approve the request and notify the requester
-                                  </p>
-                                  <div className="flex items-center space-x-3">
-                                    <DialogClose asChild>
-                                      <Button 
-                                        variant="outline" 
-                                        className="px-6"
-                                        onClick={() => {
-                                          setSelectedRequest(null)
-                                          setDecisionNotes("")
-                                        }}
-                                      >
-                                        Cancel
-                                      </Button>
-                                    </DialogClose>
-                                    <Button
-                                      onClick={() => handleDecision(request.$id, ENUMS.REQUEST_STATUS.APPROVED)}
-                                      disabled={decisionLoading}
-                                      className="px-6 bg-green-600 hover:bg-green-700"
-                                    >
-                                      <Check className="w-4 h-4 mr-2" />
-                                      {decisionLoading ? "Approving..." : "Approve Request"}
-                                    </Button>
-                                  </div>
-                                </div>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-red-600 hover:text-red-700 bg-transparent"
-                                onClick={() => setSelectedRequest(request)}
-                              >
-                                Deny
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto">
-                              <DialogHeader className="sticky top-0 bg-white border-b pb-4 mb-4">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <DialogTitle className="text-xl font-semibold flex items-center space-x-2">
-                                      <X className="h-5 w-5 text-red-600" />
-                                      <span>Deny Request</span>
-                                    </DialogTitle>
-                                    <DialogDescription className="text-gray-600 mt-1">Provide a reason for denying this asset request</DialogDescription>
-                                  </div>
-                                  <DialogClose asChild>
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                                      <X className="h-4 w-4" />
-                                      <span className="sr-only">Close</span>
-                                    </Button>
-                                  </DialogClose>
-                                </div>
-                              </DialogHeader>
-                              
-                              <div className="space-y-6 pb-4">
-                                {/* Request Summary */}
-                                <div className="bg-red-50 p-6 rounded-lg space-y-4">
-                                  <h3 className="text-lg font-semibold text-gray-900">Request Details</h3>
-                                  <div className="space-y-2">
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Requester:</span> {request.requester.name}
-                                    </p>
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Purpose:</span> {request.purpose}
-                                    </p>
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Duration:</span> {formatDate(request.issueDate)} to {formatDate(request.expectedReturnDate)}
-                                    </p>
-                                    <p className="text-sm">
-                                      <span className="font-medium text-gray-700">Assets:</span> {request.assets.map(a => a.name).join(', ')}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Denial Reason */}
-                                <div className="bg-gray-50 p-6 rounded-lg space-y-4">
-                                  <div className="flex items-center space-x-2">
-                                    <FileText className="h-5 w-5 text-red-600" />
-                                    <h3 className="text-lg font-semibold text-gray-900">Reason for Denial</h3>
-                                  </div>
-                                  <div className="space-y-3">
-                                    <label className="text-sm font-medium text-gray-700">Explanation *</label>
-                                    <Textarea
-                                      value={decisionNotes}
-                                      onChange={(e) => setDecisionNotes(e.target.value)}
-                                      placeholder="Please provide a clear reason for denying this request. This will be shared with the requester."
-                                      rows={4}
-                                      className="resize-none"
-                                      required
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <DialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
-                                <div className="flex items-center justify-between w-full">
-                                  <p className="text-sm text-red-600 font-medium">
-                                    ⚠ This will deny the request and notify the requester
-                                  </p>
-                                  <div className="flex items-center space-x-3">
-                                    <DialogClose asChild>
-                                      <Button 
-                                        variant="outline" 
-                                        className="px-6"
-                                        onClick={() => {
-                                          setSelectedRequest(null)
-                                          setDecisionNotes("")
-                                        }}
-                                      >
-                                        Cancel
-                                      </Button>
-                                    </DialogClose>
-                                    <Button
-                                      onClick={() => handleDecision(request.$id, ENUMS.REQUEST_STATUS.DENIED)}
-                                      disabled={decisionLoading || !decisionNotes.trim()}
-                                      className="px-6 bg-red-600 hover:bg-red-700"
-                                    >
-                                      <X className="w-4 h-4 mr-2" />
-                                      {decisionLoading ? "Denying..." : "Deny Request"}
-                                    </Button>
-                                  </div>
-                                </div>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        </>
-                      )}
-
-                      {request.status === ENUMS.REQUEST_STATUS.APPROVED && (
-                        <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700">
-                          <Link href={`/admin/issue/${request.$id}`}>Issue Assets</Link>
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
         )}
       </div>
-    </MainLayout>
-  )
+    </div>
+  );
 }
