@@ -20,7 +20,7 @@ export function ConsumableActivity({ consumableId }) {
   const loadEvents = async () => {
     try {
       const result = await assetEventsService.list([
-        Query.equal("itemId", consumableId),
+        Query.equal("assetId", consumableId),
         Query.orderDesc("at"),
         Query.limit(50),
       ]);
