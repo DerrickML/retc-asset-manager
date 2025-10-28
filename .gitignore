@@ -275,5 +275,4 @@ $RECYCLE.BIN/
 .claude/
 
 # Deployment
-deploy.sh
 deploy.log
