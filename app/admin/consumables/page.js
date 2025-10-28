@@ -40,6 +40,7 @@ import {
 } from "../../../components/ui/dialog";
 import { Label } from "../../../components/ui/label";
 import { Textarea } from "../../../components/ui/textarea";
+import { ImageUpload } from "../../../components/ui/image-upload";
 import {
   Plus,
   Search,
@@ -94,8 +95,13 @@ export default function AdminConsumablesPage() {
   // Manual ID assignment state
   const [manualIdAssignment, setManualIdAssignment] = useState(false);
 
-  // Helper functions to extract stock data from stored fields
+  // Helper functions to extract stock data - now using proper fields with fallback
   const getCurrentStock = (consumable) => {
+    // Use new proper field first
+    if (consumable.currentStock !== undefined) {
+      return consumable.currentStock;
+    }
+    // Fallback to old encoded format for backward compatibility
     if (
       consumable.serialNumber &&
       consumable.serialNumber.startsWith("STOCK:")
@@ -106,6 +112,11 @@ export default function AdminConsumablesPage() {
   };
 
   const getMinStock = (consumable) => {
+    // Use new proper field first
+    if (consumable.minimumStock !== undefined) {
+      return consumable.minimumStock;
+    }
+    // Fallback to old encoded format
     if (consumable.model && consumable.model.startsWith("MIN:")) {
       return parseInt(consumable.model.replace("MIN:", "")) || 0;
     }
@@ -113,6 +124,11 @@ export default function AdminConsumablesPage() {
   };
 
   const getMaxStock = (consumable) => {
+    // Use new proper field first (if added in future)
+    if (consumable.maximumStock !== undefined) {
+      return consumable.maximumStock;
+    }
+    // Fallback to old encoded format
     if (consumable.manufacturer && consumable.manufacturer.startsWith("MAX:")) {
       return parseInt(consumable.manufacturer.replace("MAX:", "")) || 0;
     }
@@ -120,24 +136,35 @@ export default function AdminConsumablesPage() {
   };
 
   const getStatus = (consumable) => {
-    if (consumable.subcategory && consumable.subcategory.includes("|")) {
-      return (
-        consumable.subcategory.split("|")[1] || ENUMS.CONSUMABLE_STATUS.IN_STOCK
-      );
-    }
+    // Calculate status based on current stock vs minimum
+    const current = getCurrentStock(consumable);
+    const min = getMinStock(consumable);
+
+    if (current === 0) return ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK;
+    if (current <= min && min > 0) return ENUMS.CONSUMABLE_STATUS.LOW_STOCK;
     return ENUMS.CONSUMABLE_STATUS.IN_STOCK;
   };
 
   const getUnit = (consumable) => {
+    // Use new proper field first
+    if (consumable.unit) {
+      return consumable.unit;
+    }
+    // Fallback to old encoded format
     if (consumable.subcategory && consumable.subcategory.includes("|")) {
       return (
         consumable.subcategory.split("|")[0] || ENUMS.CONSUMABLE_UNIT.PIECE
       );
     }
-    return consumable.subcategory || ENUMS.CONSUMABLE_UNIT.PIECE;
+    return ENUMS.CONSUMABLE_UNIT.PIECE;
   };
 
   const getConsumableCategory = (consumable) => {
+    // Use subcategory directly if it's a valid category
+    if (consumable.subcategory && !consumable.subcategory.includes("|")) {
+      return consumable.subcategory;
+    }
+    // Fallback to old encoded format
     if (consumable.subcategory && consumable.subcategory.includes("|")) {
       const parts = consumable.subcategory.split("|");
       return parts[2] || ENUMS.CONSUMABLE_CATEGORY.FLIERS;
@@ -160,6 +187,7 @@ export default function AdminConsumablesPage() {
     roomOrArea: "",
     isPublic: false,
     publicSummary: "",
+    publicImages: [], // Initialize as array for image upload
     itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
   });
 
@@ -203,14 +231,18 @@ export default function AdminConsumablesPage() {
           : `CONS-${Date.now()}`, // Generate unique tag for consumables
         name: newConsumable.name,
         category: ENUMS.CATEGORY.CONSUMABLE, // Use the correct CONSUMABLE category
-        subcategory: `${newConsumable.unit}|${newConsumable.status}|${newConsumable.consumableCategory}`, // Store unit, status, and consumable category in subcategory
+        subcategory: newConsumable.consumableCategory, // Store consumable category directly
         itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
 
-        // Stock information - store in existing ASSETS fields
-        // Store stock data in existing fields that aren't used by consumables
-        serialNumber: `STOCK:${newConsumable.currentStock || 0}`, // Store current stock in serialNumber
-        model: `MIN:${newConsumable.minStock || 0}`, // Store min stock in model
-        manufacturer: `MAX:${newConsumable.maxStock || 0}`, // Store max stock in manufacturer
+        // Stock information - use new proper database fields
+        currentStock: newConsumable.currentStock || 0,
+        minimumStock: newConsumable.minStock || 0,
+        unit: newConsumable.unit,
+
+        // Legacy fields - keep empty for backward compatibility
+        serialNumber: "", // No longer needed
+        model: "", // No longer needed
+        manufacturer: "", // No longer needed
 
         // Location information
         locationName: newConsumable.locationName || "",
@@ -219,9 +251,15 @@ export default function AdminConsumablesPage() {
         // Public information
         isPublic: newConsumable.isPublic || false,
         publicSummary: newConsumable.publicSummary || "",
-        publicImages: JSON.stringify([]), // Empty array as JSON string
+        publicImages: JSON.stringify(newConsumable.publicImages || []), // Store as JSON string
         publicLocationLabel: "", // Empty string for consumables
         publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW, // Default for consumables
+        assetImage:
+          newConsumable.publicImages && newConsumable.publicImages.length > 0
+            ? `https://appwrite.nrep.ug/v1/storage/buckets/68a2fbbc002e7db3db22/files/${
+                newConsumable.publicImages[0]
+              }/view?project=${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || "6745fd58001e7fcbf850"}`
+            : "", // First image as primary
 
         // Required fields for ASSETS collection (already set above for stock data)
         departmentId: "", // Empty for consumables
@@ -256,6 +294,7 @@ export default function AdminConsumablesPage() {
         roomOrArea: "",
         isPublic: false,
         publicSummary: "",
+        publicImages: [], // Reset images array
         itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
       });
       setManualIdAssignment(false);
@@ -446,7 +485,26 @@ export default function AdminConsumablesPage() {
                 </Button>
               )}
 
-              <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <Button
+                onClick={() => router.push("/admin/consumables/new")}
+                className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+              >
+                <div className="flex items-center justify-center relative z-10">
+                  <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 group-hover:scale-110 transition-all duration-300" />
+                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                    Add Consumable
+                  </span>
+                </div>
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                {/* Ripple effect */}
+                <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                {/* Shimmer effect */}
+                <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
+              </Button>
+
+              {/* Removed Dialog - Now using dedicated page at /admin/consumables/new */}
+              {false && <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                 <DialogTrigger asChild>
                   <Button className="relative bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105">
                     <div className="flex items-center justify-center relative z-10">
@@ -828,6 +886,31 @@ export default function AdminConsumablesPage() {
                     </div>
                   </div>
 
+                  {/* Consumable Images Section */}
+                  <div className="bg-gradient-to-br from-orange-50 to-white rounded-xl p-6 border border-orange-100">
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                          Consumable Images
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Upload images for this consumable item (optional)
+                        </p>
+                      </div>
+                      <ImageUpload
+                        assetId={newConsumable.assetTag || `temp-${Date.now()}`}
+                        existingImages={newConsumable.publicImages || []}
+                        onImagesChange={(newImages) => {
+                          setNewConsumable({
+                            ...newConsumable,
+                            publicImages: newImages,
+                          });
+                        }}
+                        maxImages={10}
+                      />
+                    </div>
+                  </div>
+
                   <DialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
                     <div className="flex items-center justify-between w-full">
                       <p className="text-sm text-gray-500">
@@ -855,7 +938,7 @@ export default function AdminConsumablesPage() {
                     </div>
                   </DialogFooter>
                 </DialogContent>
-              </Dialog>
+              </Dialog>}
             </div>
           </div>
 

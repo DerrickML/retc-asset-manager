@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "../../../../../components/ui/select";
 import { Badge } from "../../../../../components/ui/badge";
+import { ImageUpload } from "../../../../../components/ui/image-upload";
 import {
   ArrowLeft,
   Save,
@@ -40,7 +41,7 @@ import {
 import { getCurrentStaff, permissions } from "../../../../../lib/utils/auth.js";
 import { useToastContext } from "../../../../../components/providers/toast-provider";
 // Removed useConfirmation import - using custom dialog instead
-import { ENUMS } from "../../../../../lib/appwrite/config.js";
+import { ENUMS, COLLECTIONS } from "../../../../../lib/appwrite/config.js";
 import {
   formatCategory,
   getStatusBadgeColor,
@@ -59,10 +60,14 @@ export default function EditConsumable() {
   const [saving, setSaving] = useState(false);
   const [originalConsumable, setOriginalConsumable] = useState(null);
   const [consumableId, setConsumableId] = useState(null);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Helper functions to extract data from mapped fields
+  // Helper functions to extract data - using proper fields with fallback
   const getCurrentStock = (consumable) => {
+    // Use new proper field first
+    if (consumable?.currentStock !== undefined) {
+      return consumable.currentStock;
+    }
+    // Fallback to old encoded format
     if (
       consumable?.serialNumber &&
       consumable.serialNumber.startsWith("STOCK:")
@@ -73,6 +78,11 @@ export default function EditConsumable() {
   };
 
   const getMinStock = (consumable) => {
+    // Use new proper field first
+    if (consumable?.minimumStock !== undefined) {
+      return consumable.minimumStock;
+    }
+    // Fallback to old encoded format
     if (consumable?.model && consumable.model.startsWith("MIN:")) {
       return parseInt(consumable.model.replace("MIN:", "")) || 0;
     }
@@ -80,6 +90,11 @@ export default function EditConsumable() {
   };
 
   const getMaxStock = (consumable) => {
+    // Use new proper field first (if added in future)
+    if (consumable?.maximumStock !== undefined) {
+      return consumable.maximumStock;
+    }
+    // Fallback to old encoded format
     if (
       consumable?.manufacturer &&
       consumable.manufacturer.startsWith("MAX:")
@@ -90,29 +105,40 @@ export default function EditConsumable() {
   };
 
   const getStatus = (consumable) => {
-    if (consumable?.subcategory && consumable.subcategory.includes("|")) {
-      return (
-        consumable.subcategory.split("|")[1] || ENUMS.CONSUMABLE_STATUS.IN_STOCK
-      );
-    }
+    // Calculate status based on current stock vs minimum
+    const current = getCurrentStock(consumable);
+    const min = getMinStock(consumable);
+
+    if (current === 0) return ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK;
+    if (current <= min && min > 0) return ENUMS.CONSUMABLE_STATUS.LOW_STOCK;
     return ENUMS.CONSUMABLE_STATUS.IN_STOCK;
   };
 
   const getUnit = (consumable) => {
+    // Use new proper field first
+    if (consumable?.unit) {
+      return consumable.unit;
+    }
+    // Fallback to old encoded format
     if (consumable?.subcategory && consumable.subcategory.includes("|")) {
       return (
         consumable.subcategory.split("|")[0] || ENUMS.CONSUMABLE_UNIT.PIECE
       );
     }
-    return consumable?.subcategory || ENUMS.CONSUMABLE_UNIT.PIECE;
+    return ENUMS.CONSUMABLE_UNIT.PIECE;
   };
 
   const getConsumableCategory = (consumable) => {
+    // Use subcategory directly if it's a valid category
+    if (consumable?.subcategory && !consumable.subcategory.includes("|")) {
+      return consumable.subcategory;
+    }
+    // Fallback to old encoded format
     if (consumable?.subcategory && consumable.subcategory.includes("|")) {
       const parts = consumable.subcategory.split("|");
-      return parts[2] || ENUMS.CATEGORY.OFFICE_SUPPLIES;
+      return parts[2] || ENUMS.CONSUMABLE_CATEGORY.FLIERS;
     }
-    return ENUMS.CATEGORY.OFFICE_SUPPLIES;
+    return ENUMS.CONSUMABLE_CATEGORY.FLIERS;
   };
 
   useEffect(() => {
@@ -157,10 +183,14 @@ export default function EditConsumable() {
         status: getStatus(consumableData),
         unit: getUnit(consumableData),
         consumableCategory: getConsumableCategory(consumableData),
+        // Parse publicImages if it's a string
+        publicImages: typeof consumableData.publicImages === 'string'
+          ? JSON.parse(consumableData.publicImages || '[]')
+          : (consumableData.publicImages || []),
       };
 
       setConsumable(processedConsumable);
-      setOriginalConsumable(processedConsumable);
+      setOriginalConsumable(JSON.parse(JSON.stringify(processedConsumable))); // Deep clone
     } catch (error) {
       console.error("Failed to load consumable:", error);
       router.push("/admin/consumables");
@@ -170,96 +200,89 @@ export default function EditConsumable() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Prepare the updated data - map back to ASSETS collection fields
-      // Filter out Appwrite metadata fields that shouldn't be sent in updates
-      const {
-        $id,
-        $createdAt,
-        $updatedAt,
-        $databaseId,
-        $collectionId,
-        $permissions,
-        ...consumableData
-      } = consumable;
+      // Only include changed fields
+      const changedFields = {};
 
-      // Use the EXACT same data structure as the creation form
-      const updatedConsumable = {
-        // Basic information - use existing ASSETS collection fields
-        assetTag: consumableData.assetTag || `CONS-${Date.now()}`,
-        name: consumable.name,
-        category: ENUMS.CATEGORY.CONSUMABLE, // Use the correct CONSUMABLE category
-        subcategory: `${consumable.unit}|${consumable.status}|${consumable.consumableCategory}`, // Store unit, status, and consumable category in subcategory
-        itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
+      // Check basic fields
+      if (consumable.name !== originalConsumable.name) {
+        changedFields.name = consumable.name;
+      }
 
-        // Stock information - store in existing ASSETS fields
-        serialNumber: `STOCK:${consumable.currentStock || 0}`, // Store current stock in serialNumber
-        model: `MIN:${consumable.minStock || 0}`, // Store min stock in model
-        manufacturer: `MAX:${consumable.maxStock || 0}`, // Store max stock in manufacturer
+      if (consumable.consumableCategory !== originalConsumable.consumableCategory) {
+        changedFields.subcategory = consumable.consumableCategory;
+      }
 
-        // Location information
-        locationName: consumable.locationName || "",
-        roomOrArea: consumable.roomOrArea || "",
+      // Check stock fields
+      if (consumable.currentStock !== originalConsumable.currentStock) {
+        changedFields.currentStock = consumable.currentStock || 0;
+      }
 
-        // Public information
-        isPublic: consumable.isPublic || false,
-        publicSummary: consumable.publicSummary || "",
-        publicImages: JSON.stringify([]), // Empty array as JSON string
-        publicLocationLabel: "", // Empty string for consumables
-        publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW, // Default for consumables
+      if (consumable.minStock !== originalConsumable.minStock) {
+        changedFields.minimumStock = consumable.minStock || 0;
+      }
 
-        // Required fields for ASSETS collection
-        departmentId: "", // Empty for consumables
-        custodianStaffId: "", // Empty for consumables
-        availableStatus: ENUMS.AVAILABLE_STATUS.AVAILABLE, // Default for consumables
-        currentCondition: ENUMS.CURRENT_CONDITION.NEW, // Default for consumables
-        purchaseDate: null, // Empty for consumables
-        warrantyExpiryDate: null, // Empty for consumables
-        lastMaintenanceDate: null, // Empty for consumables
-        nextMaintenanceDue: null, // Empty for consumables
-        lastInventoryCheck: null, // Empty for consumables
-        retirementDate: null, // Empty for consumables
-        disposalDate: null, // Empty for consumables
-        attachmentFileIds: [], // Empty array for consumables
-        assetImage: "", // Consumables don't have images
-      };
+      if (consumable.maxStock !== originalConsumable.maxStock) {
+        changedFields.maximumStock = consumable.maxStock || 0;
+      }
 
-      // Log the data being sent for debugging
-      // Preparing consumable data for update
+      if (consumable.unit !== originalConsumable.unit) {
+        changedFields.unit = consumable.unit;
+      }
 
-      // Track changes for audit trail
-      const changes = [];
-      Object.keys(updatedConsumable).forEach((key) => {
-        if (
-          originalConsumable[key] !== updatedConsumable[key] &&
-          key !== "currentStock" && // Skip these as they're derived fields
-          key !== "minStock" &&
-          key !== "maxStock" &&
-          key !== "status" &&
-          key !== "unit" &&
-          key !== "consumableCategory"
-        ) {
-          changes.push({
-            field: key,
-            from: originalConsumable[key],
-            to: updatedConsumable[key],
-          });
-        }
-      });
+      // Check location fields
+      if (consumable.locationName !== originalConsumable.locationName) {
+        changedFields.locationName = consumable.locationName || "";
+      }
 
-      // Update the consumable
+      if (consumable.roomOrArea !== originalConsumable.roomOrArea) {
+        changedFields.roomOrArea = consumable.roomOrArea || "";
+      }
+
+      // Check public fields
+      if (consumable.isPublic !== originalConsumable.isPublic) {
+        changedFields.isPublic = consumable.isPublic || false;
+      }
+
+      if (consumable.publicSummary !== originalConsumable.publicSummary) {
+        changedFields.publicSummary = consumable.publicSummary || "";
+      }
+
+      // Check images - compare arrays
+      const originalImages = Array.isArray(originalConsumable.publicImages)
+        ? originalConsumable.publicImages
+        : [];
+      const currentImages = Array.isArray(consumable.publicImages)
+        ? consumable.publicImages
+        : [];
+
+      if (JSON.stringify(originalImages) !== JSON.stringify(currentImages)) {
+        changedFields.publicImages = JSON.stringify(currentImages);
+        // Update assetImage with first image or empty
+        changedFields.assetImage = currentImages.length > 0
+          ? `https://appwrite.nrep.ug/v1/storage/buckets/${COLLECTIONS.ATTACHMENTS}/files/${currentImages[0]}/view?project=${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6745fd58001e7fcbf850'}`
+          : "";
+      }
+
+      // If no changes, show message and return
+      if (Object.keys(changedFields).length === 0) {
+        toast.info("No changes to save");
+        setSaving(false);
+        return;
+      }
+
+      // Update the consumable with only changed fields
       await assetsService.update(
         consumableId,
-        updatedConsumable,
+        changedFields,
         staff.$id,
         "Consumable updated"
       );
 
       // Log changes as asset events
-      for (const change of changes) {
+      for (const [field, value] of Object.entries(changedFields)) {
         try {
-          // Convert values to strings and truncate if too long
-          const fromValue = String(change.from || "").substring(0, 100);
-          const toValue = String(change.to || "").substring(0, 100);
+          const fromValue = String(originalConsumable[field] || "").substring(0, 100);
+          const toValue = String(value || "").substring(0, 100);
 
           await assetEventsService.create({
             assetId: consumableId,
@@ -268,17 +291,20 @@ export default function EditConsumable() {
             toValue: toValue,
             actorStaffId: staff.$id,
             at: new Date().toISOString(),
-            notes: `Updated ${change.field}`,
+            notes: `Updated ${field}`,
           });
         } catch (eventError) {
           console.error("Failed to log asset event:", eventError);
         }
       }
 
-      // Refresh the consumable data
-      await loadConsumable(consumableId);
+      // Show success message and redirect to details page
       toast.success("Consumable updated successfully!");
-      setShowSuccessModal(true);
+
+      // Redirect to consumable details page
+      setTimeout(() => {
+        router.push(`/admin/consumables/${consumableId}`);
+      }, 500); // Small delay to allow toast to be seen
     } catch (error) {
       console.error("Failed to update consumable:", error);
       console.error("Error details:", {
@@ -821,44 +847,28 @@ export default function EditConsumable() {
           </div>
         </div>
 
-        {/* Beautiful Success Modal */}
-        {showSuccessModal && (
-          <div className="fixed inset-0 bg-gradient-to-br from-black/40 via-primary-900/20 to-sidebar-900/20 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full relative z-[10000] animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-              {/* Close Button */}
-              <button
-                onClick={() => setShowSuccessModal(false)}
-                className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-
-              {/* Success Content */}
-              <div className="p-8 text-center">
-                {/* Success Icon */}
-                <div className="mx-auto mb-6 w-20 h-20 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg">
-                  <CheckCircle className="w-10 h-10 text-white" />
-                </div>
-
-                {/* Success Message */}
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                  Success!
-                </h3>
-                <p className="text-gray-600 text-lg mb-8">
-                  Consumable updated successfully!
-                </p>
-
-                {/* Action Button */}
-                <Button
-                  onClick={() => setShowSuccessModal(false)}
-                  className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                >
-                  Continue
-                </Button>
-              </div>
-            </div>
+        {/* Consumable Images Section */}
+        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6">
+            <h3 className="text-xl font-bold text-white flex items-center">
+              <Image className="w-5 h-5 mr-3" />
+              Consumable Images
+            </h3>
+            <p className="text-orange-100 text-sm mt-1">
+              Upload images for this consumable item
+            </p>
           </div>
-        )}
+          <div className="p-6">
+            <ImageUpload
+              assetId={consumable.assetTag || consumableId}
+              existingImages={consumable.publicImages || []}
+              onImagesChange={(newImages) => {
+                setConsumable({ ...consumable, publicImages: newImages });
+              }}
+              maxImages={10}
+            />
+          </div>
+        </div>
 
         {/* Custom Delete Confirmation Dialog */}
         {showDeleteDialog && (

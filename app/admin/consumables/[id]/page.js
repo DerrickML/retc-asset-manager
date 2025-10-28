@@ -40,7 +40,16 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  MapPin,
+  Tag,
+  Layers,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  BarChart3,
+  Image as ImageIcon,
 } from "lucide-react";
+import { formatCategory } from "../../../../lib/utils/mappings.js";
 
 export default function ConsumableDetailPage() {
   const router = useRouter();
@@ -133,109 +142,258 @@ export default function ConsumableDetailPage() {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button
-            variant="outline"
-            onClick={() => router.back()}
-            className="flex items-center"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {consumable.name}
-            </h1>
-            <p className="text-gray-600">Consumable Details</p>
-          </div>
-        </div>
-        {canManageConsumables && (
-          <Button
-            onClick={() =>
-              router.push(`/admin/consumables/${consumable.$id}/edit`)
-            }
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Edit className="w-4 h-4 mr-2" />
-            Edit
-          </Button>
-        )}
-      </div>
+  // Parse images
+  const images = consumable.publicImages
+    ? typeof consumable.publicImages === "string"
+      ? JSON.parse(consumable.publicImages || "[]")
+      : consumable.publicImages
+    : [];
 
-      {/* Status Banner */}
-      <Card
-        className={`border-2 ${
-          getStatusColor(consumable.status).split(" ")[0]
-        }-200`}
-      >
-        <CardContent className="p-4">
+  // Get stock metrics
+  const currentStock = getCurrentStock(consumable);
+  const minStock = getMinStock(consumable);
+  const maxStock = getMaxStock(consumable);
+  const status = getConsumableStatus(consumable);
+  const unit = getConsumableUnit(consumable);
+
+  // Calculate stock percentage
+  const stockPercentage =
+    maxStock > 0 ? Math.round((currentStock / maxStock) * 100) : 0;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        {/* Enhanced Header */}
+        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm p-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              {getStatusIcon(getConsumableStatus(consumable))}
-              <div>
-                <h3 className="font-semibold text-lg">
-                  {getStatusText(getConsumableStatus(consumable))}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Current Stock: {getCurrentStock(consumable)}{" "}
-                  {getConsumableUnit(consumable)?.toLowerCase()}
-                </p>
+            <div className="flex items-center space-x-6">
+              <Button
+                variant="ghost"
+                onClick={() => router.push("/admin/consumables")}
+                className="bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-200"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Consumables
+              </Button>
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg">
+                  <Package className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-orange-600 to-amber-600 bg-clip-text text-transparent">
+                    {consumable.name}
+                  </h1>
+                  <div className="flex items-center space-x-3 mt-1">
+                    <Badge className="bg-orange-100 text-orange-800 border-orange-200">
+                      <Tag className="w-3 h-3 mr-1" />
+                      {consumable.assetTag}
+                    </Badge>
+                    <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                      <Layers className="w-3 h-3 mr-1" />
+                      {formatCategory(getConsumableCategory(consumable))}
+                    </Badge>
+                  </div>
+                </div>
               </div>
             </div>
-            <Badge
-              className={getConsumableStatusBadgeColor(
-                getConsumableStatus(consumable)
-              )}
-            >
-              {getStatusText(getConsumableStatus(consumable))}
-            </Badge>
+            {canManageConsumables && (
+              <Button
+                onClick={() =>
+                  router.push(`/admin/consumables/${consumable.$id}/edit`)
+                }
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transition-all"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Consumable
+              </Button>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Main Content */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview" className="flex items-center">
-            <Package className="w-4 h-4 mr-2" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="flex items-center">
-            <Activity className="w-4 h-4 mr-2" />
-            Activity
-          </TabsTrigger>
-          <TabsTrigger value="distribution" className="flex items-center">
-            <Truck className="w-4 h-4 mr-2" />
-            Distribution
-          </TabsTrigger>
-        </TabsList>
+        {/* Stock Metrics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Current Stock Card */}
+          <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-blue-600 flex items-center">
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Current Stock
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-blue-700">
+                  {currentStock}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {unit ? formatCategory(unit) : "Units"}
+                </div>
+                {maxStock > 0 && (
+                  <div className="pt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(stockPercentage, 100)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {stockPercentage}% of capacity
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="overview" className="space-y-6">
-          <ConsumableOverview
-            consumable={consumable}
-            onUpdate={(consumable) => {
-              // TODO: Handle update
-              // Update consumable functionality
-            }}
-            onStockUpdated={() => {
-              // Reload consumable data when stock is updated
-              loadData();
-            }}
-          />
-        </TabsContent>
+          {/* Minimum Stock Card */}
+          <Card className="border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-white shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-yellow-600 flex items-center">
+                <TrendingDown className="w-4 h-4 mr-2" />
+                Minimum Stock
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-yellow-700">
+                  {minStock}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Reorder threshold
+                </div>
+                {currentStock <= minStock && minStock > 0 && (
+                  <Badge className="bg-yellow-500 text-white mt-2">
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    Low Stock Alert
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="activity" className="space-y-6">
-          <ConsumableActivity consumableId={consumable.$id} />
-        </TabsContent>
+          {/* Maximum Stock Card */}
+          <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-white shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-green-600 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Maximum Capacity
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-green-700">
+                  {maxStock || "N/A"}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Maximum capacity
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-        <TabsContent value="distribution" className="space-y-6">
-          {/* <ConsumableDistribution consumableId={consumable.$id} /> */}
-        </TabsContent>
-      </Tabs>
+          {/* Status Card */}
+          <Card
+            className={`border-2 ${
+              status === "IN_STOCK"
+                ? "border-green-300 bg-gradient-to-br from-green-100 to-white"
+                : status === "LOW_STOCK"
+                ? "border-yellow-300 bg-gradient-to-br from-yellow-100 to-white"
+                : "border-red-300 bg-gradient-to-br from-red-100 to-white"
+            } shadow-lg hover:shadow-xl transition-shadow`}
+          >
+            <CardHeader className="pb-3">
+              <CardTitle
+                className={`text-sm font-medium flex items-center ${
+                  status === "IN_STOCK"
+                    ? "text-green-600"
+                    : status === "LOW_STOCK"
+                    ? "text-yellow-600"
+                    : "text-red-600"
+                }`}
+              >
+                {getStatusIcon(status)}
+                <span className="ml-2">Status</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Badge
+                  className={`text-base px-3 py-1 ${getConsumableStatusBadgeColor(
+                    status
+                  )}`}
+                >
+                  {getStatusText(status)}
+                </Badge>
+                <div className="text-xs text-gray-600 mt-2">
+                  {status === "IN_STOCK"
+                    ? "Available for distribution"
+                    : status === "LOW_STOCK"
+                    ? "Reorder recommended"
+                    : "Out of stock"}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Content */}
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 bg-white shadow-md rounded-xl p-1">
+            <TabsTrigger
+              value="overview"
+              className="flex items-center data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-lg"
+            >
+              <Package className="w-4 h-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="activity"
+              className="flex items-center data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-lg"
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              Activity Log
+            </TabsTrigger>
+            <TabsTrigger
+              value="distribution"
+              className="flex items-center data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-lg"
+            >
+              <Truck className="w-4 h-4 mr-2" />
+              Distribution
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6 mt-6">
+            <ConsumableOverview
+              consumable={consumable}
+              onUpdate={(consumable) => {
+                router.push(`/admin/consumables/${consumable.$id}/edit`);
+              }}
+              onStockUpdated={() => {
+                loadData();
+              }}
+            />
+          </TabsContent>
+
+          <TabsContent value="activity" className="space-y-6 mt-6">
+            <ConsumableActivity consumableId={consumable.$id} />
+          </TabsContent>
+
+          <TabsContent value="distribution" className="space-y-6 mt-6">
+            <Card className="border-orange-200">
+              <CardHeader className="bg-orange-50 border-b border-orange-100">
+                <CardTitle className="text-orange-800 flex items-center">
+                  <Truck className="w-5 h-5 mr-2" />
+                  Distribution History
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8 text-center text-gray-500">
+                <Package className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <p>Distribution tracking coming soon</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

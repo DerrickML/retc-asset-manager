@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Card,
@@ -74,6 +75,7 @@ import {
 } from "../../../lib/utils/mappings.js";
 
 export default function AdminAssetManagement() {
+  const router = useRouter();
   const toast = useToastContext();
   const { confirm } = useConfirmation();
   const [staff, setStaff] = useState(null);
@@ -448,7 +450,26 @@ export default function AdminAssetManagement() {
                 </Button>
               )}
 
-              <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <Button
+                onClick={() => router.push("/admin/assets/new")}
+                className="relative bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+              >
+                <div className="flex items-center justify-center relative z-10">
+                  <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 group-hover:scale-110 transition-all duration-300" />
+                  <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                    Add Asset
+                  </span>
+                </div>
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                {/* Ripple effect */}
+                <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                {/* Shimmer effect */}
+                <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
+              </Button>
+
+              {/* Removed Dialog - Now using dedicated page at /admin/assets/new */}
+              {false && <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                 <DialogTrigger asChild>
                   <Button className="relative bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105">
                     <div className="flex items-center justify-center relative z-10">
@@ -1014,7 +1035,7 @@ export default function AdminAssetManagement() {
                     </div>
                   </DialogFooter>
                 </DialogContent>
-              </Dialog>
+              </Dialog>}
             </div>
           </div>
 

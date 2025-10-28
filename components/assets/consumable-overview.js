@@ -75,8 +75,48 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
     permissions.canManageAssets(staff) &&
     getCurrentViewMode() === "admin";
 
+  // Parse images
+  const images = consumable.publicImages
+    ? typeof consumable.publicImages === "string"
+      ? JSON.parse(consumable.publicImages || "[]")
+      : consumable.publicImages
+    : [];
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Consumable Images (if available) */}
+      {images.length > 0 && (
+        <Card className="border-orange-200 bg-white lg:col-span-2">
+          <CardHeader className="bg-orange-50 border-b border-orange-200">
+            <CardTitle className="text-orange-800">Images</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {images.map((imageId, index) => (
+                <div
+                  key={imageId}
+                  className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-200 hover:border-orange-400 transition-colors"
+                >
+                  <img
+                    src={`https://appwrite.nrep.ug/v1/storage/buckets/68a2fbbc002e7db3db22/files/${imageId}/view?project=${
+                      process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID ||
+                      "6745fd58001e7fcbf850"
+                    }`}
+                    alt={`${consumable.name} - Image ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  {index === 0 && (
+                    <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded">
+                      Primary
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Basic Information */}
       <Card className="border-green-200 bg-white">
         <CardHeader className="bg-green-50 border-b border-green-200">
@@ -171,7 +211,7 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
               </h4>
               <p className="text-sm text-gray-600">
                 {getMinStock(consumable)}{" "}
-                {getConsumableUnit(consumable)?.toLowerCase()}
+                {/* {getConsumableUnit(consumable)?.toLowerCase()} */}
               </p>
             </div>
 
@@ -181,7 +221,7 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
               </h4>
               <p className="text-sm text-gray-600">
                 {getMaxStock(consumable)}{" "}
-                {getConsumableUnit(consumable)?.toLowerCase()}
+                {/* {getConsumableUnit(consumable)?.toLowerCase()} */}
               </p>
             </div>
           </div>
