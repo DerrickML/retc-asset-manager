@@ -141,6 +141,21 @@ export default function LayoutProvider({ children }) {
       window.removeEventListener("session-warning", handleSessionWarning);
   }, [toast]);
 
+  // Handle redirect to login if not authenticated
+  const shouldRedirectToLogin =
+    !loading &&
+    !staff &&
+    !isNoLayout &&
+    !isTopNavOnly &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/unauthorized");
+
+  useEffect(() => {
+    if (shouldRedirectToLogin) {
+      router.push("/login");
+    }
+  }, [shouldRedirectToLogin, router]);
+
   if (loading) {
     return <PageLoading message="Loading workspace..." />;
   }
@@ -253,20 +268,6 @@ export default function LayoutProvider({ children }) {
       </div>
     );
   }
-
-  const shouldRedirectToLogin =
-    !loading &&
-    !staff &&
-    !finalIsNoLayout &&
-    !finalIsTopNavOnly &&
-    !pathname.startsWith("/login") &&
-    !pathname.startsWith("/unauthorized");
-
-  useEffect(() => {
-    if (shouldRedirectToLogin) {
-      router.push("/login");
-    }
-  }, [shouldRedirectToLogin, router]);
 
   // Default: redirect to login if not authenticated, otherwise show with sidebar
   if (!staff) {
