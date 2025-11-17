@@ -254,13 +254,22 @@ export default function LayoutProvider({ children }) {
     );
   }
 
-  // Default: redirect to login if not authenticated, otherwise show with sidebar
-  if (!staff) {
-    // Only redirect if we're not already on login/unauthorized pages to prevent loops
-    if (typeof window !== "undefined" && !pathname.startsWith("/login") && !pathname.startsWith("/unauthorized")) {
-      // Use router.push instead of window.location to avoid full page reload issues
+  const shouldRedirectToLogin =
+    !loading &&
+    !staff &&
+    !finalIsNoLayout &&
+    !finalIsTopNavOnly &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/unauthorized");
+
+  useEffect(() => {
+    if (shouldRedirectToLogin) {
       router.push("/login");
     }
+  }, [shouldRedirectToLogin, router]);
+
+  // Default: redirect to login if not authenticated, otherwise show with sidebar
+  if (!staff) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <PageLoading message="Checking authentication..." />
