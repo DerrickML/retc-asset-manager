@@ -37,11 +37,22 @@ import { assetRequestsService } from "../../lib/appwrite/provider.js";
 import { Query } from "appwrite";
 import { ENUMS } from "../../lib/appwrite/config.js";
 import { useOrgTheme } from "../providers/org-theme-provider";
+import { setCurrentOrgCode, resolveOrgCodeFromIdentifier, listSupportedOrgCodes } from "../../lib/utils/org";
+import { resolveOrgTheme } from "../../lib/constants/org-branding";
+import { useToastContext } from "../providers/toast-provider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 export default function Sidebar() {
   const [staff, setStaff] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  // Initialize with empty array, will be populated in useEffect
+  const [availableOrgs, setAvailableOrgs] = useState([]);
   const [viewMode, setViewMode] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("viewMode") || "user";
@@ -57,7 +68,8 @@ export default function Sidebar() {
     requests: false,
   });
   const pathname = usePathname();
-  const { theme } = useOrgTheme();
+  const { theme, orgCode, setOrgCode } = useOrgTheme();
+  const toast = useToastContext();
   const orgLogo =
     theme?.branding?.logoProxy ||
     theme?.branding?.logo ||
@@ -65,7 +77,6 @@ export default function Sidebar() {
   const orgName = theme?.name || "Asset Manager";
   const orgTagline = theme?.branding?.tagline || "Asset Management";
   const systemName = "Assets Manager";
-  const orgCode = theme?.code || "RETC";
   const isAdminView = viewMode === "admin";
 
   // Function to update view mode and persist it
@@ -123,6 +134,13 @@ export default function Sidebar() {
     }
   }, [isCollapsed]);
 
+  // Initialize available orgs on mount
+  useEffect(() => {
+    // Always show all supported organizations for switching
+    const allSupportedOrgs = listSupportedOrgCodes();
+    setAvailableOrgs(allSupportedOrgs);
+  }, []);
+
   const loadStaffData = async () => {
     try {
       const currentStaff = await getCurrentStaff();
@@ -130,6 +148,9 @@ export default function Sidebar() {
         setStaff(currentStaff);
         const adminStatus = permissions.isAdmin(currentStaff);
         setIsAdmin(adminStatus);
+
+        // Available orgs are already set in useEffect above
+        // No need to set them here again
 
         // Load pending request count for admins
         if (adminStatus) {
@@ -503,25 +524,86 @@ export default function Sidebar() {
           {/* User Info */}
           <div className="px-4 pb-6">
             {isCollapsed ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex justify-center">
-                      <Avatar className="w-10 h-10 ring-2 ring-gray-700">
-                        <AvatarFallback className="bg-gradient-to-br from-sidebar-500 to-sidebar-600 text-white font-semibold">
-                          {staff.name?.charAt(0)?.toUpperCase() || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <div>
-                      <p className="font-medium">{staff.name}</p>
-                      <p className="text-xs text-orange-400">{staff.email}</p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <>
+                {/* Organization Switcher for Collapsed Sidebar */}
+                {availableOrgs.length > 0 && (
+                  <div className="mb-3 flex justify-center">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-10 h-10 p-0 bg-white/5 border-white/20 hover:bg-white/10 text-white hover:text-white"
+                              >
+                                <Globe className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-56 bg-gray-800 border-gray-700">
+                              {availableOrgs.map((code) => {
+                                const orgTheme = resolveOrgTheme(code);
+                                const isActive = (orgCode || "RETC").toUpperCase() === code.toUpperCase();
+                                return (
+                                  <DropdownMenuItem
+                                    key={code}
+                                    onClick={() => {
+                                      setCurrentOrgCode(code);
+                                      setOrgCode(code);
+                                      toast.success(`Switched to ${orgTheme.name}`);
+                                      window.location.reload();
+                                    }}
+                                    className={`cursor-pointer !hover:bg-transparent !hover:text-gray-300 ${
+                                      isActive
+                                        ? "bg-gray-700 text-white"
+                                        : "text-gray-300"
+                                    }`}
+                                  >
+                                    <div className="flex items-center space-x-2 w-full">
+                                      <img
+                                        src={orgTheme.branding.logoProxy || orgTheme.branding.logo}
+                                        alt={orgTheme.name}
+                                        className="w-4 h-4 object-contain"
+                                      />
+                                      <span className="flex-1">{orgTheme.name}</span>
+                                      {isActive && (
+                                        <span className="text-xs text-green-400">●</span>
+                                      )}
+                                    </div>
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          <p>Switch Organization</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex justify-center">
+                        <Avatar className="w-10 h-10 ring-2 ring-gray-700">
+                          <AvatarFallback className="bg-gradient-to-br from-sidebar-500 to-sidebar-600 text-white font-semibold">
+                            {staff.name?.charAt(0)?.toUpperCase() || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <div>
+                        <p className="font-medium">{staff.name}</p>
+                        <p className="text-xs text-orange-400">{staff.email}</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
             ) : (
               <div className="bg-gray-800/30 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50">
                 <div className="flex items-center space-x-3 mb-4">
@@ -543,6 +625,66 @@ export default function Sidebar() {
                   </div>
                 </div>
 
+                {/* Organization Switcher - Always show if we have org data */}
+                {availableOrgs.length > 0 && (
+                  <div className="mb-3">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-between text-xs h-9 bg-white/5 border-white/20 hover:bg-white/10 text-white hover:text-white"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <Globe className="w-3 h-3" />
+                            <span className="truncate">
+                              {resolveOrgTheme(orgCode || "RETC").code}
+                            </span>
+                          </div>
+                          <ChevronDown className="w-3 h-3 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-56 bg-gray-800 border-gray-700">
+                        {availableOrgs.map((code) => {
+                          const orgTheme = resolveOrgTheme(code);
+                          const isActive = (orgCode || "RETC").toUpperCase() === code.toUpperCase();
+                          const primaryColor = orgTheme.colors?.primary || "#0E6370";
+                          const primaryDark = orgTheme.colors?.primaryDark || "#0A4E57";
+                          return (
+                            <DropdownMenuItem
+                              key={code}
+                              onClick={() => {
+                                setCurrentOrgCode(code);
+                                setOrgCode(code);
+                                toast.success(`Switched to ${orgTheme.name}`);
+                                // Reload page to apply new organization theme
+                                window.location.reload();
+                              }}
+                              className={`cursor-pointer hover:!bg-transparent hover:!text-gray-300 focus:!bg-transparent ${
+                                isActive
+                                  ? "bg-gray-700 text-white"
+                                  : "text-gray-300"
+                              }`}
+                            >
+                              <div className="flex items-center space-x-2 w-full">
+                                <img
+                                  src={orgTheme.branding.logoProxy || orgTheme.branding.logo}
+                                  alt={orgTheme.name}
+                                  className="w-4 h-4 object-contain"
+                                />
+                                <span className="flex-1">{orgTheme.name}</span>
+                                {isActive && (
+                                  <span className="text-xs text-green-400">●</span>
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
+
                 {/* Role Switch for Admins */}
                 {isAdmin && (
                   <div className="space-y-2">
@@ -550,12 +692,21 @@ export default function Sidebar() {
                       <Button
                         variant={viewMode === "user" ? "default" : "ghost"}
                         size="sm"
-                        className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-medium ${
+                        className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-semibold ${
                           viewMode === "user"
-                            ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
-                            : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                            ? "bg-gradient-to-r from-[var(--org-primary)] to-[var(--org-primary-dark)] text-white shadow-lg shadow-[var(--org-primary)]/50 scale-[1.02] border-2 border-[var(--org-primary-dark)] ring-2 ring-[var(--org-primary)]/30"
+                            : "!text-white border border-white/30 bg-white/5 hover:bg-white/10 hover:!text-white hover:border-white/50 hover:shadow-md"
                         }`}
                         onClick={() => switchViewMode("user")}
+                        style={
+                          viewMode === "user"
+                            ? {
+                                backgroundImage: `linear-gradient(to right, ${theme?.colors?.primary || "#0E6370"}, ${theme?.colors?.primaryDark || "#0A4E57"})`,
+                                boxShadow: `0 10px 15px -3px ${theme?.colors?.primary || "#0E6370"}50`,
+                                borderColor: theme?.colors?.primaryDark || "#0A4E57",
+                              }
+                            : undefined
+                        }
                       >
                         <Eye className="w-3 h-3 mr-1 !text-white" />
                         <span className="!text-white">User</span>
@@ -563,12 +714,21 @@ export default function Sidebar() {
                       <Button
                         variant={viewMode === "admin" ? "default" : "ghost"}
                         size="sm"
-                        className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-medium ${
+                        className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-semibold ${
                           viewMode === "admin"
-                            ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
-                            : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                            ? "bg-gradient-to-r from-[var(--org-accent)] to-[var(--org-accent-dark)] text-white shadow-lg shadow-[var(--org-accent)]/50 scale-[1.02] border-2 border-[var(--org-accent-dark)] ring-2 ring-[var(--org-accent)]/30"
+                            : "!text-white border border-white/30 bg-white/5 hover:bg-white/10 hover:!text-white hover:border-white/50 hover:shadow-md"
                         }`}
                         onClick={() => switchViewMode("admin")}
+                        style={
+                          viewMode === "admin"
+                            ? {
+                                backgroundImage: `linear-gradient(to right, ${theme?.colors?.accent || "#1F8B99"}, ${theme?.colors?.accentDark || "#1A7A87"})`,
+                                boxShadow: `0 10px 15px -3px ${theme?.colors?.accent || "#1F8B99"}50`,
+                                borderColor: theme?.colors?.accentDark || "#1A7A87",
+                              }
+                            : undefined
+                        }
                       >
                         <Shield className="w-3 h-3 mr-1 !text-white" />
                         <span className="!text-white">Admin</span>
@@ -757,28 +917,28 @@ export default function Sidebar() {
                     <Button
                       variant={viewMode === "user" ? "default" : "ghost"}
                       size="sm"
-                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium ${
+                      className={`flex-1 text-xs h-8 transition-all duration-200 font-semibold ${
                         viewMode === "user"
-                          ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
-                          : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                          ? "bg-gradient-to-r from-[var(--org-primary)] to-[var(--org-primary-dark)] text-white shadow-lg shadow-[var(--org-primary)]/50 scale-[1.02] border-2 border-[var(--org-primary-dark)] ring-2 ring-[var(--org-primary)]/30"
+                          : "!text-white/70 border border-white/30 bg-white/5 hover:bg-white/10 hover:!text-white hover:border-white/50 hover:shadow-md"
                       }`}
                       onClick={() => switchViewMode("user")}
                     >
-                      <Eye className="w-3 h-3 mr-1 !text-white" />
-                      <span className="!text-white">User</span>
+                      <Eye className={`w-3 h-3 mr-1 ${viewMode === "user" ? "!text-white" : "!text-white/70"}`} />
+                      <span className={viewMode === "user" ? "!text-white" : "!text-white/70"}>User</span>
                     </Button>
                     <Button
                       variant={viewMode === "admin" ? "default" : "ghost"}
                       size="sm"
-                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium ${
+                      className={`flex-1 text-xs h-8 transition-all duration-200 font-semibold ${
                         viewMode === "admin"
-                          ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
-                          : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
+                          ? "bg-gradient-to-r from-[var(--org-accent)] to-[var(--org-accent-dark)] text-white shadow-lg shadow-[var(--org-accent)]/50 scale-[1.02] border-2 border-[var(--org-accent-dark)] ring-2 ring-[var(--org-accent)]/30"
+                          : "!text-white/70 border border-white/30 bg-white/5 hover:bg-white/10 hover:!text-white hover:border-white/50 hover:shadow-md"
                       }`}
                       onClick={() => switchViewMode("admin")}
                     >
-                      <Shield className="w-3 h-3 mr-1 !text-white" />
-                      <span className="!text-white">Admin</span>
+                      <Shield className={`w-3 h-3 mr-1 ${viewMode === "admin" ? "!text-white" : "!text-white/70"}`} />
+                      <span className={viewMode === "admin" ? "!text-white" : "!text-white/70"}>Admin</span>
                     </Button>
                   </div>
                 </div>

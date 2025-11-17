@@ -20,6 +20,7 @@ export default function LayoutProvider({ children }) {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [maxLoadingReached, setMaxLoadingReached] = useState(false);
   const { theme, orgCode } = useOrgTheme();
   const colors = theme?.colors || {};
   const primaryColor = colors.primary || "#0E6370";
@@ -46,7 +47,12 @@ export default function LayoutProvider({ children }) {
     try {
       setError(null);
 
+      // Wait briefly after page load to allow Appwrite session to be recognized
+      // This is especially important right after login redirect
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Load staff data with timeout and proper error handling
+      // Use a longer timeout to give Appwrite more time
       const staffPromise = getCurrentStaff().catch((err) => {
         console.warn("Failed to load staff:", err);
         return null;
@@ -78,34 +84,58 @@ export default function LayoutProvider({ children }) {
       setStaff(currentStaff);
       setSettings(systemSettings);
 
-      // If user is authenticated but no staff record exists, handle gracefully
+      // If staff is null, it could mean:
+      // 1. User is not authenticated (will be handled by redirect below)
+      // 2. Staff lookup failed/timed out (temporary - don't redirect to unauthorized)
+      // 3. User has no staff record (only redirect if we're CERTAIN user is authenticated)
+      
+      // Only redirect to unauthorized if we're CERTAIN the user is authenticated but has no staff record
+      // Don't redirect if staff lookup just failed or timed out
       if (currentStaff === null) {
-        // Check if user is actually authenticated
+        // Wait a bit longer and try to verify user authentication
+        // This prevents false positives right after login
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        
         try {
           const { getCurrentUser } = await import("../../lib/utils/auth.js");
           const user = await getCurrentUser();
-          if (user && typeof window !== "undefined") {
-            // User is authenticated but no staff record - redirect to error page
-            // Only redirect if not already on unauthorized page to prevent loops
-            if (!pathname.startsWith("/unauthorized")) {
-              try {
-                // Clear any cached auth data
-                localStorage.removeItem("auth_staff");
-                localStorage.removeItem("auth_user");
-                // Redirect to a page that explains the issue
-                window.location.href = "/unauthorized?reason=no_staff_record";
-                return;
-              } catch (redirectError) {
-                console.error("Redirect error:", redirectError);
-                // Fallback: try router.push
-                router.push("/unauthorized?reason=no_staff_record");
-                return;
+          
+          // Only redirect if:
+          // 1. User is definitely authenticated
+          // 2. We're not on the unauthorized page already
+          // 3. We're not on login/setup pages
+          if (user && user.$id && 
+              !pathname.startsWith("/unauthorized") &&
+              !pathname.startsWith("/login") &&
+              !pathname.startsWith("/setup")) {
+            
+            // Try to get staff one more time with a longer wait
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              const retryStaff = await getCurrentStaff();
+              if (retryStaff) {
+                setStaff(retryStaff);
+                return; // Staff found, continue normally
               }
+            } catch (retryError) {
+              // Staff lookup still failed
+            }
+            
+            // If we get here, user is authenticated but truly has no staff record
+            // Only then redirect to unauthorized
+            try {
+              localStorage.removeItem("auth_staff");
+              localStorage.removeItem("auth_user");
+              window.location.href = "/unauthorized?reason=no_staff_record";
+              return;
+            } catch (redirectError) {
+              router.push("/unauthorized?reason=no_staff_record");
+              return;
             }
           }
         } catch (userError) {
           // User not authenticated - will be handled by redirect below
-          console.warn("Could not verify user authentication:", userError);
+          // Don't redirect to unauthorized
         }
       }
     } catch (error) {
@@ -119,13 +149,13 @@ export default function LayoutProvider({ children }) {
   useEffect(() => {
     loadAppData();
 
-    // Set a timeout to stop loading after 10 seconds
+    // Set a timeout to stop loading after 5 seconds - don't wait forever
     const timeout = setTimeout(() => {
       if (loading) {
-        // Timeout reached - stop loading
+        setMaxLoadingReached(true);
         setLoading(false);
       }
-    }, 10000);
+    }, 5000);
 
     return () => clearTimeout(timeout);
   }, [loadAppData, loading]);
@@ -141,7 +171,64 @@ export default function LayoutProvider({ children }) {
       window.removeEventListener("session-warning", handleSessionWarning);
   }, [toast]);
 
-  if (loading) {
+  // Define routes that don't need any layout
+  const noLayoutRoutes = ["/login", "/setup", "/select-org"];
+
+  // Define routes that only need top navigation (like guest portal)
+  const topNavOnlyRoutes = ["/guest"];
+
+  // Define routes that need full sidebar layout (authenticated users)
+  const sidebarRoutes = [
+    "/dashboard",
+    "/admin",
+    "/assets",
+    "/consumables",
+    "/requests",
+  ];
+
+  // Re-check route types now that we have data loaded
+  const finalIsNoLayout = noLayoutRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+  const finalIsTopNavOnly = topNavOnlyRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+  const isSidebarRoute = sidebarRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+
+  // Only redirect to login if:
+  // 1. Not loading (we've finished trying to load)
+  // 2. No staff (user is not authenticated)
+  // 3. Not on a public route
+  // 4. We've given enough time for session to be recognized (at least 2 seconds)
+  const [minWaitElapsed, setMinWaitElapsed] = useState(false);
+  
+  useEffect(() => {
+    // Give at least 2 seconds for session to be recognized after redirect
+    const timer = setTimeout(() => {
+      setMinWaitElapsed(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const shouldRedirectToLogin =
+    !loading &&
+    minWaitElapsed &&
+    !staff &&
+    !finalIsNoLayout &&
+    !finalIsTopNavOnly &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/unauthorized");
+
+  useEffect(() => {
+    if (shouldRedirectToLogin) {
+      router.push("/login");
+    }
+  }, [shouldRedirectToLogin, router]);
+
+  // Don't show loading forever - if it takes too long, show the page anyway
+  if (loading && !maxLoadingReached) {
     return <PageLoading message="Loading workspace..." />;
   }
 
@@ -192,32 +279,6 @@ export default function LayoutProvider({ children }) {
     );
   }
 
-  // Define routes that don't need any layout
-  const noLayoutRoutes = ["/login", "/setup", "/select-org"];
-
-  // Define routes that only need top navigation (like guest portal)
-  const topNavOnlyRoutes = ["/guest"];
-
-  // Define routes that need full sidebar layout (authenticated users)
-  const sidebarRoutes = [
-    "/dashboard",
-    "/admin",
-    "/assets",
-    "/consumables",
-    "/requests",
-  ];
-
-  // Re-check route types now that we have data loaded
-  const finalIsNoLayout = noLayoutRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const finalIsTopNavOnly = topNavOnlyRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const isSidebarRoute = sidebarRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
   // No layout for login/setup pages
   if (finalIsNoLayout) {
     return (
@@ -254,27 +315,19 @@ export default function LayoutProvider({ children }) {
     );
   }
 
-  const shouldRedirectToLogin =
-    !loading &&
-    !staff &&
-    !finalIsNoLayout &&
-    !finalIsTopNavOnly &&
-    !pathname.startsWith("/login") &&
-    !pathname.startsWith("/unauthorized");
-
-  useEffect(() => {
-    if (shouldRedirectToLogin) {
-      router.push("/login");
-    }
-  }, [shouldRedirectToLogin, router]);
-
   // Default: redirect to login if not authenticated, otherwise show with sidebar
-  if (!staff) {
+  // Only show loading if we're still actually loading, not if we're just unauthenticated
+  if (!staff && loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <PageLoading message="Checking authentication..." />
       </div>
     );
+  }
+
+  // If not loading and no staff, redirect will be handled by useEffect above
+  if (!staff && !loading) {
+    return null; // useEffect will handle redirect
   }
 
   // Fallback layout

@@ -48,6 +48,8 @@ export async function middleware(request) {
 
   // Get session cookie (Appwrite session) - check multiple possible cookie names
   // Modern Appwrite uses pattern: a_session_<PROJECT_ID>
+  // Note: Appwrite stores sessions in localStorage, not cookies, so middleware can't detect them
+  // We'll be lenient and allow access - client-side LayoutProvider will handle auth checks
   const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID;
   const modernSessionCookie = request.cookies.get(`a_session_${projectId}`);
   const legacySessionCookie = request.cookies.get(
@@ -67,6 +69,9 @@ export async function middleware(request) {
     consoleSession ||
     standardSession;
 
+  // Since Appwrite uses localStorage, we can't reliably detect sessions in middleware
+  // Allow all routes through - LayoutProvider will handle authentication client-side
+  // Only block if we have a clear session cookie (for server-side detection)
   const isAuthenticated = !!session;
   const isPublicRoute = PUBLIC_ROUTES.some((route) =>
     pathname.startsWith(route)
@@ -101,15 +106,17 @@ export async function middleware(request) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Redirect unauthenticated users from protected routes to login
-  if (!isAuthenticated && isProtectedRoute) {
-    const loginUrl = new URL("/login", request.url);
-    // Store the intended URL as a callback parameter
-    if (pathname !== "/login") {
-      loginUrl.searchParams.set("callback", pathname + request.nextUrl.search);
-    }
-    return NextResponse.redirect(loginUrl);
-  }
+  // Don't redirect unauthenticated users in middleware
+  // Appwrite sessions are in localStorage, so middleware can't detect them
+  // Let LayoutProvider handle authentication checks client-side
+  // This prevents false redirects right after login
+  // if (!isAuthenticated && isProtectedRoute) {
+  //   const loginUrl = new URL("/login", request.url);
+  //   if (pathname !== "/login") {
+  //     loginUrl.searchParams.set("callback", pathname + request.nextUrl.search);
+  //   }
+  //   return NextResponse.redirect(loginUrl);
+  // }
 
   if (
     isAuthenticated &&

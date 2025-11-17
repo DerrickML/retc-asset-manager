@@ -104,70 +104,27 @@ export default function LoginPage() {
     }
 
     try {
+      // Check if Appwrite configuration is available
+      if (!process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || !process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID) {
+        setError("Server configuration error. Please contact your administrator.");
+        setLoading(false);
+        return;
+      }
+
       await login(email, password, callbackUrl);
       
+      // If we get here, login succeeded (session was created)
       // Reset login attempts on successful login
       resetLoginAttempts(email);
 
-      // Wait for session to be properly established and cookies to be set
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Verify session is established before redirecting (with retries for timing issues)
-      let sessionUser = await verifySession();
-      let retryCount = 0;
-      const maxRetries = 3;
-
-      // Retry session verification if it fails (to handle timing issues)
-      while (!sessionUser && retryCount < maxRetries) {
-        retryCount++;
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        sessionUser = await verifySession();
+      // Redirect IMMEDIATELY - use replace to avoid back button issues
+      // Don't wait for anything, just redirect NOW
+      if (typeof window !== "undefined") {
+        window.location.replace(callbackUrl);
       }
-
-      if (sessionUser) {
-        let staffRecord = null;
-        try {
-          staffRecord = await getCurrentStaff();
-        } catch (staffError) {
-          // Continue even if staff fetch fails
-        }
-
-        const rawOrgCodes = Array.isArray(staffRecord?.orgCodes)
-          ? staffRecord.orgCodes
-          : [staffRecord?.orgCode, staffRecord?.orgId, staffRecord?.orgMemberships]
-              .flat()
-              .filter(Boolean);
-
-        const availableOrgCodes = rawOrgCodes
-          .map((code) => resolveOrgCodeFromIdentifier(code))
-          .filter(Boolean);
-
-        const fallbackOrgCode = DEFAULT_ORG_CODE;
-        const uniqueOrgCodes = Array.from(
-          new Set(
-            availableOrgCodes.length
-              ? availableOrgCodes
-              : [resolveOrgCodeFromIdentifier(selectedOrg) || fallbackOrgCode]
-          )
-        );
-
-        if (uniqueOrgCodes.length === 1) {
-          const chosenOrg = uniqueOrgCodes[0];
-          setCurrentOrgCode(chosenOrg);
-          setOrgCode(chosenOrg);
-          setSelectedOrg(chosenOrg);
-          await new Promise((resolve) => setTimeout(resolve, 150));
-          router.push(callbackUrl);
-        } else {
-          const selectUrl = new URL("/select-org", window.location.origin);
-          selectUrl.searchParams.set("callback", callbackUrl);
-          router.push(selectUrl.pathname + selectUrl.search);
-        }
-      } else {
-        throw new Error(
-          "Session verification failed - please try logging in again"
-        );
-      }
+      
+      // This should never execute, but just in case
+      return;
     } catch (err) {
       // Record failed attempt
       recordFailedAttempt(email);
@@ -176,8 +133,8 @@ export default function LoginPage() {
       const blockCheck = checkLoginBlocked(email);
       const remainingAttempts = getRemainingAttempts(email);
       
-      // Build error message
-      let errorMessage = err.message || "Login failed. Please check your credentials.";
+      // Build error message - use the error message from login function which is user-friendly
+      let errorMessage = err.message || "Login failed. Please check your credentials and try again.";
       
       if (blockCheck.isBlocked) {
         errorMessage = blockCheck.message;
