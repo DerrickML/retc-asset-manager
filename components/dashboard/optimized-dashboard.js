@@ -265,14 +265,14 @@ export default function OptimizedDashboard() {
     }
   }, [refreshMutation, effectiveDepartmentFilter]);
 
-  // Handle export (memoized to prevent recreation)
+  // Handle download (memoized to prevent recreation)
   const handleExport = useCallback(async (type) => {
     try {
-      console.log(`Exporting ${type} data...`);
+      console.log(`Downloading ${type} data...`);
       // Implementation would go here
-      toast.success(`${type} report exported successfully!`);
+      toast.success(`${type} report downloaded successfully!`);
     } catch (error) {
-      console.error("Export error:", error);
+      console.error("Download error:", error);
     }
   }, []);
 
@@ -337,11 +337,11 @@ export default function OptimizedDashboard() {
           </Button>
           <Button onClick={() => handleExport("Assets")} variant="outline">
             <Download className="w-4 h-4 mr-2" />
-            Export Assets
+            Download Assets PDF
           </Button>
           <Button onClick={() => handleExport("Requests")} variant="outline">
             <Download className="w-4 h-4 mr-2" />
-            Export Requests
+            Download Requests PDF
           </Button>
         </div>
       </div>

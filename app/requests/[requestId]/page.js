@@ -35,6 +35,7 @@ import {
   Clock,
   User,
   FileText,
+  Download,
   Package,
   CheckCircle,
   XCircle,
@@ -60,12 +61,21 @@ import {
 } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { useOrgTheme } from "../../../components/providers/org-theme-provider";
+import { useToastContext } from "../../../components/providers/toast-provider";
 import { Query } from "appwrite";
-import { formatCategory, hexToRgba, getConsumableStatus, extractDenialReason } from "../../../lib/utils/mappings.js";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import {
+  formatCategory,
+  hexToRgba,
+  getConsumableStatus,
+  extractDenialReason,
+} from "../../../lib/utils/mappings.js";
 
 export default function RequestDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToastContext();
   const [request, setRequest] = useState(null);
   const [assets, setAssets] = useState([]);
   const [requester, setRequester] = useState(null);
@@ -74,6 +84,7 @@ export default function RequestDetailsPage() {
   const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
 
   // Dialog states
@@ -82,7 +93,7 @@ export default function RequestDetailsPage() {
   const [resubmitDialogOpen, setResubmitDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [resubmitReason, setResubmitReason] = useState("");
-  const { theme } = useOrgTheme();
+  const { theme, orgCode } = useOrgTheme();
   const primaryColor = theme?.colors?.primary || "#0E6370";
   const primaryDark = theme?.colors?.primaryDark || "#0A4E57";
   const accentColor = theme?.colors?.accent || primaryColor;
@@ -373,6 +384,145 @@ export default function RequestDetailsPage() {
     request?.status === ENUMS.REQUEST_STATUS.DENIED &&
     viewMode === "user";
 
+  const hexToRgb = (hex) => {
+    if (!hex) return [14, 99, 112];
+    let sanitized = hex.replace("#", "");
+    if (sanitized.length === 3) {
+      sanitized = sanitized
+        .split("")
+        .map((c) => c + c)
+        .join("");
+    }
+    const intVal = parseInt(sanitized, 16);
+    return [
+      (intVal >> 16) & 255,
+      (intVal >> 8) & 255,
+      intVal & 255,
+    ];
+  };
+
+  const handleDownloadRequest = async () => {
+    if (!request) return;
+    try {
+      setDownloading(true);
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const colors = theme?.colors || {};
+      const primaryHex = colors.primary || "#0E6370";
+      const accentHex = colors.accent || "#1F8B99";
+      const primaryRgb = hexToRgb(primaryHex);
+
+      doc.setFontSize(18);
+      doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+      doc.text(
+        `${theme?.name || orgCode || "Asset Workspace"} Request Summary`,
+        40,
+        50
+      );
+
+      doc.setFontSize(10);
+      doc.setTextColor(17, 24, 39);
+
+      const infoLines = [
+        `Request ID: ${request.$id}`,
+        `Status: ${request.status.replace(/_/g, " ")}`,
+        `Submitted: ${
+          request.$createdAt ? formatDateTime(request.$createdAt) : "—"
+        }`,
+        `Requester: ${requester?.name || request.requesterName || "—"}`,
+        `Department: ${requester?.department || "Not specified"}`,
+        `Issue Date: ${
+          request.issueDate ? formatDate(request.issueDate) : "—"
+        }`,
+        `Expected Return: ${
+          request.expectedReturnDate
+            ? formatDate(request.expectedReturnDate)
+            : "—"
+        }`,
+      ];
+
+      infoLines.forEach((line, index) =>
+        doc.text(line, 40, 75 + index * 14)
+      );
+
+      let currentY = 75 + infoLines.length * 14 + 20;
+
+      if (request.purpose) {
+        doc.setFontSize(11);
+        doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+        doc.text("Purpose", 40, currentY);
+        doc.setFontSize(10);
+        doc.setTextColor(17, 24, 39);
+        const wrappedPurpose = doc.splitTextToSize(request.purpose, 500);
+        doc.text(wrappedPurpose, 40, currentY + 14);
+        currentY += wrappedPurpose.length * 12 + 24;
+      }
+
+      const assetsForExport =
+        assets && assets.length > 0
+          ? assets
+          : request?.requestedItems || [];
+
+      if (assetsForExport.length > 0) {
+        autoTable(doc, {
+          startY: currentY,
+          head: [
+            ["#", "Item", "Category", "Type", "Qty", "Status"],
+          ],
+          body: assetsForExport.map((item, index) => [
+            index + 1,
+            item.name || item.assetName || item.itemName || "—",
+            formatCategory(
+              item.category ||
+                item.itemCategory ||
+                item.categoryLabel ||
+                "Unknown"
+            ),
+            (item.itemType || "ASSET").toString().replace(/_/g, " "),
+            item.quantity ||
+              item.requestedQuantity ||
+              item.requestedAmount ||
+              1,
+            (item.availableStatus || item.status || request.status || "Pending")
+              .toString()
+              .replace(/_/g, " "),
+          ]),
+          styles: { fontSize: 9, cellPadding: 4 },
+          headStyles: { fillColor: primaryRgb, textColor: 255 },
+          margin: { left: 40, right: 40 },
+        });
+        currentY = doc.lastAutoTable.finalY + 20;
+      }
+
+      if (timeline.length > 0) {
+        autoTable(doc, {
+          startY: currentY,
+          head: [["#", "Event", "Description", "When"]],
+          body: timeline.map((item, index) => [
+            index + 1,
+            item.title || "Event",
+            item.description || item.notes || "—",
+            item.timestamp ? formatDateTime(item.timestamp) : "—",
+          ]),
+          styles: { fontSize: 9, cellPadding: 4 },
+          headStyles: { fillColor: hexToRgb(accentHex), textColor: 255 },
+          margin: { left: 40, right: 40 },
+        });
+      }
+
+      doc.save(
+        `request_${request.$id}_${new Date()
+          .toISOString()
+          .split("T")[0]}.pdf`
+      );
+      toast?.success?.("Request PDF downloaded successfully.");
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast?.error?.("Unable to download request PDF.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="animate-pulse space-y-6 p-6">
@@ -459,7 +609,23 @@ export default function RequestDetailsPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {isRequester && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadRequest}
+                  disabled={downloading || !request}
+                  className="border-[var(--org-primary)] text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
+                >
+                  <Download
+                    className={`w-4 h-4 mr-2 ${
+                      downloading ? "animate-spin" : ""
+                    }`}
+                  />
+                  {downloading ? "Preparing PDF..." : "Download Request"}
+                </Button>
+              )}
               {canEditRequest && (
                 <Button
                   asChild
