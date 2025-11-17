@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -14,6 +14,16 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { login, verifySession, getCurrentStaff } from "../../lib/utils/auth.js";
+import { useOrgTheme } from "../../components/providers/org-theme-provider";
+import { setCurrentOrgCode, listSupportedOrgCodes, resolveOrgCodeFromIdentifier } from "../../lib/utils/org";
+import { DEFAULT_ORG_CODE, resolveOrgTheme } from "../../lib/constants/org-branding";
+import { 
+  checkLoginBlocked, 
+  recordFailedAttempt, 
+  resetLoginAttempts,
+  getRemainingAttempts,
+  MAX_ATTEMPTS
+} from "../../lib/utils/login-attempts.js";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,6 +34,32 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { theme, setOrgCode, orgCode } = useOrgTheme();
+  const [selectedOrg, setSelectedOrg] = useState(() => orgCode?.toUpperCase() || DEFAULT_ORG_CODE);
+  const activeTheme = useMemo(() => resolveOrgTheme(selectedOrg || DEFAULT_ORG_CODE), [selectedOrg]);
+  const orgOptions = useMemo(
+    () => listSupportedOrgCodes().map((code) => resolveOrgTheme(code)),
+    []
+  );
+  const branding = activeTheme?.branding ?? {};
+  const orgLogo =
+    branding.logoProxy ||
+    branding.logo ||
+    "https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin";
+  const orgName = activeTheme?.name || "Asset Management";
+  const orgTagline = branding.tagline || orgName;
+  const orgCodeDisplay = activeTheme?.code || DEFAULT_ORG_CODE;
+
+  // Get organization-specific contact email
+  const getContactEmail = useMemo(() => {
+    const org = selectedOrg?.toUpperCase() || DEFAULT_ORG_CODE;
+    if (org === "RETC") {
+      return "retc@nrep.ug";
+    } else if (org === "NREP") {
+      return "info@nrep.ug";
+    }
+    return "retc@nrep.ug"; // Default to RETC email
+  }, [selectedOrg]);
 
   useEffect(() => {
     const callback = searchParams.get("callback");
@@ -32,13 +68,46 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (!orgCode) {
+      const defaultCode = DEFAULT_ORG_CODE.toUpperCase();
+      setSelectedOrg(defaultCode);
+      setCurrentOrgCode(defaultCode);
+      setOrgCode(defaultCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const normalised = orgCode?.toUpperCase() || DEFAULT_ORG_CODE;
+    setSelectedOrg(normalised);
+  }, [orgCode]);
+
+  const handleOrgSelection = (code) => {
+    const normalised = code.toUpperCase();
+    setSelectedOrg(normalised);
+    setCurrentOrgCode(normalised);
+    setOrgCode(normalised);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
+    // Check if user is blocked due to too many failed attempts
+    const blockCheck = checkLoginBlocked(email);
+    if (blockCheck.isBlocked) {
+      setError(blockCheck.message);
+      setLoading(false);
+      return;
+    }
+
     try {
       await login(email, password, callbackUrl);
+      
+      // Reset login attempts on successful login
+      resetLoginAttempts(email);
 
       // Wait for session to be properly established and cookies to be set
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -56,50 +125,96 @@ export default function LoginPage() {
       }
 
       if (sessionUser) {
-        // Fetch complete staff details from database
+        let staffRecord = null;
         try {
-          await getCurrentStaff();
+          staffRecord = await getCurrentStaff();
         } catch (staffError) {
-          // Staff details fetch failed, but continue with login
+          // Continue even if staff fetch fails
         }
 
-        // Force a small delay before redirect to ensure middleware sees the session
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        router.push(callbackUrl);
+        const rawOrgCodes = Array.isArray(staffRecord?.orgCodes)
+          ? staffRecord.orgCodes
+          : [staffRecord?.orgCode, staffRecord?.orgId, staffRecord?.orgMemberships]
+              .flat()
+              .filter(Boolean);
+
+        const availableOrgCodes = rawOrgCodes
+          .map((code) => resolveOrgCodeFromIdentifier(code))
+          .filter(Boolean);
+
+        const fallbackOrgCode = DEFAULT_ORG_CODE;
+        const uniqueOrgCodes = Array.from(
+          new Set(
+            availableOrgCodes.length
+              ? availableOrgCodes
+              : [resolveOrgCodeFromIdentifier(selectedOrg) || fallbackOrgCode]
+          )
+        );
+
+        if (uniqueOrgCodes.length === 1) {
+          const chosenOrg = uniqueOrgCodes[0];
+          setCurrentOrgCode(chosenOrg);
+          setOrgCode(chosenOrg);
+          setSelectedOrg(chosenOrg);
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          router.push(callbackUrl);
+        } else {
+          const selectUrl = new URL("/select-org", window.location.origin);
+          selectUrl.searchParams.set("callback", callbackUrl);
+          router.push(selectUrl.pathname + selectUrl.search);
+        }
       } else {
         throw new Error(
           "Session verification failed - please try logging in again"
         );
       }
     } catch (err) {
-      setError(err.message || "Login failed. Please check your credentials.");
+      // Record failed attempt
+      recordFailedAttempt(email);
+      
+      // Check block status again after recording the attempt
+      const blockCheck = checkLoginBlocked(email);
+      const remainingAttempts = getRemainingAttempts(email);
+      
+      // Build error message
+      let errorMessage = err.message || "Login failed. Please check your credentials.";
+      
+      if (blockCheck.isBlocked) {
+        errorMessage = blockCheck.message;
+      } else if (blockCheck.isWarning) {
+        errorMessage = `${errorMessage} ${blockCheck.message}`;
+      } else if (remainingAttempts < MAX_ATTEMPTS) {
+        errorMessage = `${errorMessage} ${blockCheck.message || `(${remainingAttempts} attempt${remainingAttempts !== 1 ? 's' : ''} remaining)`}`;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-primary-50">
+    <div className="login-page__background min-h-screen relative overflow-hidden">
       {/* Advanced Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         {/* Primary gradient orbs */}
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-primary-400/30 to-primary-600/30 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 login-page__orb rounded-full blur-3xl animate-pulse"></div>
         <div
-          className="absolute top-1/2 -left-40 w-96 h-96 bg-gradient-to-br from-sidebar-400/25 to-sidebar-600/25 rounded-full blur-3xl animate-pulse"
+          className="absolute top-1/2 -left-40 w-96 h-96 login-page__orb--muted rounded-full blur-3xl animate-pulse"
           style={{ animationDelay: "2s" }}
         ></div>
         <div
-          className="absolute -bottom-40 right-1/3 w-64 h-64 bg-gradient-to-br from-primary-300/35 to-sidebar-300/35 rounded-full blur-2xl animate-pulse"
+          className="absolute -bottom-40 right-1/3 w-64 h-64 login-page__orb--accent rounded-full blur-2xl animate-pulse"
           style={{ animationDelay: "4s" }}
         ></div>
 
         {/* Additional floating elements for depth */}
         <div
-          className="absolute top-1/4 right-1/4 w-32 h-32 bg-gradient-to-br from-primary-200/20 to-sidebar-200/20 rounded-full blur-2xl animate-pulse"
+          className="absolute top-1/4 right-1/4 w-32 h-32 login-page__orb rounded-full blur-2xl animate-pulse"
           style={{ animationDelay: "1.5s" }}
         ></div>
         <div
-          className="absolute bottom-1/4 left-1/3 w-48 h-48 bg-gradient-to-br from-sidebar-300/15 to-primary-300/15 rounded-full blur-3xl animate-pulse"
+          className="absolute bottom-1/4 left-1/3 w-48 h-48 login-page__orb--muted rounded-full blur-3xl animate-pulse"
           style={{ animationDelay: "3.5s" }}
         ></div>
       </div>
@@ -107,19 +222,19 @@ export default function LoginPage() {
       {/* Floating Geometric Shapes */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute top-20 left-20 w-4 h-4 bg-primary-500/30 rounded-full animate-bounce"
+          className="absolute top-20 left-20 w-4 h-4 login-page__orb rounded-full animate-bounce"
           style={{ animationDelay: "1s" }}
         ></div>
         <div
-          className="absolute top-40 right-32 w-6 h-6 bg-sidebar-500/30 rounded-full animate-bounce"
+          className="absolute top-40 right-32 w-6 h-6 login-page__orb--accent rounded-full animate-bounce"
           style={{ animationDelay: "2.5s" }}
         ></div>
         <div
-          className="absolute bottom-32 left-1/4 w-3 h-3 bg-primary-400/40 rounded-full animate-bounce"
+          className="absolute bottom-32 left-1/4 w-3 h-3 login-page__orb rounded-full animate-bounce"
           style={{ animationDelay: "3.5s" }}
         ></div>
         <div
-          className="absolute top-1/3 right-1/4 w-5 h-5 bg-sidebar-400/30 rounded-full animate-bounce"
+          className="absolute top-1/3 right-1/4 w-5 h-5 login-page__orb--muted rounded-full animate-bounce"
           style={{ animationDelay: "4.5s" }}
         ></div>
       </div>
@@ -128,10 +243,16 @@ export default function LoginPage() {
         {/* Left Side - Modern Hero Section */}
         <div className="hidden lg:flex lg:w-1/2 relative">
           {/* Gradient Background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-600 via-primary-700 to-sidebar-700"></div>
+          <div className="absolute inset-0 login-page__hero-gradient"></div>
 
           {/* Mesh Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/20 via-transparent to-sidebar-500/20"></div>
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to bottom right, var(--org-hero-accent-a), transparent 40%, var(--org-hero-accent-b))",
+            }}
+          ></div>
 
           {/* Animated Grid Pattern */}
           <div className="absolute inset-0 opacity-10">
@@ -149,16 +270,11 @@ export default function LoginPage() {
           <div className="relative z-10 flex flex-col justify-center px-16 py-24 text-white">
             {/* Logo with Glow Effect */}
             <div className="mb-12">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center overflow-hidden shadow-2xl border border-white/30 hover:shadow-3xl hover:scale-105 transition-all duration-300">
-                  <img
-                    src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
-                    alt="RETC Logo"
-                    className="w-14 h-14 object-contain"
-                  />
-                </div>
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary-400/30 to-sidebar-400/30 blur-xl"></div>
-              </div>
+              <img
+                src={orgLogo}
+                alt={`${orgName} logo`}
+                className="w-40 h-40 object-contain drop-shadow-2xl rounded-full"
+              />
             </div>
 
             {/* Hero Text with Modern Typography */}
@@ -166,23 +282,33 @@ export default function LoginPage() {
               <div>
                 <h1 className="text-5xl lg:text-6xl font-bold leading-tight mb-4">
                   Welcome to
-                  <span className="block bg-gradient-to-r from-white via-primary-200 to-sidebar-200 bg-clip-text text-transparent">
-                    Asset Manager
+                  <span
+                    className="block bg-clip-text text-transparent"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(to right, rgba(255,255,255,0.95), rgba(255,255,255,0.7), var(--org-accent))",
+                    }}
+                  >
+                    {orgCodeDisplay} Assets Manager
                   </span>
                 </h1>
-                <p className="text-xl text-primary-100 leading-relaxed max-w-lg">
-                  Experience the future of asset management with our
-                  cutting-edge platform designed for the Renewable Energy
-                  Training Center.
+                <p className="text-xl text-white/80 leading-relaxed max-w-lg">
+                  Experience Asset management with {orgName}.
                 </p>
               </div>
 
               {/* Feature Cards */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-4 p-4 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/15 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sidebar-400 to-sidebar-500 flex items-center justify-center shadow-lg">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+                    style={{
+                      background:
+                        "linear-gradient(to bottom right, var(--org-primary), var(--org-primary-dark))",
+                    }}
+                  >
                     <svg
-                      className="w-6 h-6 text-white"
+                      className="w-7 h-7 text-white"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
@@ -194,19 +320,31 @@ export default function LoginPage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">
+                    <h3 
+                      className="text-xl md:text-2xl font-bold text-white mb-2"
+                      style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                    >
                       Secure & Reliable
                     </h3>
-                    <p className="text-primary-100 text-sm">
+                    <p 
+                      className="text-base md:text-lg text-white/90 font-normal leading-relaxed"
+                      style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                    >
                       Enterprise-grade security for your assets
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-4 p-4 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/15 transition-all duration-300">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-400 to-primary-500 flex items-center justify-center shadow-lg">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+                    style={{
+                      background:
+                        "linear-gradient(to bottom right, var(--org-primary), var(--org-primary-dark))",
+                    }}
+                  >
                     <svg
-                      className="w-6 h-6 text-white"
+                      className="w-7 h-7 text-white"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
@@ -218,10 +356,16 @@ export default function LoginPage() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">
+                    <h3 
+                      className="text-xl md:text-2xl font-bold text-white mb-2"
+                      style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                    >
                       Asset Management
                     </h3>
-                    <p className="text-primary-100 text-sm">
+                    <p 
+                      className="text-base md:text-lg text-white/90 font-normal leading-relaxed"
+                      style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                    >
                       Complete asset tracking and lifecycle management
                     </p>
                   </div>
@@ -236,32 +380,51 @@ export default function LoginPage() {
           <div className="w-full max-w-md space-y-8">
             {/* Mobile Logo */}
             <div className="flex flex-col items-center lg:hidden mb-8">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-600 to-sidebar-600 flex items-center justify-center overflow-hidden shadow-2xl border-4 border-white">
-                <img
-                  src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
-                  alt="RETC Logo"
-                  className="w-12 h-12 object-contain"
-                />
-              </div>
-              <h2 className="mt-4 text-3xl font-bold text-gray-900">
-                Asset Manager
+              <img
+                src={orgLogo}
+                alt={`${orgName} logo`}
+                className="w-32 h-32 object-contain drop-shadow-xl mb-4 rounded-full"
+              />
+              <h2 className="mt-4 text-3xl font-bold text-gray-900 text-center">
+                Welcome to {orgCodeDisplay} Assets Manager
               </h2>
-              <p className="text-gray-600">RETC Management System</p>
+              <p className="text-gray-600 text-center">
+                Choose your organisation and sign in to continue
+              </p>
             </div>
 
             {/* Ultra-Modern Login Card */}
             <div className="relative bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/30 overflow-hidden group hover:shadow-3xl transition-all duration-500">
               {/* Subtle inner glow */}
-              <div className="absolute inset-0 bg-gradient-to-br from-white/50 via-transparent to-primary-50/30 rounded-3xl"></div>
 
               {/* Animated border gradient */}
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-primary-500/20 via-sidebar-500/20 to-primary-500/20 p-[1px]">
+              <div
+                className="absolute inset-0 rounded-3xl"
+                style={{
+                  background:
+                    "linear-gradient(to bottom right, rgba(255, 255, 255, 0.5), transparent 45%, var(--org-muted))",
+                }}
+              ></div>
+
+              <div
+                className="absolute inset-0 rounded-3xl p-[1px]"
+                style={{
+                  background:
+                    "linear-gradient(to right, var(--org-hero-accent-a), var(--org-hero-accent-b), var(--org-hero-accent-a))",
+                }}
+              >
                 <div className="w-full h-full bg-white/90 backdrop-blur-2xl rounded-3xl"></div>
               </div>
 
               <div className="relative px-8 py-10 lg:px-10 lg:py-12">
                 <div className="mb-8 text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-sidebar-500 mb-4 shadow-lg">
+                  <div
+                    className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 shadow-lg"
+                    style={{
+                      background:
+                        "linear-gradient(to bottom right, var(--org-primary), var(--org-accent))",
+                    }}
+                  >
                     <svg
                       className="w-8 h-8 text-white"
                       fill="none"
@@ -276,7 +439,13 @@ export default function LoginPage() {
                       />
                     </svg>
                   </div>
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-primary-600 to-sidebar-600 bg-clip-text text-transparent mb-2">
+                  <h2
+                    className="text-3xl font-bold bg-clip-text text-transparent mb-2"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(to right, #111827, var(--org-primary), var(--org-accent))",
+                    }}
+                  >
                     Welcome back
                   </h2>
                   <p className="text-gray-600">
@@ -284,25 +453,84 @@ export default function LoginPage() {
                   </p>
                 </div>
 
+                <div className="mb-6 text-center space-y-2">
+                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                    Select organisation
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {orgOptions.map((option) => (
+                      <button
+                        key={option.code}
+                        type="button"
+                        onClick={() => handleOrgSelection(option.code)}
+                        className={`flex flex-col items-center justify-center rounded-2xl border-2 px-4 py-3 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--org-primary)] ${
+                          selectedOrg === option.code
+                            ? "border-[var(--org-primary)] bg-white shadow-lg"
+                            : "border-gray-200/70 bg-white/70 hover:bg-white"
+                        }`}
+                      >
+                        <img
+                          src={option.branding.logoProxy || option.branding.logo}
+                          alt={`${option.name} logo`}
+                          className="w-10 h-10 object-contain mb-2"
+                        />
+                        <span className="text-sm font-semibold text-gray-800">
+                          {option.code}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {option.branding.tagline}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {error && (
-                    <div className="rounded-2xl bg-red-50 border border-red-200 p-4">
-                      <div className="flex items-center">
+                    <div className={`rounded-2xl border p-4 ${
+                      error.includes("Warning") || error.includes("attempts remaining")
+                        ? "bg-amber-50 border-amber-200"
+                        : error.includes("locked") || error.includes("temporarily")
+                        ? "bg-red-50 border-red-200"
+                        : "bg-red-50 border-red-200"
+                    }`}>
+                      <div className="flex items-start">
                         <div className="flex-shrink-0">
-                          <svg
-                            className="h-5 w-5 text-red-400"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
+                          {error.includes("Warning") || error.includes("attempts remaining") ? (
+                            <svg
+                              className="h-6 w-6 text-amber-600"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          ) : (
+                            <svg
+                              className="h-6 w-6 text-red-600"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          )}
                         </div>
-                        <div className="ml-3">
-                          <p className="text-sm font-medium text-red-800">
+                        <div className="ml-3 flex-1">
+                          <p 
+                            className={`text-base font-semibold leading-relaxed ${
+                              error.includes("Warning") || error.includes("attempts remaining")
+                                ? "text-amber-800"
+                                : "text-red-800"
+                            }`}
+                            style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                          >
                             {error}
                           </p>
                         </div>
@@ -429,7 +657,8 @@ export default function LoginPage() {
                         id="remember-me"
                         name="remember-me"
                         type="checkbox"
-                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-2 border-gray-300 rounded transition-all duration-200"
+                        className="h-4 w-4 border-2 border-gray-300 rounded transition-all duration-200"
+                        style={{ accentColor: "var(--org-primary)" }}
                       />
                       <label
                         htmlFor="remember-me"
@@ -440,7 +669,7 @@ export default function LoginPage() {
                     </div>
                     <a
                       href="#"
-                      className="text-sm font-semibold text-primary-600 hover:text-primary-500 transition-colors duration-200"
+                      className="text-sm font-semibold link-org-primary"
                     >
                       Forgot password?
                     </a>
@@ -449,7 +678,11 @@ export default function LoginPage() {
                   {/* Ultra-Modern Login Button */}
                   <button
                     type="submit"
-                    className="group relative w-full flex justify-center py-4 px-6 border border-transparent rounded-2xl text-lg font-semibold text-white bg-gradient-to-r from-primary-600 via-primary-700 to-sidebar-600 hover:from-primary-700 hover:via-primary-800 hover:to-sidebar-700 focus:outline-none focus:ring-4 focus:ring-primary-500/30 transition-all duration-300 transform hover:scale-105 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl overflow-hidden"
+                    className="group relative w-full flex justify-center py-4 px-6 border border-transparent rounded-2xl text-lg font-semibold text-white focus:outline-none focus:ring-4 focus:ring-primary-500/30 transition-all duration-300 transform hover:scale-105 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl overflow-hidden"
+                    style={{
+                      background:
+                        "linear-gradient(to right, var(--org-primary), var(--org-primary-dark))",
+                    }}
                     disabled={loading}
                   >
                     {/* Animated background shimmer */}
@@ -488,62 +721,74 @@ export default function LoginPage() {
 
             {/* Enhanced Guest Portal Button */}
             <div className="text-center">
-              <Button
-                asChild
-                className="group relative w-full bg-gradient-to-r from-sidebar-600 via-sidebar-700 to-primary-600 hover:from-sidebar-700 hover:via-sidebar-800 hover:to-primary-700 text-white font-semibold py-4 px-6 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-0.5 overflow-hidden"
-              >
-                <a
-                  href="/guest"
-                  className="relative z-10 flex items-center justify-center space-x-3"
+              {selectedOrg === "RETC" && (
+                <Button
+                  asChild
+                  className="group relative w-full text-white font-semibold py-4 px-6 rounded-2xl shadow-lg transition-all duration-300 overflow-hidden bg-gradient-to-r from-sky-400/60 to-emerald-300/50 hover:from-sky-400/70 hover:to-emerald-300/60 hover:text-white hover:shadow-xl hover:scale-[1.02]"
                 >
-                  {/* Animated shimmer effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-
-                  <svg
-                    className="w-5 h-5 group-hover:scale-110 transition-transform duration-300"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                  <a
+                    href="/guest"
+                    className="relative z-10 flex items-center justify-center space-x-3"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                    />
-                  </svg>
-                  <span className="group-hover:tracking-wide transition-all duration-300">
-                    Browse the Guest Portal
-                  </span>
-                </a>
-              </Button>
+                    {/* Animated shimmer effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+
+                    <svg
+                      className="w-5 h-5 group-hover:scale-110 transition-transform duration-300"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </svg>
+                    <span className="group-hover:tracking-wide transition-all duration-300">
+                      Browse the Guest Portal
+                    </span>
+                  </a>
+                </Button>
+              )}
             </div>
 
             {/* Footer */}
-            <div className="text-center space-y-4">
-              <p className="text-sm text-gray-600">
+            <div className="text-center space-y-5 pt-4">
+              <p 
+                className="text-base md:text-lg text-gray-700 font-normal leading-relaxed"
+                style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+              >
                 Need access?{" "}
-                <span className="font-semibold text-primary-600">
+                <a
+                  href={`mailto:${getContactEmail}`}
+                  className="font-semibold text-[var(--org-primary)] hover:text-[var(--org-primary-dark)] underline underline-offset-2 hover:underline-offset-4 transition-all duration-200"
+                  style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+                >
                   Contact your system administrator
-                </span>
+                </a>
               </p>
-              <div className="flex items-center justify-center space-x-6 text-xs text-gray-500">
+              <div 
+                className="flex items-center justify-center space-x-4 text-sm md:text-base text-gray-600 font-medium"
+                style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}
+              >
                 <a
                   href="#"
-                  className="hover:text-gray-700 transition-colors duration-200"
+                  className="hover:text-[var(--org-primary)] hover:underline underline-offset-2 transition-all duration-200"
                 >
                   Privacy Policy
                 </a>
-                <span>•</span>
+                <span className="text-gray-400">•</span>
                 <a
                   href="#"
-                  className="hover:text-gray-700 transition-colors duration-200"
+                  className="hover:text-[var(--org-primary)] hover:underline underline-offset-2 transition-all duration-200"
                 >
                   Terms of Service
                 </a>

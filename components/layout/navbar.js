@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { getCurrentStaff, logout, permissions } from "../../lib/utils/auth.js";
 import { settingsService } from "../../lib/appwrite/provider.js";
+import { useOrgTheme } from "../providers/org-theme-provider";
 
 export function Navbar() {
   const [staff, setStaff] = useState(null);
@@ -33,6 +34,7 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { theme } = useOrgTheme();
 
   useEffect(() => {
     const loadData = async () => {
@@ -122,6 +124,17 @@ export function Navbar() {
       : []),
   ];
 
+  const orgLogo =
+    theme?.branding?.logoProxy ||
+    theme?.branding?.logo ||
+    settings?.branding?.logo ||
+    "https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a";
+  const systemName = "Assets Manager";
+  const orgDisplayName = theme?.name || settings.branding.orgName || "Asset Workspace";
+  const orgTagline =
+    theme?.branding?.tagline || settings.branding.tagline || "Unified asset workspace";
+  const orgCode = theme?.code || "RETC";
+
   return (
     <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-50 shadow-sm transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -129,33 +142,31 @@ export function Navbar() {
           {/* Logo and Brand */}
           <div className="flex items-center space-x-4 animate-fade-in-up">
             <Link href="/assets" className="flex items-center space-x-3 group">
-              <div className="relative">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105"
-                  style={{
-                    background: `linear-gradient(135deg, ${settings.branding.brandColor}ee, ${settings.branding.brandColor})`,
-                  }}
-                >
+              <div className="flex items-center space-x-3 p-2 rounded-2xl shadow-lg transition-all duration-300 group-hover:shadow-xl"
+                style={{
+                  background: "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                }}
+              >
+                <div className="relative w-10 h-10 overflow-hidden rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
                   <img
-                    src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
-                    alt="RETC Logo"
-                    className="w-6 h-6 object-cover rounded-lg"
+                    src={orgLogo}
+                    alt={`${orgDisplayName} logo`}
+                    className="w-7 h-7 object-contain"
                     onError={(e) => {
                       e.target.style.display = "none";
-                      e.target.nextSibling.style.display = "block";
+                      e.target.nextSibling.style.display = "flex";
                     }}
                   />
-                  <span className="hidden">RETC</span>
+                  <div className="hidden text-sm font-semibold text-white">{orgDisplayName}</div>
                 </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
-              </div>
-              <div>
-                <h1 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
-                  Asset Management
-                </h1>
-                <p className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors duration-200">
-                  {settings.branding.orgName}
-                </p>
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold uppercase tracking-[0.4em] text-white/70">
+                    {orgCode}
+                  </span>
+                  <span className="text-lg font-bold text-white leading-tight">
+                    {systemName}
+                  </span>
+                </div>
               </div>
             </Link>
           </div>

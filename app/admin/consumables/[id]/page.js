@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useParams } from "next/navigation";
 import {
@@ -30,7 +30,6 @@ import {
 } from "../../../../lib/utils/mappings.js";
 import { ConsumableOverview } from "../../../../components/assets/consumable-overview";
 import { ConsumableActivity } from "../../../../components/assets/consumable-activity";
-// import { ConsumableDistribution } from "../../../../components/assets/consumable-distribution";
 import {
   ArrowLeft,
   Edit,
@@ -45,11 +44,10 @@ import {
   Layers,
   TrendingUp,
   TrendingDown,
-  Minus,
   BarChart3,
-  Image as ImageIcon,
 } from "lucide-react";
 import { formatCategory } from "../../../../lib/utils/mappings.js";
+import { useOrgTheme } from "../../../../components/providers/org-theme-provider";
 
 export default function ConsumableDetailPage() {
   const router = useRouter();
@@ -58,6 +56,11 @@ export default function ConsumableDetailPage() {
   const [currentStaff, setCurrentStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { orgCode } = useOrgTheme();
+  const isNrepOrg = useMemo(
+    () => (orgCode || "").toUpperCase() === "NREP",
+    [orgCode]
+  );
 
   useEffect(() => {
     loadData();
@@ -160,35 +163,69 @@ export default function ConsumableDetailPage() {
   const stockPercentage =
     maxStock > 0 ? Math.round((currentStock / maxStock) * 100) : 0;
 
+  const surfaceClass = isNrepOrg
+    ? "bg-white shadow-lg border border-[var(--org-primary)]/10"
+    : "bg-white shadow-lg border border-gray-100";
+  const accentButtonClass = isNrepOrg
+    ? "bg-[var(--org-primary)] hover:bg-[var(--org-primary-dark)] text-white"
+    : "bg-orange-500 hover:bg-orange-600 text-white";
+  const mutedButtonClass = isNrepOrg
+    ? "bg-[var(--org-muted)] text-[var(--org-primary)] hover:bg-[var(--org-muted)]/80"
+    : "bg-orange-100 text-orange-700 hover:bg-orange-200";
+  const headingAccentClass = isNrepOrg
+    ? "bg-gradient-to-r from-slate-900 via-[var(--org-primary)] to-[var(--org-accent)]"
+    : "bg-gradient-to-r from-slate-900 via-orange-600 to-amber-600";
+  const metricCardBorder = isNrepOrg
+    ? "border border-[var(--org-primary)]/15"
+    : "border-2 border-blue-200";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+    <div className="min-h-screen bg-[var(--org-background)]">
       <div className="container mx-auto px-4 py-8 space-y-8">
         {/* Enhanced Header */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
+        <div className={`${surfaceClass} rounded-2xl backdrop-blur-sm p-6`}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6 gap-4 sm:gap-6">
               <Button
                 variant="ghost"
                 onClick={() => router.push("/admin/consumables")}
-                className="bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-200"
+                className={`${mutedButtonClass} border-none`}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Consumables
               </Button>
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <Package className="w-8 h-8 text-white" />
+              <div className="flex items-center gap-4 sm:gap-4">
+                <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center shadow-lg ${
+                  isNrepOrg
+                    ? "bg-gradient-to-br from-[var(--org-primary)] to-[var(--org-accent)]"
+                    : "bg-gradient-to-br from-orange-500 to-amber-500"
+                }`}>
+                  <Package className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-orange-600 to-amber-600 bg-clip-text text-transparent">
+                  <h1
+                    className={`text-2xl sm:text-3xl font-bold bg-clip-text text-transparent ${headingAccentClass}`}
+                  >
                     {consumable.name}
                   </h1>
-                  <div className="flex items-center space-x-3 mt-1">
-                    <Badge className="bg-orange-100 text-orange-800 border-orange-200">
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <Badge
+                      className={`border-0 ${
+                        isNrepOrg
+                          ? "bg-[var(--org-muted)] text-[var(--org-primary)]"
+                          : "bg-orange-100 text-orange-800"
+                      }`}
+                    >
                       <Tag className="w-3 h-3 mr-1" />
                       {consumable.assetTag}
                     </Badge>
-                    <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                    <Badge
+                      className={`border-0 ${
+                        isNrepOrg
+                          ? "bg-[var(--org-primary)]/10 text-[var(--org-primary)]"
+                          : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
                       <Layers className="w-3 h-3 mr-1" />
                       {formatCategory(getConsumableCategory(consumable))}
                     </Badge>
@@ -201,7 +238,7 @@ export default function ConsumableDetailPage() {
                 onClick={() =>
                   router.push(`/admin/consumables/${consumable.$id}/edit`)
                 }
-                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transition-all"
+                className={`${accentButtonClass} w-full sm:w-auto justify-center shadow-lg hover:shadow-xl transition-all`}
               >
                 <Edit className="w-4 h-4 mr-2" />
                 Edit Consumable
@@ -211,9 +248,9 @@ export default function ConsumableDetailPage() {
         </div>
 
         {/* Stock Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Current Stock Card */}
-          <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-lg hover:shadow-xl transition-shadow">
+          <Card className={`${surfaceClass} ${metricCardBorder}`}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-blue-600 flex items-center">
                 <BarChart3 className="w-4 h-4 mr-2" />
@@ -246,7 +283,7 @@ export default function ConsumableDetailPage() {
           </Card>
 
           {/* Minimum Stock Card */}
-          <Card className="border-2 border-yellow-200 bg-gradient-to-br from-yellow-50 to-white shadow-lg hover:shadow-xl transition-shadow">
+          <Card className={`${surfaceClass} ${metricCardBorder}`}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-yellow-600 flex items-center">
                 <TrendingDown className="w-4 h-4 mr-2" />
@@ -272,7 +309,7 @@ export default function ConsumableDetailPage() {
           </Card>
 
           {/* Maximum Stock Card */}
-          <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-white shadow-lg hover:shadow-xl transition-shadow">
+          <Card className={`${surfaceClass} ${metricCardBorder}`}>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-green-600 flex items-center">
                 <TrendingUp className="w-4 h-4 mr-2" />
@@ -292,15 +329,7 @@ export default function ConsumableDetailPage() {
           </Card>
 
           {/* Status Card */}
-          <Card
-            className={`border-2 ${
-              status === "IN_STOCK"
-                ? "border-green-300 bg-gradient-to-br from-green-100 to-white"
-                : status === "LOW_STOCK"
-                ? "border-yellow-300 bg-gradient-to-br from-yellow-100 to-white"
-                : "border-red-300 bg-gradient-to-br from-red-100 to-white"
-            } shadow-lg hover:shadow-xl transition-shadow`}
-          >
+          <Card className={`${surfaceClass} ${metricCardBorder}`}>
             <CardHeader className="pb-3">
               <CardTitle
                 className={`text-sm font-medium flex items-center ${
@@ -338,24 +367,36 @@ export default function ConsumableDetailPage() {
 
         {/* Main Content */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-white shadow-md rounded-xl p-1">
+          <TabsList className={`grid w-full grid-cols-3 ${surfaceClass} rounded-xl p-1`}>
             <TabsTrigger
               value="overview"
-              className="flex items-center data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-lg"
+              className={`flex items-center rounded-lg data-[state=active]:text-white ${
+                isNrepOrg
+                  ? "data-[state=active]:bg-[var(--org-primary)]"
+                  : "data-[state=active]:bg-orange-500"
+              }`}
             >
               <Package className="w-4 h-4 mr-2" />
               Overview
             </TabsTrigger>
             <TabsTrigger
               value="activity"
-              className="flex items-center data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-lg"
+              className={`flex items-center rounded-lg data-[state=active]:text-white ${
+                isNrepOrg
+                  ? "data-[state=active]:bg-[var(--org-primary)]"
+                  : "data-[state=active]:bg-orange-500"
+              }`}
             >
               <Activity className="w-4 h-4 mr-2" />
               Activity Log
             </TabsTrigger>
             <TabsTrigger
               value="distribution"
-              className="flex items-center data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-lg"
+              className={`flex items-center rounded-lg data-[state=active]:text-white ${
+                isNrepOrg
+                  ? "data-[state=active]:bg-[var(--org-primary)]"
+                  : "data-[state=active]:bg-orange-500"
+              }`}
             >
               <Truck className="w-4 h-4 mr-2" />
               Distribution
@@ -379,9 +420,15 @@ export default function ConsumableDetailPage() {
           </TabsContent>
 
           <TabsContent value="distribution" className="space-y-6 mt-6">
-            <Card className="border-orange-200">
-              <CardHeader className="bg-orange-50 border-b border-orange-100">
-                <CardTitle className="text-orange-800 flex items-center">
+            <Card className={surfaceClass}>
+              <CardHeader className="border-b border-gray-100">
+                <CardTitle
+                  className={`flex items-center ${
+                    isNrepOrg
+                      ? "text-[var(--org-primary)]"
+                      : "text-orange-800"
+                  }`}
+                >
                   <Truck className="w-5 h-5 mr-2" />
                   Distribution History
                 </CardTitle>

@@ -10,7 +10,6 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { Badge } from "../../components/ui/badge";
 import { Progress } from "../../components/ui/progress";
 import {
   Package,
@@ -111,18 +110,82 @@ export default function DashboardPage() {
         (asset) => asset.availableStatus === ENUMS.AVAILABLE_STATUS.AVAILABLE
       ).length;
       const myRequestsCount = myRequests.length;
-      const pendingRequests = myRequests.filter(
-        (request) => request.status === ENUMS.REQUEST_STATUS.PENDING
-      ).length;
-      const approvedRequests = myRequests.filter(
-        (request) => request.status === ENUMS.REQUEST_STATUS.APPROVED
-      ).length;
-      const rejectedRequests = myRequests.filter(
-        (request) => request.status === ENUMS.REQUEST_STATUS.REJECTED
-      ).length;
-      const fulfilledRequests = myRequests.filter(
-        (request) => request.status === ENUMS.REQUEST_STATUS.FULFILLED
-      ).length;
+
+      const statusCounts = myRequests.reduce(
+        (acc, request) => {
+          const rawStatus = (request.status || "").toString();
+          const normalized = rawStatus.trim().toUpperCase();
+
+          const trackUnknown = () => acc._unknown.add(normalized || "(empty)");
+
+          if (
+            normalized === ENUMS.REQUEST_STATUS.PENDING ||
+            normalized.startsWith("PEND") ||
+            normalized.includes("AWAIT")
+          ) {
+            acc.pending += 1;
+          } else if (
+            normalized === ENUMS.REQUEST_STATUS.APPROVED ||
+            normalized.startsWith("APPROV") ||
+            normalized.includes("READY")
+          ) {
+            acc.approved += 1;
+          } else if (
+            normalized === ENUMS.REQUEST_STATUS.FULFILLED ||
+            normalized.startsWith("FULFILL") ||
+            normalized.startsWith("ISSUED") ||
+            normalized.includes("ISSUE") ||
+            normalized.startsWith("COMPLETE") ||
+            normalized.includes("RETURNED")
+          ) {
+            acc.fulfilled += 1;
+            // Fulfilled requests were approved earlier; reflect that in the summary
+            acc.approved += 1;
+          } else if (
+            normalized === ENUMS.REQUEST_STATUS.DENIED ||
+            normalized.startsWith("DENIED") ||
+            normalized.startsWith("REJECT") ||
+            normalized.includes("DECLINE")
+          ) {
+            acc.rejected += 1;
+          } else if (
+            normalized === ENUMS.REQUEST_STATUS.CANCELLED ||
+            normalized.startsWith("CANCEL")
+          ) {
+            acc.cancelled += 1;
+          } else {
+            trackUnknown();
+          }
+
+          return acc;
+        },
+        {
+          pending: 0,
+          approved: 0,
+          fulfilled: 0,
+          rejected: 0,
+          cancelled: 0,
+          _unknown: new Set(),
+        }
+      );
+
+      const rawStatusTallies = myRequests.reduce((acc, request) => {
+        const key = (request.status || "").toString();
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+
+      if (statusCounts._unknown.size > 0) {
+        console.warn(
+          "[Dashboard] Unmapped request statuses:",
+          Array.from(statusCounts._unknown),
+          "All status tallies:",
+          rawStatusTallies
+        );
+      } else {
+        console.debug("[Dashboard] Request status tallies:", rawStatusTallies);
+      }
+
       const totalConsumables = consumablesOnly.length;
 
       // Calculate consumable stock status
@@ -175,10 +238,10 @@ export default function DashboardPage() {
         totalAssets,
         availableAssets,
         myRequests: myRequestsCount,
-        pendingRequests,
-        approvedRequests,
-        rejectedRequests,
-        fulfilledRequests,
+        pendingRequests: statusCounts.pending,
+        approvedRequests: statusCounts.approved,
+        rejectedRequests: statusCounts.rejected,
+        fulfilledRequests: statusCounts.fulfilled,
         totalConsumables,
         inStockConsumables,
         lowStockConsumables,
@@ -210,16 +273,38 @@ export default function DashboardPage() {
   const getStatusBadgeColor = (status) => {
     switch (status) {
       case ENUMS.REQUEST_STATUS.PENDING:
-        return "bg-orange-100 text-orange-700";
+        return "highlight";
       case ENUMS.REQUEST_STATUS.APPROVED:
-        return "bg-green-100 text-green-700";
+        return "primary";
       case ENUMS.REQUEST_STATUS.REJECTED:
-        return "bg-red-100 text-red-700";
+        return "danger";
       case ENUMS.REQUEST_STATUS.FULFILLED:
-        return "bg-blue-100 text-blue-700";
+        return "accent";
       default:
-        return "bg-slate-100 text-slate-700";
+        return "neutral";
     }
+  };
+
+  const Pill = ({ tone = "primary", className = "", children }) => {
+    const toneClasses = {
+      primary: "bg-org-primary-soft text-org-primary",
+      accent: "bg-org-accent-soft text-org-accent",
+      highlight: "bg-org-highlight-soft text-org-highlight",
+      neutral: "badge-neutral",
+      success: "bg-emerald-100 text-emerald-700",
+      danger: "bg-red-100 text-red-700",
+      info: "bg-sky-100 text-sky-700",
+    };
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border border-transparent ${
+          toneClasses[tone] || toneClasses.primary
+        } ${className}`.trim()}
+      >
+        {children}
+      </span>
+    );
   };
 
   const getStatusIcon = (status) => {
@@ -241,7 +326,7 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-[var(--org-primary)] rounded-full animate-spin"></div>
         </div>
         <p className="mt-4 text-slate-600 font-medium">Loading Dashboard...</p>
       </div>
@@ -282,7 +367,7 @@ export default function DashboardPage() {
             <div className="space-y-1">
               {staff && (
                 <h1 className="text-3xl font-bold text-slate-900">
-                  {getTimeBasedGreeting()}, <span className="text-blue-600">{staff.name}</span>!
+                  {getTimeBasedGreeting()}, <span className="text-org-primary">{staff.name}</span>!
                 </h1>
               )}
               <p className="text-slate-600">
@@ -303,7 +388,7 @@ export default function DashboardPage() {
                 onClick={loadDashboardData}
                 variant="outline"
                 disabled={refreshing}
-                className="h-10 px-4 border-slate-300 hover:bg-slate-50"
+                className="h-10 px-4 border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
               >
                 <RefreshCw
                   className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
@@ -320,10 +405,10 @@ export default function DashboardPage() {
           <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <CheckCircle2 className="h-6 w-6 text-green-600" />
+                <div className="p-3 rounded-lg bg-org-primary-soft text-org-primary">
+                  <CheckCircle2 className="h-6 w-6" />
                 </div>
-                <Badge className="bg-green-100 text-green-700">Available</Badge>
+                <Pill tone="primary">Available</Pill>
               </div>
               <div className="space-y-2">
                 <h3 className="text-3xl font-bold text-slate-900">
@@ -343,10 +428,10 @@ export default function DashboardPage() {
           <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <FileText className="h-6 w-6 text-blue-600" />
+                <div className="p-3 rounded-lg bg-org-accent-soft text-org-accent">
+                  <FileText className="h-6 w-6" />
                 </div>
-                <Badge className="bg-blue-100 text-blue-700">Requests</Badge>
+                <Pill tone="accent">Requests</Pill>
               </div>
               <div className="space-y-2">
                 <h3 className="text-3xl font-bold text-slate-900">
@@ -371,10 +456,10 @@ export default function DashboardPage() {
           <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-orange-100 rounded-lg">
-                  <Clock className="h-6 w-6 text-orange-600" />
+                <div className="p-3 rounded-lg bg-org-highlight-soft text-org-highlight">
+                  <Clock className="h-6 w-6" />
                 </div>
-                <Badge className="bg-orange-100 text-orange-700">Pending</Badge>
+                <Pill tone="highlight">Pending</Pill>
               </div>
               <div className="space-y-2">
                 <h3 className="text-3xl font-bold text-slate-900">
@@ -394,10 +479,10 @@ export default function DashboardPage() {
           <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <ShoppingCart className="h-6 w-6 text-purple-600" />
+                <div className="p-3 rounded-lg bg-org-accent-soft text-org-accent">
+                  <ShoppingCart className="h-6 w-6" />
                 </div>
-                <Badge className="bg-purple-100 text-purple-700">Stock</Badge>
+                <Pill tone="accent">Stock</Pill>
               </div>
               <div className="space-y-2">
                 <h3 className="text-3xl font-bold text-slate-900">
@@ -426,90 +511,53 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">
-                      Pending
-                    </span>
-                    <span className="text-lg font-bold text-orange-700">
-                      {dashboardData.pendingRequests}
-                    </span>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    label: "Pending",
+                    value: dashboardData.pendingRequests,
+                    color: "text-orange-700",
+                    bar: "bg-orange-500",
+                  },
+                  {
+                    label: "Approved",
+                    value: dashboardData.approvedRequests,
+                    color: "text-green-700",
+                    bar: "bg-green-500",
+                  },
+                  {
+                    label: "Fulfilled",
+                    value: dashboardData.fulfilledRequests,
+                    color: "text-blue-700",
+                    bar: "bg-blue-500",
+                  },
+                  {
+                    label: "Rejected",
+                    value: dashboardData.rejectedRequests,
+                    color: "text-red-700",
+                    bar: "bg-red-500",
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="space-y-2 text-center sm:text-left">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                      <span className={`text-2xl font-bold ${item.color}`}>
+                        {item.value}
+                      </span>
+                      <span className="text-sm font-medium text-slate-700 uppercase tracking-wide">
+                        {item.label}
+                      </span>
+                    </div>
+                    <Progress
+                      value={
+                        dashboardData.myRequests > 0
+                          ? (item.value / dashboardData.myRequests) * 100
+                          : 0
+                      }
+                      className="h-2"
+                      indicatorClassName={item.bar}
+                    />
                   </div>
-                  <Progress
-                    value={
-                      dashboardData.myRequests > 0
-                        ? (dashboardData.pendingRequests /
-                            dashboardData.myRequests) *
-                          100
-                        : 0
-                    }
-                    className="h-2"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">
-                      Approved
-                    </span>
-                    <span className="text-lg font-bold text-green-700">
-                      {dashboardData.approvedRequests}
-                    </span>
-                  </div>
-                  <Progress
-                    value={
-                      dashboardData.myRequests > 0
-                        ? (dashboardData.approvedRequests /
-                            dashboardData.myRequests) *
-                          100
-                        : 0
-                    }
-                    className="h-2"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">
-                      Fulfilled
-                    </span>
-                    <span className="text-lg font-bold text-blue-700">
-                      {dashboardData.fulfilledRequests}
-                    </span>
-                  </div>
-                  <Progress
-                    value={
-                      dashboardData.myRequests > 0
-                        ? (dashboardData.fulfilledRequests /
-                            dashboardData.myRequests) *
-                          100
-                        : 0
-                    }
-                    className="h-2"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">
-                      Rejected
-                    </span>
-                    <span className="text-lg font-bold text-red-700">
-                      {dashboardData.rejectedRequests}
-                    </span>
-                  </div>
-                  <Progress
-                    value={
-                      dashboardData.myRequests > 0
-                        ? (dashboardData.rejectedRequests /
-                            dashboardData.myRequests) *
-                          100
-                        : 0
-                    }
-                    className="h-2"
-                  />
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -521,7 +569,7 @@ export default function DashboardPage() {
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <div className="flex items-center space-x-2">
-                <Zap className="w-5 h-5 text-purple-600" />
+                <Zap className="w-5 h-5 text-org-primary" />
                 <CardTitle className="text-lg font-semibold text-slate-900">
                   Quick Actions
                 </CardTitle>
@@ -531,12 +579,12 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="mt-4 grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2 mx-auto">
                 <Button
                   asChild
-                  className="h-24 flex-col bg-blue-600 hover:bg-blue-700"
+                  className="w-full h-24 flex-col justify-center items-center rounded-2xl bg-org-gradient text-white shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5"
                 >
-                  <Link href="/requests/new">
+                  <Link href="/requests/new?type=asset">
                     <Send className="w-6 h-6 mb-2" />
                     <span>Request Asset</span>
                   </Link>
@@ -544,8 +592,18 @@ export default function DashboardPage() {
 
                 <Button
                   asChild
+                  className="w-full h-24 flex-col justify-center items-center rounded-2xl bg-white border border-[var(--org-primary)] text-[var(--org-primary)] shadow-sm hover:shadow-md transition-transform hover:-translate-y-0.5"
+                >
+                  <Link href="/requests/new?type=consumable">
+                    <ShoppingCart className="w-6 h-6 mb-2" />
+                    <span>Request Consumable</span>
+                  </Link>
+                </Button>
+
+                <Button
+                  asChild
                   variant="outline"
-                  className="h-24 flex-col border-slate-300 hover:bg-slate-50"
+                  className="w-full h-24 flex-col justify-center items-center rounded-2xl border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
                 >
                   <Link href="/assets">
                     <Search className="w-6 h-6 mb-2" />
@@ -556,7 +614,7 @@ export default function DashboardPage() {
                 <Button
                   asChild
                   variant="outline"
-                  className="h-24 flex-col border-slate-300 hover:bg-slate-50"
+                  className="w-full h-24 flex-col justify-center items-center rounded-2xl border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
                 >
                   <Link href="/consumables">
                     <ShoppingCart className="w-6 h-6 mb-2" />
@@ -567,7 +625,7 @@ export default function DashboardPage() {
                 <Button
                   asChild
                   variant="outline"
-                  className="h-24 flex-col border-slate-300 hover:bg-slate-50"
+                  className="w-full h-24 flex-col justify-center items-center rounded-2xl border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
                 >
                   <Link href="/requests">
                     <Eye className="w-6 h-6 mb-2" />
@@ -582,7 +640,7 @@ export default function DashboardPage() {
           <Card className="border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <div className="flex items-center space-x-2">
-                <Activity className="w-5 h-5 text-green-600" />
+                <Activity className="w-5 h-5 text-org-primary" />
                 <CardTitle className="text-lg font-semibold text-slate-900">
                   Recent Requests
                 </CardTitle>
@@ -608,14 +666,10 @@ export default function DashboardPage() {
                           item{request.itemCount !== 1 ? "s" : ""}
                         </p>
                       </div>
-                      <Badge
-                        className={`${getStatusBadgeColor(
-                          request.status
-                        )} flex items-center space-x-1`}
-                      >
+                      <Pill tone={getStatusBadgeColor(request.status)}>
                         {getStatusIcon(request.status)}
                         <span>{request.status}</span>
-                      </Badge>
+                      </Pill>
                     </div>
                   ))}
                 </div>
@@ -660,16 +714,14 @@ export default function DashboardPage() {
                     href={`/assets/${asset.$id}`}
                     className="block"
                   >
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all group">
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 hover:border-[var(--org-primary)] hover:shadow-md transition-all group">
                       <div className="flex items-start justify-between mb-3">
-                        <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
-                          <Package className="w-5 h-5 text-blue-600" />
+                        <div className="p-2 rounded-lg bg-org-accent-soft text-org-accent group-hover:bg-org-primary-soft group-hover:text-org-primary transition-colors">
+                          <Package className="w-5 h-5" />
                         </div>
-                        <Badge className="bg-green-100 text-green-700">
-                          Available
-                        </Badge>
+                        <Pill tone="primary">Available</Pill>
                       </div>
-                      <h4 className="font-semibold text-slate-800 mb-1 truncate group-hover:text-blue-600 transition-colors">
+                      <h4 className="font-semibold text-slate-800 mb-1 truncate group-hover:text-org-primary transition-colors">
                         {asset.name}
                       </h4>
                       <p className="text-xs text-slate-500">

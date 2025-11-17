@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "../ui/button";
 import { settingsService } from "../../lib/appwrite/provider.js";
 import { getCurrentStaff, logout } from "../../lib/utils/auth.js";
@@ -14,11 +14,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { useOrgTheme } from "../providers/org-theme-provider";
 
 export function GuestNavbar() {
   const [settings, setSettings] = useState(null);
   const [staff, setStaff] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const { theme } = useOrgTheme();
   const router = useRouter();
 
   useEffect(() => {
@@ -36,6 +39,15 @@ export function GuestNavbar() {
     };
     loadData();
   }, []);
+
+  const orgLogo =
+    theme?.branding?.logoProxy ||
+    theme?.branding?.logo ||
+    settings?.branding?.logo ||
+    "https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a";
+  const brandName = theme?.name || settings?.branding?.orgName || "Asset Management";
+  const brandTagline =
+    theme?.branding?.tagline || settings?.branding?.orgName || "Unified asset workspace";
 
   const handleLogout = async () => {
     try {
@@ -95,8 +107,8 @@ export function GuestNavbar() {
                 <div className="absolute inset-0 bg-gradient-to-br from-primary-200/30 to-blue-200/30 rounded-2xl blur-sm group-hover:blur-md transition-all duration-500"></div>
                 <div className="relative bg-white/60 backdrop-blur-sm border border-white/20 rounded-2xl p-2 shadow-lg group-hover:shadow-xl transition-all duration-300">
                   <img
-                    src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
-                    alt="RETC Logo"
+                    src={orgLogo}
+                    alt={`${brandName} logo`}
                     className="w-12 h-12 object-cover rounded-xl group-hover:scale-110 transition-all duration-300"
                     onError={(e) => {
                       e.target.style.display = "none";
@@ -104,16 +116,16 @@ export function GuestNavbar() {
                     }}
                   />
                   <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg hidden group-hover:scale-110 transition-all duration-300">
-                    RETC
+                    {brandName?.split(" ")[0]?.[0] || "A"}
                   </div>
                 </div>
               </div>
               <div className="group-hover:translate-x-1 transition-transform duration-300">
                 <h1 className="font-bold text-xl bg-gradient-to-r from-gray-900 via-primary-700 to-blue-600 bg-clip-text text-transparent group-hover:from-primary-600 group-hover:to-blue-500 transition-all duration-300">
-                  Asset Management
+                  {brandName}
                 </h1>
                 <p className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors duration-300 font-medium">
-                  {settings.branding.orgName}
+                  {brandTagline}
                 </p>
               </div>
             </Link>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -40,7 +40,6 @@ import {
 } from "../../../components/ui/dialog";
 import { Label } from "../../../components/ui/label";
 import { Textarea } from "../../../components/ui/textarea";
-import { ImageUpload } from "../../../components/ui/image-upload";
 import {
   Plus,
   Search,
@@ -61,8 +60,11 @@ import {
   CheckCircle,
   Clock,
   ShoppingCart,
+  List,
+  Grid3X3,
+  RefreshCw,
 } from "lucide-react";
-import { assetsService } from "../../../lib/appwrite/provider.js";
+import { assetsService, projectsService } from "../../../lib/appwrite/provider.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
 import { useConfirmation } from "../../../components/ui/confirmation-dialog";
@@ -72,12 +74,32 @@ import {
   formatCategory,
   getStatusBadgeColor,
   getConditionBadgeColor,
+  getConsumableStatusEnum,
+  getConsumableCategory,
+  getConsumableUnit,
+  getCurrentStock,
+  getMinStock,
+  getMaxStock,
 } from "../../../lib/utils/mappings.js";
+import { useOrgTheme } from "../../../components/providers/org-theme-provider";
+import { getConsumableCategoriesForOrg } from "../../../lib/constants/consumable-categories.js";
+import { PageLoading } from "../../../components/ui/loading";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+function createDebounce(fn, wait = 300) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), wait);
+  };
+}
 
 export default function AdminConsumablesPage() {
   const router = useRouter();
   const toast = useToastContext();
   const { confirm } = useConfirmation();
+  const { theme, orgCode } = useOrgTheme();
   const [staff, setStaff] = useState(null);
   const [consumables, setConsumables] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,83 +116,132 @@ export default function AdminConsumablesPage() {
 
   // Manual ID assignment state
   const [manualIdAssignment, setManualIdAssignment] = useState(false);
+  const normalizedOrgCode = (orgCode || theme?.code || "").toUpperCase();
+  const isNrepOrg = normalizedOrgCode === "NREP";
+  const ADMIN_PLACEHOLDER_PROJECT_ID = "ADMIN";
+  const [viewMode, setViewMode] = useState("table");
+  const [scopeFilter, setScopeFilter] = useState(() =>
+    isNrepOrg ? ENUMS.CONSUMABLE_SCOPE.PROJECT : ENUMS.CONSUMABLE_SCOPE.ADMIN
+  );
 
-  // Helper functions to extract stock data - now using proper fields with fallback
-  const getCurrentStock = (consumable) => {
-    // Use new proper field first
-    if (consumable.currentStock !== undefined) {
-      return consumable.currentStock;
+  // Project filter state
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [projects, setProjects] = useState([]);
+  const allowedProjectIds = useMemo(() => {
+    if (!isNrepOrg) return [];
+    const ids = theme?.projects?.allowedIds;
+    return Array.isArray(ids)
+      ? ids
+          .map((id) => id?.toString().toLowerCase())
+          .filter((id) => typeof id === "string" && id.length > 0)
+      : [];
+  }, [isNrepOrg, theme?.projects?.allowedIds]);
+  const defaultProjectId = useMemo(() => {
+    if (!isNrepOrg) return null;
+    return theme?.projects?.defaultId || null;
+  }, [isNrepOrg, theme?.projects?.defaultId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedMode = window.localStorage.getItem("consumablesViewMode");
+    if (storedMode === "table" || storedMode === "grid") {
+      setViewMode(storedMode);
     }
-    // Fallback to old encoded format for backward compatibility
-    if (
-      consumable.serialNumber &&
-      consumable.serialNumber.startsWith("STOCK:")
-    ) {
-      return parseInt(consumable.serialNumber.replace("STOCK:", "")) || 0;
+  }, []);
+
+  useEffect(() => {
+    setScopeFilter(
+      isNrepOrg ? ENUMS.CONSUMABLE_SCOPE.PROJECT : ENUMS.CONSUMABLE_SCOPE.ADMIN
+    );
+  }, [isNrepOrg]);
+
+  const handleViewModeChange = (mode) => {
+    if (mode === "table" || mode === "grid") {
+      setViewMode(mode);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("consumablesViewMode", mode);
+      }
     }
-    return 0;
   };
 
-  const getMinStock = (consumable) => {
-    // Use new proper field first
-    if (consumable.minimumStock !== undefined) {
-      return consumable.minimumStock;
-    }
-    // Fallback to old encoded format
-    if (consumable.model && consumable.model.startsWith("MIN:")) {
-      return parseInt(consumable.model.replace("MIN:", "")) || 0;
-    }
-    return 0;
+  const handleFormScopeChange = (scope) => {
+    if (!isNrepOrg) return;
+    setNewConsumable((prev) => ({
+      ...prev,
+      consumableScope: scope,
+    }));
   };
 
-  const getMaxStock = (consumable) => {
-    // Use new proper field first (if added in future)
-    if (consumable.maximumStock !== undefined) {
-      return consumable.maximumStock;
-    }
-    // Fallback to old encoded format
-    if (consumable.manufacturer && consumable.manufacturer.startsWith("MAX:")) {
-      return parseInt(consumable.manufacturer.replace("MAX:", "")) || 0;
-    }
-    return 0;
+  const handleScopeFilterChange = (scope) => {
+    if (!isNrepOrg) return;
+    setScopeFilter(scope);
+    setFilterCategory("all");
+    setFilterStatus("all");
+    setProjectFilter(
+      scope === ENUMS.CONSUMABLE_SCOPE.PROJECT
+        ? defaultProjectId || "all"
+        : "all"
+    );
   };
 
+  const rowHoverClass = isNrepOrg
+    ? "hover:bg-[var(--org-primary)]/7"
+    : "hover:bg-gray-50/50";
+
+  const iconBackgroundClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-primary)]/16 via-[var(--org-highlight)]/12 to-[var(--org-primary-dark)]/10"
+    : "bg-gradient-to-br from-sidebar-100 to-sidebar-200";
+
+  const nameHoverClass = isNrepOrg
+    ? "group-hover:text-[var(--org-primary)]"
+    : "group-hover:text-sidebar-700";
+  const categoryBadgeClass = isNrepOrg
+    ? "bg-[var(--org-highlight)]/15 text-[var(--org-highlight)] border-[var(--org-highlight)]/25"
+    : "bg-sidebar-50 text-sidebar-700 border-sidebar-200";
+  const headerBadgeClass = isNrepOrg
+    ? "bg-[var(--org-primary)]/18 text-[var(--org-primary)] border-[var(--org-primary)]/25"
+    : "bg-primary-500/20 text-primary-600 border-primary-500/30";
+  const actionButtonClass = isNrepOrg
+    ? "bg-[var(--org-primary)]/12 text-[var(--org-primary)] border border-[var(--org-primary)]/30 hover:bg-[var(--org-primary)]/18 hover:text-white hover:shadow-lg"
+    : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-900";
+  const actionEditButtonClass = isNrepOrg
+    ? "bg-[var(--org-highlight)]/14 text-[var(--org-highlight)] border border-[var(--org-highlight)]/30 hover:bg-[var(--org-highlight)]/20 hover:text-white hover:shadow-lg"
+    : "bg-primary-50 text-primary-600 border border-primary-100 hover:bg-primary-100 hover:text-primary-800";
+  const locationIconClass = isNrepOrg
+    ? "text-[var(--org-primary)]/70"
+    : "text-slate-400";
+  const locationTextClass = isNrepOrg
+    ? "text-[var(--org-primary-dark)]"
+    : "text-slate-700";
+  const metricBadgeClass = isNrepOrg
+    ? "bg-[var(--org-highlight)]/15 text-[var(--org-highlight)] border-[var(--org-highlight)]/25"
+    : "bg-primary-500/20 text-primary-600 border-primary-500/30";
+
+  const badgeForStatus = (status) => {
+    switch (status) {
+      case ENUMS.CONSUMABLE_STATUS.IN_STOCK:
+        return isNrepOrg
+          ? "bg-[var(--org-primary)]/18 text-[var(--org-primary)] border-[var(--org-primary)]/25"
+          : "bg-green-100 text-green-700 border-green-200";
+      case ENUMS.CONSUMABLE_STATUS.LOW_STOCK:
+        return isNrepOrg
+          ? "bg-[var(--org-highlight)]/18 text-[var(--org-highlight)] border-[var(--org-highlight)]/25"
+          : "bg-yellow-100 text-yellow-700 border-yellow-200";
+      case ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK:
+        return "bg-red-100 text-red-700 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-700 border-gray-200";
+    }
+  };
+
+  // Stock functions are imported from mappings.js
+
+  // Use utility function for status - returns enum value
   const getStatus = (consumable) => {
-    // Calculate status based on current stock vs minimum
-    const current = getCurrentStock(consumable);
-    const min = getMinStock(consumable);
-
-    if (current === 0) return ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK;
-    if (current <= min && min > 0) return ENUMS.CONSUMABLE_STATUS.LOW_STOCK;
-    return ENUMS.CONSUMABLE_STATUS.IN_STOCK;
+    return getConsumableStatusEnum(consumable) || ENUMS.CONSUMABLE_STATUS.IN_STOCK;
   };
 
-  const getUnit = (consumable) => {
-    // Use new proper field first
-    if (consumable.unit) {
-      return consumable.unit;
-    }
-    // Fallback to old encoded format
-    if (consumable.subcategory && consumable.subcategory.includes("|")) {
-      return (
-        consumable.subcategory.split("|")[0] || ENUMS.CONSUMABLE_UNIT.PIECE
-      );
-    }
-    return ENUMS.CONSUMABLE_UNIT.PIECE;
-  };
-
-  const getConsumableCategory = (consumable) => {
-    // Use subcategory directly if it's a valid category
-    if (consumable.subcategory && !consumable.subcategory.includes("|")) {
-      return consumable.subcategory;
-    }
-    // Fallback to old encoded format
-    if (consumable.subcategory && consumable.subcategory.includes("|")) {
-      const parts = consumable.subcategory.split("|");
-      return parts[2] || ENUMS.CONSUMABLE_CATEGORY.FLIERS;
-    }
-    return ENUMS.CONSUMABLE_CATEGORY.FLIERS;
-  };
+  // Unit and category functions are imported from mappings.js
 
   // New consumable form state - matching Appwrite collection attributes
   const [newConsumable, setNewConsumable] = useState({
@@ -187,9 +258,57 @@ export default function AdminConsumablesPage() {
     roomOrArea: "",
     isPublic: false,
     publicSummary: "",
-    publicImages: [], // Initialize as array for image upload
-    itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
+    projectId: "",
+    consumableScope: isNrepOrg
+      ? ENUMS.CONSUMABLE_SCOPE.PROJECT
+      : ENUMS.CONSUMABLE_SCOPE.ADMIN,
   });
+
+  useEffect(() => {
+    if (!isNrepOrg) return;
+    const options = getConsumableCategoriesForOrg(
+      orgCode,
+      newConsumable.consumableScope
+    );
+    setNewConsumable((prev) => {
+      let nextCategory = prev.consumableCategory;
+      let nextProjectId = prev.projectId;
+
+      if (
+        Array.isArray(options) &&
+        options.length > 0 &&
+        !options.includes(prev.consumableCategory)
+      ) {
+        nextCategory = options[0];
+      }
+
+      if (prev.consumableScope === ENUMS.CONSUMABLE_SCOPE.PROJECT) {
+        nextProjectId =
+          prev.projectId || defaultProjectId || projects[0]?.$id || "";
+      } else {
+        nextProjectId = ADMIN_PLACEHOLDER_PROJECT_ID;
+      }
+
+      if (
+        nextCategory === prev.consumableCategory &&
+        nextProjectId === prev.projectId
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        consumableCategory: nextCategory,
+        projectId: nextProjectId,
+      };
+    });
+  }, [
+    isNrepOrg,
+    orgCode,
+    newConsumable.consumableScope,
+    defaultProjectId,
+    projects,
+  ]);
 
   useEffect(() => {
     checkPermissionsAndLoadData();
@@ -204,6 +323,7 @@ export default function AdminConsumablesPage() {
       }
       setStaff(currentStaff);
       await loadConsumables();
+      await loadProjects(); // Load projects here
     } catch (error) {
       // Silent fail for data loading
     } finally {
@@ -220,8 +340,45 @@ export default function AdminConsumablesPage() {
     }
   };
 
+  const loadProjects = useCallback(async () => {
+    if (!isNrepOrg) return;
+    try {
+      const result = await projectsService.list();
+      let docs = Array.isArray(result?.documents) ? result.documents : [];
+      docs = docs.map((project) => ({
+        ...project,
+        $id: project?.$id || project?.id || "",
+      }));
+      if (allowedProjectIds.length > 0) {
+        docs = docs.filter((project) =>
+          allowedProjectIds.includes((project.$id || "").toLowerCase())
+        );
+      }
+      setProjects(docs);
+      if (
+        defaultProjectId &&
+        docs.some((project) => project.$id === defaultProjectId)
+      ) {
+        setProjectFilter((prev) =>
+          prev === "all" ? defaultProjectId : prev
+        );
+      }
+    } catch (error) {
+      console.warn("Failed to load projects", error);
+      setProjects([]);
+    }
+  }, [allowedProjectIds, defaultProjectId, isNrepOrg]);
+
   const handleCreateConsumable = async () => {
     try {
+      const isProjectScope =
+        isNrepOrg &&
+        newConsumable.consumableScope === ENUMS.CONSUMABLE_SCOPE.PROJECT;
+      if (isProjectScope && !newConsumable.projectId) {
+        toast.error("Please select a project for this consumable.");
+        return;
+      }
+
       // Prepare consumable data matching Appwrite collection schema
       // Note: Consumables do not have images - they are internal inventory items
       const consumableData = {
@@ -238,6 +395,9 @@ export default function AdminConsumablesPage() {
         currentStock: newConsumable.currentStock || 0,
         minimumStock: newConsumable.minStock || 0,
         unit: newConsumable.unit,
+        
+        // Status - save the admin-selected status
+        status: newConsumable.status || ENUMS.CONSUMABLE_STATUS.IN_STOCK,
 
         // Legacy fields - keep empty for backward compatibility
         serialNumber: "", // No longer needed
@@ -251,15 +411,11 @@ export default function AdminConsumablesPage() {
         // Public information
         isPublic: newConsumable.isPublic || false,
         publicSummary: newConsumable.publicSummary || "",
-        publicImages: JSON.stringify(newConsumable.publicImages || []), // Store as JSON string
+        publicImages: JSON.stringify([]),
         publicLocationLabel: "", // Empty string for consumables
         publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW, // Default for consumables
         assetImage:
-          newConsumable.publicImages && newConsumable.publicImages.length > 0
-            ? `https://appwrite.nrep.ug/v1/storage/buckets/68a2fbbc002e7db3db22/files/${
-                newConsumable.publicImages[0]
-              }/view?project=${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || "6745fd58001e7fcbf850"}`
-            : "", // First image as primary
+          "https://via.placeholder.com/400x300.png?text=Consumable",
 
         // Required fields for ASSETS collection (already set above for stock data)
         departmentId: "", // Empty for consumables
@@ -274,7 +430,14 @@ export default function AdminConsumablesPage() {
         retirementDate: null, // Empty for consumables
         disposalDate: null, // Empty for consumables
         attachmentFileIds: [], // Empty array for consumables
-        assetImage: "https://via.placeholder.com/400?text=Consumable", // Placeholder for consumables (no images)
+        projectId: isNrepOrg
+          ? isProjectScope
+            ? newConsumable.projectId || defaultProjectId || projects[0]?.$id || ""
+            : ADMIN_PLACEHOLDER_PROJECT_ID
+          : null,
+        consumableScope: isProjectScope
+          ? ENUMS.CONSUMABLE_SCOPE.PROJECT
+          : ENUMS.CONSUMABLE_SCOPE.ADMIN,
       };
 
       const result = await assetsService.create(consumableData, staff.$id);
@@ -284,7 +447,12 @@ export default function AdminConsumablesPage() {
         assetTag: "",
         name: "",
         category: ENUMS.CATEGORY.CONSUMABLE,
-        consumableCategory: ENUMS.CONSUMABLE_CATEGORY.FLIERS,
+        consumableCategory: isNrepOrg
+          ? (getConsumableCategoriesForOrg(
+              orgCode,
+              newConsumable.consumableScope
+            )[0] || ENUMS.CONSUMABLE_CATEGORY.FLIERS)
+          : ENUMS.CONSUMABLE_CATEGORY.FLIERS,
         currentStock: 0,
         minStock: 0,
         maxStock: 0,
@@ -294,8 +462,14 @@ export default function AdminConsumablesPage() {
         roomOrArea: "",
         isPublic: false,
         publicSummary: "",
-        publicImages: [], // Reset images array
-        itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
+        projectId: isNrepOrg
+          ? newConsumable.consumableScope === ENUMS.CONSUMABLE_SCOPE.PROJECT
+            ? defaultProjectId || projects[0]?.$id || ""
+            : ADMIN_PLACEHOLDER_PROJECT_ID
+          : ADMIN_PLACEHOLDER_PROJECT_ID,
+        consumableScope: isNrepOrg
+          ? newConsumable.consumableScope
+          : ENUMS.CONSUMABLE_SCOPE.ADMIN,
       });
       setManualIdAssignment(false);
 
@@ -336,7 +510,7 @@ export default function AdminConsumablesPage() {
   };
 
   /**
-   * Export consumables data to JSON file with comprehensive metadata
+   * Download consumables data to a PDF file with comprehensive metadata
    */
   const exportConsumablesData = async (type = "Consumables") => {
     try {
@@ -353,54 +527,150 @@ export default function AdminConsumablesPage() {
         dataToExport = result.documents;
       }
 
-      // Prepare the export data with additional metadata
-      const exportData = {
-        metadata: {
-          exportType: type,
-          exportedAt: new Date().toISOString(),
-          totalConsumables: dataToExport.length,
-          exportedBy: staff?.name || "Unknown",
-          filters: {
-            searchTerm: searchTerm || null,
-            category: filterCategory !== "all" ? filterCategory : null,
-            status: filterStatus !== "all" ? filterStatus : null,
-          },
+      if (!dataToExport || dataToExport.length === 0) {
+        toast.warning("No consumables available for download.");
+        return;
+      }
+
+      const exportLabel =
+        type === "FilteredConsumables"
+          ? "Filtered Consumables"
+          : "All Consumables";
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      const now = new Date();
+      const filtersLine =
+        [
+          searchTerm ? `Search: ${searchTerm}` : null,
+          filterCategory !== "all"
+            ? `Category: ${formatCategory(filterCategory)}`
+            : null,
+          filterStatus !== "all"
+            ? `Status: ${formatCategory(filterStatus)}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" | ") || "No filters applied";
+
+      doc.setFontSize(16);
+      doc.text(`${exportLabel} Report`, 40, 40);
+      doc.setFontSize(10);
+      doc.text(
+        `Organization: ${theme?.name || orgCode || "N/A"}`,
+        40,
+        60
+      );
+      doc.text(`Generated by: ${staff?.name || "Unknown"}`, 40, 74);
+      doc.text(`Generated on: ${now.toLocaleString()}`, 40, 88);
+      doc.text(`Filters: ${filtersLine}`, 40, 102);
+
+      const tableRows = dataToExport.map((item, index) => [
+        index + 1,
+        item.itemCode || item.assetTag || item.$id,
+        item.name || item.assetName || "Unnamed Consumable",
+        formatCategory(getConsumableCategory(item) || "Unknown"),
+        getStatus(item).replace(/_/g, " "),
+        formatCategory(getConsumableUnit(item) || "pieces"),
+        `${getCurrentStock(item) ?? 0}/${getMinStock(item) ?? 0}`,
+        getMaxStock(item) ? `${getMaxStock(item)}` : "—",
+        item.projectName || item.projectId || "—",
+      ]);
+
+      autoTable(doc, {
+        startY: 120,
+        head: [
+          [
+            "#",
+            "Code",
+            "Name",
+            "Category",
+            "Status",
+            "Unit",
+            "Current/Min",
+            "Max Stock",
+            "Project",
+          ],
+        ],
+        body: tableRows,
+        styles: {
+          fontSize: 9,
+          cellPadding: 4,
+          lineColor: [230, 230, 230],
+          lineWidth: 0.3,
         },
-        consumables: dataToExport,
-      };
+        headStyles: {
+          fillColor: [14, 99, 112],
+          textColor: 255,
+        },
+        alternateRowStyles: {
+          fillColor: [249, 250, 251],
+        },
+        margin: { left: 40, right: 40 },
+        didDrawPage: (data) => {
+          const pageSize = doc.internal.pageSize;
+          doc.setFontSize(9);
+          doc.text(
+            `Page ${doc.internal.getNumberOfPages()}`,
+            pageSize.getWidth() - 80,
+            pageSize.getHeight() - 30
+          );
+        },
+      });
 
-      // Convert to JSON with proper formatting
-      const jsonData = JSON.stringify(exportData, null, 2);
-
-      // Create and download the file
-      const blob = new Blob([jsonData], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${type.toLowerCase()}_export_${
-        new Date().toISOString().split("T")[0]
-      }.json`;
-
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Clean up the URL object
-      URL.revokeObjectURL(url);
+      doc.save(
+        `${type === "FilteredConsumables" ? "filtered_consumables" : "consumables"}_${
+          now.toISOString().split("T")[0]
+        }.pdf`
+      );
+      toast.success("Consumables PDF downloaded successfully.");
     } catch (error) {
-      console.error("Export failed:", error);
-      toast.error("Export failed. Please try again.");
+      console.error("Download failed:", error);
+      toast.error("Download failed. Please try again.");
     } finally {
       setExporting(false);
     }
   };
 
   // Filter consumables based on search and filters
-  const filteredConsumables = consumables.filter((consumable) => {
+  const activeScopeFilter = isNrepOrg ? scopeFilter : ENUMS.CONSUMABLE_SCOPE.ADMIN;
+
+  const filterCategoryOptions = useMemo(() => {
+    if (!isNrepOrg) {
+      return Object.values(ENUMS.CONSUMABLE_CATEGORY);
+    }
+    return getConsumableCategoriesForOrg(orgCode, activeScopeFilter);
+  }, [activeScopeFilter, isNrepOrg, orgCode]);
+
+  const formCategoryOptions = useMemo(() => {
+    if (!isNrepOrg) {
+      return Object.values(ENUMS.CONSUMABLE_CATEGORY);
+    }
+    return getConsumableCategoriesForOrg(orgCode, newConsumable.consumableScope);
+  }, [isNrepOrg, orgCode, newConsumable.consumableScope]);
+
+  function resolveConsumableScope(item) {
+    if (item?.consumableScope) return item.consumableScope;
+    if (item?.projectId && item.projectId !== ADMIN_PLACEHOLDER_PROJECT_ID) {
+      return ENUMS.CONSUMABLE_SCOPE.PROJECT;
+    }
+    return ENUMS.CONSUMABLE_SCOPE.ADMIN;
+  }
+
+  useEffect(() => {
+    if (!isNrepOrg) return;
+    if (
+      filterCategory !== "all" &&
+      !filterCategoryOptions.includes(filterCategory)
+    ) {
+      setFilterCategory("all");
+    }
+  }, [filterCategory, filterCategoryOptions, isNrepOrg]);
+
+  const filteredConsumables = (consumables || []).filter((consumable) => {
     const matchesSearch =
       consumable.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      consumable.category?.toLowerCase().includes(searchTerm.toLowerCase());
+      getConsumableCategory(consumable)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
     const matchesCategory =
       filterCategory === "all" ||
@@ -408,15 +678,34 @@ export default function AdminConsumablesPage() {
     const matchesStatus =
       filterStatus === "all" || getStatus(consumable) === filterStatus;
 
-    return matchesSearch && matchesCategory && matchesStatus;
+    const itemScope = resolveConsumableScope(consumable);
+    const matchesScope = !isNrepOrg || itemScope === scopeFilter;
+
+    const itemProjectId = consumable.projectId; // Use consumable.projectId
+    const normalizedItemProjectId = itemProjectId
+      ? itemProjectId.toLowerCase()
+      : "";
+    const normalizedProjectFilter = projectFilter
+      ? projectFilter.toLowerCase()
+      : "";
+    const matchesProject =
+      !isNrepOrg ||
+      scopeFilter !== ENUMS.CONSUMABLE_SCOPE.PROJECT ||
+      projectFilter === "all" ||
+      itemProjectId === projectFilter ||
+      normalizedItemProjectId === normalizedProjectFilter;
+
+    return (
+      matchesSearch &&
+      matchesCategory &&
+      matchesStatus &&
+      matchesProject &&
+      matchesScope
+    );
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoading message="Loading consumables..." />;
   }
 
   return (
@@ -437,12 +726,12 @@ export default function AdminConsumablesPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              {/* Export All Consumables Button */}
+              {/* Download All Consumables Button */}
               <Button
                 onClick={() => exportConsumablesData("Consumables")}
                 disabled={exporting}
                 variant="outline"
-                title="Export all consumables from the database as JSON file"
+                title="Download all consumables from the database as PDF file"
                 className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center justify-center relative z-10">
@@ -452,14 +741,14 @@ export default function AdminConsumablesPage() {
                     }`}
                   />
                   <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                    {exporting ? "Exporting..." : "Export All"}
+                    {exporting ? "Generating PDF..." : "Download PDF"}
                   </span>
                 </div>
                 {/* Ripple effect */}
                 <div className="absolute inset-0 bg-gray-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </Button>
 
-              {/* Export Filtered Results Button - Only show if filters are applied */}
+              {/* Download Filtered Results Button - Only show if filters are applied */}
               {(searchTerm ||
                 filterCategory !== "all" ||
                 filterStatus !== "all") && (
@@ -467,7 +756,7 @@ export default function AdminConsumablesPage() {
                   onClick={() => exportConsumablesData("FilteredConsumables")}
                   disabled={exporting}
                   variant="outline"
-                  title="Export only the currently filtered/displayed consumables as JSON file"
+                  title="Download only the currently filtered/displayed consumables as PDF file"
                   className="relative bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:bg-blue-100 hover:border-blue-300 text-blue-700 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center relative z-10">
@@ -477,7 +766,7 @@ export default function AdminConsumablesPage() {
                       }`}
                     />
                     <span className="group-hover:translate-x-0.5 transition-transform duration-300">
-                      {exporting ? "Exporting..." : "Export Filtered"}
+                      {exporting ? "Generating PDF..." : "Download PDF (Filtered)"}
                     </span>
                   </div>
                   {/* Ripple effect */}
@@ -487,7 +776,7 @@ export default function AdminConsumablesPage() {
 
               <Button
                 onClick={() => router.push("/admin/consumables/new")}
-                className="relative bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+                className="relative bg-org-gradient text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
               >
                 <div className="flex items-center justify-center relative z-10">
                   <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 group-hover:scale-110 transition-all duration-300" />
@@ -647,13 +936,11 @@ export default function AdminConsumablesPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {Object.values(ENUMS.CONSUMABLE_CATEGORY).map(
-                                (category) => (
-                                  <SelectItem key={category} value={category}>
-                                    {formatCategory(category)}
-                                  </SelectItem>
-                                )
-                              )}
+                              {formCategoryOptions.map((category) => (
+                                <SelectItem key={category} value={category}>
+                                  {formatCategory(category)}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>
@@ -761,7 +1048,7 @@ export default function AdminConsumablesPage() {
                             htmlFor="status"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Status
+                            Availability Status *
                           </Label>
                           <Select
                             value={newConsumable.status}
@@ -771,9 +1058,10 @@ export default function AdminConsumablesPage() {
                                 status: value,
                               })
                             }
+                            required
                           >
                             <SelectTrigger className="h-11">
-                              <SelectValue />
+                              <SelectValue placeholder="Select availability status" />
                             </SelectTrigger>
                             <SelectContent>
                               {Object.values(ENUMS.CONSUMABLE_STATUS).map(
@@ -785,6 +1073,9 @@ export default function AdminConsumablesPage() {
                               )}
                             </SelectContent>
                           </Select>
+                          <p className="text-xs text-gray-500">
+                            This status will be visible to requesters when browsing consumables
+                          </p>
                         </div>
                         <div className="space-y-3">
                           <Label
@@ -886,31 +1177,6 @@ export default function AdminConsumablesPage() {
                     </div>
                   </div>
 
-                  {/* Consumable Images Section */}
-                  <div className="bg-gradient-to-br from-orange-50 to-white rounded-xl p-6 border border-orange-100">
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          Consumable Images
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Upload images for this consumable item (optional)
-                        </p>
-                      </div>
-                      <ImageUpload
-                        assetId={newConsumable.assetTag || `temp-${Date.now()}`}
-                        existingImages={newConsumable.publicImages || []}
-                        onImagesChange={(newImages) => {
-                          setNewConsumable({
-                            ...newConsumable,
-                            publicImages: newImages,
-                          });
-                        }}
-                        maxImages={10}
-                      />
-                    </div>
-                  </div>
-
                   <DialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
                     <div className="flex items-center justify-between w-full">
                       <p className="text-sm text-gray-500">
@@ -927,7 +1193,9 @@ export default function AdminConsumablesPage() {
                           disabled={
                             !newConsumable.name ||
                             !newConsumable.consumableCategory ||
-                            (manualIdAssignment && !newConsumable.assetTag)
+                            !newConsumable.status ||
+                            (manualIdAssignment && !newConsumable.assetTag) ||
+                            (isNrepOrg && !newConsumable.projectId)
                           }
                           className="px-6 bg-blue-600 hover:bg-blue-700"
                         >
@@ -1093,16 +1361,46 @@ export default function AdminConsumablesPage() {
 
           {/* Modern Filters */}
           <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
-                <Filter className="w-5 h-5 text-white" />
-              </div>
-              <h2 className="text-xl font-semibold text-slate-900">
-                Filters & Search
-              </h2>
+            <div className="flex items-center gap-3 mb-6">
+              <Filter className="w-5 h-5 text-primary-600" />
+              <h3 className="text-lg font-semibold text-gray-900">
+                Search & Filter
+              </h3>
+              {isNrepOrg && (
+                <div className="ml-auto flex items-center gap-2 bg-white/80 border border-gray-200/70 rounded-full px-1.5 py-1 shadow-sm">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      handleScopeFilterChange(ENUMS.CONSUMABLE_SCOPE.PROJECT)
+                    }
+                    className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
+                      scopeFilter === ENUMS.CONSUMABLE_SCOPE.PROJECT
+                        ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
+                        : "text-slate-600 hover:text-[var(--org-primary)]"
+                    }`}
+                  >
+                    Projects
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      handleScopeFilterChange(ENUMS.CONSUMABLE_SCOPE.ADMIN)
+                    }
+                    className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
+                      scopeFilter === ENUMS.CONSUMABLE_SCOPE.ADMIN
+                        ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
+                        : "text-slate-600 hover:text-[var(--org-primary)]"
+                    }`}
+                  >
+                    Administrative
+                  </Button>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-slate-700">
                   Search Consumables
@@ -1131,13 +1429,11 @@ export default function AdminConsumablesPage() {
                   </SelectTrigger>
                   <SelectContent className="z-30">
                     <SelectItem value="all">All Categories</SelectItem>
-                    {Object.values(ENUMS.CONSUMABLE_CATEGORY).map(
-                      (category) => (
-                        <SelectItem key={category} value={category}>
-                          {formatCategory(category)}
-                        </SelectItem>
-                      )
-                    )}
+                    {filterCategoryOptions.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {formatCategory(category)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1160,6 +1456,30 @@ export default function AdminConsumablesPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {isNrepOrg && scopeFilter === ENUMS.CONSUMABLE_SCOPE.PROJECT && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium text-slate-700">
+                    Project
+                  </Label>
+                  <Select
+                    value={projectFilter}
+                    onValueChange={setProjectFilter}
+                  >
+                    <SelectTrigger className="h-11 border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 transition-all duration-200">
+                      <SelectValue placeholder="Project" />
+                    </SelectTrigger>
+                    <SelectContent className="z-30">
+                      <SelectItem value="all">All Projects</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.$id} value={project.$id}>
+                          {project.name || project.title || project.code || project.$id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1180,17 +1500,47 @@ export default function AdminConsumablesPage() {
                     </p>
                   </div>
                 </div>
-                <Badge className="bg-sidebar-500/20 text-sidebar-600 border-sidebar-500/30 px-3 py-1">
-                  {filteredConsumables.length}{" "}
-                  {filteredConsumables.length === 1
-                    ? "Consumable"
-                    : "Consumables"}
-                </Badge>
+                <div className="flex items-center gap-3">
+                  <Badge className={`${headerBadgeClass} px-3 py-1`}>
+                    {filteredConsumables.length}{" "}
+                    {filteredConsumables.length === 1
+                      ? "Consumable"
+                      : "Consumables"}
+                  </Badge>
+                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-1.5 py-1 shadow-sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewModeChange("table")}
+                      className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
+                        viewMode === "table"
+                          ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      }`}
+                    >
+                      <List className="w-4 h-4" />
+                      <span className="hidden sm:inline">Table</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewModeChange("grid")}
+                      className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
+                        viewMode === "grid"
+                          ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Grid3X3 className="w-4 h-4" />
+                      <span className="hidden sm:inline">Cards</span>
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <Table>
+              <Table className={viewMode === "grid" ? "hidden" : ""}>
                 <TableHeader>
                   <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
                     <TableHead className="font-semibold text-slate-700 py-4 px-6">
@@ -1218,19 +1568,29 @@ export default function AdminConsumablesPage() {
                     filteredConsumables.map((consumable, index) => (
                       <TableRow
                         key={consumable.$id}
-                        className="hover:bg-gray-50/50 transition-colors duration-200 group border-b border-gray-100/50"
+                        className={`${rowHoverClass} transition-colors duration-200 group border-b border-gray-100/50`}
                       >
                         <TableCell className="py-4 px-6">
                           <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-gradient-to-br from-sidebar-100 to-sidebar-200 rounded-lg group-hover:from-sidebar-200 group-hover:to-sidebar-300 transition-all duration-200">
-                              <Package className="h-4 w-4 text-sidebar-600" />
+                            <div
+                              className={`p-2 rounded-lg transition-all duration-200 ${iconBackgroundClass}`}
+                            >
+                              <Package
+                                className={`h-4 w-4 ${
+                                  isNrepOrg
+                                    ? "text-[var(--org-primary)]"
+                                    : "text-sidebar-600"
+                                }`}
+                              />
                             </div>
                             <div>
-                              <p className="font-medium text-slate-900 group-hover:text-sidebar-700 transition-colors duration-200">
+                              <p
+                                className={`font-medium text-slate-900 ${nameHoverClass} transition-colors duration-200`}
+                              >
                                 {consumable.name}
                               </p>
                               <p className="text-sm text-slate-500">
-                                {formatCategory(getUnit(consumable))}
+                                {formatCategory(getConsumableUnit(consumable))}
                               </p>
                             </div>
                           </div>
@@ -1238,7 +1598,7 @@ export default function AdminConsumablesPage() {
                         <TableCell className="py-4 px-6">
                           <Badge
                             variant="outline"
-                            className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100 transition-colors duration-200"
+                            className={`${categoryBadgeClass} hover:brightness-110 transition-colors duration-200`}
                           >
                             {formatCategory(getConsumableCategory(consumable))}
                           </Badge>
@@ -1257,26 +1617,17 @@ export default function AdminConsumablesPage() {
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           <Badge
-                            className={`${
-                              getStatus(consumable) ===
-                              ENUMS.CONSUMABLE_STATUS.IN_STOCK
-                                ? "bg-green-100 text-green-700 border-green-200"
-                                : getStatus(consumable) ===
-                                  ENUMS.CONSUMABLE_STATUS.LOW_STOCK
-                                ? "bg-yellow-100 text-yellow-700 border-yellow-200"
-                                : getStatus(consumable) ===
-                                  ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
-                                ? "bg-red-100 text-red-700 border-red-200"
-                                : "bg-gray-100 text-gray-700 border-gray-200"
-                            } shadow-sm`}
+                            className={`${badgeForStatus(
+                              getStatus(consumable)
+                            )} shadow-sm`}
                           >
                             {getStatus(consumable).replace(/_/g, " ")}
                           </Badge>
                         </TableCell>
                         <TableCell className="py-4 px-6">
                           <div className="flex items-center space-x-2">
-                            <MapPin className="h-4 w-4 text-slate-400" />
-                            <span className="text-slate-700">
+                            <MapPin className={`h-4 w-4 ${locationIconClass}`} />
+                            <span className={locationTextClass}>
                               {consumable.locationName ||
                                 consumable.roomOrArea ||
                                 "Not specified"}
@@ -1289,31 +1640,31 @@ export default function AdminConsumablesPage() {
                               asChild
                               variant="ghost"
                               size="sm"
-                              className="h-10 w-10 p-0 hover:bg-sidebar-100 hover:text-sidebar-700 transition-all duration-200 group/btn"
+                              className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionButtonClass}`}
                             >
                               <Link
                                 href={`/admin/consumables/${consumable.$id}`}
                               >
-                                <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                <Eye className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
                               </Link>
                             </Button>
                             <Button
                               asChild
                               variant="ghost"
                               size="sm"
-                              className="h-10 w-10 p-0 hover:bg-primary-100 hover:text-primary-700 transition-all duration-200 group/btn"
+                              className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionEditButtonClass}`}
                             >
                               <Link
                                 href={`/admin/consumables/${consumable.$id}/edit`}
                               >
-                                <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                <Edit className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
                               </Link>
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeleteConsumable(consumable)}
-                              className="h-10 w-10 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn"
+                              className="h-11 w-11 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn rounded-lg"
                             >
                               <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
                             </Button>
@@ -1337,8 +1688,8 @@ export default function AdminConsumablesPage() {
                             </p>
                           </div>
                           <Button
-                            onClick={() => setShowAddDialog(true)}
-                            className="mt-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white"
+                            onClick={() => router.push("/admin/consumables/new")}
+                            className="mt-4 bg-org-gradient text-white shadow-md hover:shadow-lg"
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             Add First Consumable
@@ -1350,6 +1701,140 @@ export default function AdminConsumablesPage() {
                 </TableBody>
               </Table>
             </div>
+            {viewMode === "grid" && (
+              <div className="p-6">
+                {filteredConsumables.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {filteredConsumables.map((consumable) => {
+                      const status = getStatus(consumable);
+                      const updatedAtLabel = consumable.$updatedAt
+                        ? new Date(consumable.$updatedAt).toLocaleDateString()
+                        : "–";
+                      return (
+                        <div
+                          key={`${consumable.$id}-card`}
+                          className="group relative overflow-hidden rounded-2xl border border-gray-200/70 bg-white/95 shadow-lg hover:shadow-xl transition-all duration-300"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-highlight)]/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                          <div className="relative z-10 p-6 space-y-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`p-3 rounded-xl shadow-sm ${iconBackgroundClass}`}
+                                >
+                                  <ShoppingCart
+                                    className={`h-5 w-5 ${
+                                      isNrepOrg
+                                        ? "text-[var(--org-primary)]"
+                                        : "text-sidebar-600"
+                                    }`}
+                                  />
+                                </div>
+                                <div>
+                                  <h3
+                                    className={`text-lg font-semibold text-slate-900 ${nameHoverClass}`}
+                                  >
+                                    {consumable.name}
+                                  </h3>
+                                  <p className="text-sm text-slate-500">
+                                    Unit: {formatCategory(getConsumableUnit(consumable))}
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge className={`${categoryBadgeClass} px-3 py-1`}>
+                                {formatCategory(getConsumableCategory(consumable))}
+                              </Badge>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3">
+                              <Badge className={`${badgeForStatus(status)} shadow-sm`}>
+                                {status.replace(/_/g, " ")}
+                              </Badge>
+                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <CheckCircle className="h-4 w-4" />
+                                <span>
+                                  Stock:{" "}
+                                  <span className="font-semibold">
+                                    {getCurrentStock(consumable)}
+                                  </span>
+                                  {getMinStock(consumable) > 0 && (
+                                    <span className="text-xs text-slate-400 ml-2">
+                                      min {getMinStock(consumable)}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              {getMaxStock(consumable) > 0 && (
+                                <Badge variant="outline" className="text-xs text-slate-500 border-slate-200">
+                                  Max {getMaxStock(consumable)}
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                              <div className="flex items-center gap-2">
+                                <MapPin className={`h-4 w-4 ${locationIconClass}`} />
+                                <span className={locationTextClass}>
+                                  {consumable.locationName ||
+                                    consumable.roomOrArea ||
+                                    "Not specified"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-slate-500">
+                                <Clock className="h-4 w-4" />
+                                <span>
+                                  Updated <span className="font-medium">{updatedAtLabel}</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs uppercase tracking-wide text-slate-400">
+                                Item Code: {consumable.assetTag || "—"}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  asChild
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionButtonClass}`}
+                                >
+                                  <Link href={`/admin/consumables/${consumable.$id}`}>
+                                    <Eye className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                  </Link>
+                                </Button>
+                                <Button
+                                  asChild
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionEditButtonClass}`}
+                                >
+                                  <Link href={`/admin/consumables/${consumable.$id}/edit`}>
+                                    <Edit className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
+                                  </Link>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteConsumable(consumable)}
+                                  className="h-11 w-11 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn rounded-lg"
+                                >
+                                  <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    No consumables found. Try adjusting your filters.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1414,7 +1899,7 @@ export default function AdminConsumablesPage() {
                         </p>
                         <p className="text-sm text-gray-500">
                           Stock: {getCurrentStock(consumableToDelete)}{" "}
-                          {formatCategory(getUnit(consumableToDelete))}
+                      {formatCategory(getConsumableUnit(consumableToDelete))}
                         </p>
                       </div>
                     </div>
@@ -1425,13 +1910,15 @@ export default function AdminConsumablesPage() {
                 <div className="flex items-center space-x-3 w-full pt-4">
                   <Button
                     onClick={cancelDeleteConsumable}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
+                    variant="outline"
+                    className="flex-1 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={confirmDeleteConsumable}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
+                    variant="destructive"
+                    className="flex-1 shadow-md hover:shadow-lg transition-all duration-200"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Consumable

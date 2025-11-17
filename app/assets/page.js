@@ -20,6 +20,14 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../components/ui/table";
+import {
   Package,
   Search,
   Filter,
@@ -28,6 +36,10 @@ import {
   Eye,
   Image as ImageIcon,
   FileText,
+  MapPin,
+  Clock,
+  List,
+  Grid3X3,
 } from "lucide-react";
 import {
   assetsService,
@@ -65,6 +77,38 @@ export default function AssetsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 12;
 
+  const [viewMode, setViewMode] = useState("cards");
+  // Default to user mode for requester pages
+  // Only switch to admin if user explicitly toggles and has permissions
+  const [userViewMode, setUserViewMode] = useState("user");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedMode = window.localStorage.getItem("assetsViewMode");
+    if (storedMode === "cards" || storedMode === "table") {
+      setViewMode(storedMode);
+    }
+  }, []);
+
+  // Separate effect to handle view mode changes from sidebar
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    // Listen for custom events from sidebar
+    const handleViewModeChange = (e) => {
+      const mode = e?.detail?.mode;
+      if (mode === "admin" || mode === "user") {
+        setUserViewMode(mode);
+      }
+    };
+    
+    window.addEventListener("viewModeChanged", handleViewModeChange);
+    
+    return () => {
+      window.removeEventListener("viewModeChanged", handleViewModeChange);
+    };
+  }, []);
+
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -72,6 +116,13 @@ export default function AssetsPage() {
   useEffect(() => {
     loadAssets();
   }, [search, categoryFilter, statusFilter, departmentFilter, currentPage]);
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("assetsViewMode", mode);
+    }
+  };
 
   const loadInitialData = async () => {
     try {
@@ -122,11 +173,14 @@ export default function AssetsPage() {
           item.itemType === undefined
       );
 
-      console.log("All items:", result.documents.length);
-      console.log("Assets only:", assetsOnly.length);
-      console.log("Item types found:", [
-        ...new Set(result.documents.map((item) => item.itemType)),
-      ]);
+      // Debug logging (development only)
+      if (process.env.NODE_ENV === 'development') {
+        console.log("All items:", result.documents.length);
+        console.log("Assets only:", assetsOnly.length);
+        console.log("Item types found:", [
+          ...new Set(result.documents.map((item) => item.itemType)),
+        ]);
+      }
 
       setAssets(assetsOnly);
       setTotalPages(Math.ceil(assetsOnly.length / pageSize));
@@ -145,10 +199,10 @@ export default function AssetsPage() {
     setCurrentPage(1);
   };
 
-  const canManageAssets =
-    staff &&
-    permissions.canManageAssets(staff) &&
-    getCurrentViewMode() === "admin";
+  // This is a requester page - show "Request Asset" by default
+  // Only show "Add Asset" if user is in admin mode and has permissions
+  const isAdminMode = userViewMode === "admin";
+  const shouldShowAddAsset = isAdminMode && staff && permissions.canManageAssets(staff);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -169,26 +223,24 @@ export default function AssetsPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Request Asset button only for users (not admin mode) */}
-              {getCurrentViewMode() === "user" && (
-                <Button
-                  onClick={() => router.push("/requests/new")}
-                  className="bg-primary-600 hover:bg-primary-700 text-white"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Request Asset
-                </Button>
-              )}
-
-              {canManageAssets && (
+              {/* Use state for view mode, but default to user if not admin */}
+              {shouldShowAddAsset ? (
                 <Button
                   asChild
                   className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                 >
-                  <Link href="/assets/new" className="flex items-center gap-2">
+                  <Link href="/admin/assets/new" className="flex items-center gap-2">
                     <Plus className="w-5 h-5" />
                     Add Asset
                   </Link>
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => router.push("/requests/new?type=asset")}
+                  className="bg-org-gradient hover:opacity-90 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Request Asset
                 </Button>
               )}
             </div>
@@ -284,6 +336,38 @@ export default function AssetsPage() {
           </div>
         </div>
 
+        {/* View Mode Toggle */}
+        <div className="flex items-center justify-end mb-6">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-1.5 py-1 shadow-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleViewModeChange("table")}
+              className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
+                viewMode === "table"
+                  ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <List className="w-4 h-4" />
+              <span className="hidden sm:inline">Table</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleViewModeChange("cards")}
+              className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
+                viewMode === "cards"
+                  ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <Grid3X3 className="w-4 h-4" />
+              <span className="hidden sm:inline">Cards</span>
+            </Button>
+          </div>
+        </div>
+
         {/* Assets Grid */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -316,21 +400,127 @@ export default function AssetsPage() {
               <p className="text-gray-600 mb-8 text-lg">
                 {search || categoryFilter || statusFilter || departmentFilter
                   ? "No assets match your current filters. Try adjusting your search criteria."
-                  : "Get started by adding your first asset."}
+                  : shouldShowAddAsset
+                  ? "Get started by adding your first asset."
+                  : "No assets available. Contact your administrator to request assets."}
               </p>
-              {canManageAssets && (
+              {shouldShowAddAsset ? (
                 <Button
                   asChild
-                  className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="bg-org-gradient text-white shadow-lg hover:shadow-xl transition-transform duration-300 hover:-translate-y-0.5"
                 >
-                  <Link href="/assets/new" className="flex items-center gap-2">
+                  <Link href="/admin/assets/new" className="flex items-center gap-2">
                     <Plus className="w-5 h-5" />
                     Add First Asset
                   </Link>
                 </Button>
+              ) : (
+                <Button
+                  onClick={() => router.push("/requests/new?type=asset")}
+                  className="bg-org-gradient text-white shadow-lg hover:shadow-xl transition-transform duration-300 hover:-translate-y-0.5"
+                >
+                  <FileText className="w-5 h-5 mr-2" />
+                  Request Asset
+                </Button>
               )}
             </CardContent>
           </Card>
+        ) : viewMode === "table" ? (
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                    Asset
+                  </TableHead>
+                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                    Category
+                  </TableHead>
+                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                    Status
+                  </TableHead>
+                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                    Condition
+                  </TableHead>
+                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                    Location
+                  </TableHead>
+                  <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700 text-right">
+                    Actions
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assets.map((asset) => (
+                  <TableRow key={`${asset.$id}-table`} className="border-b">
+                    <TableCell className="py-4 px-6">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-gray-900">
+                          {asset.name}
+                        </span>
+                        {asset.serialNumber && (
+                          <span className="text-sm text-gray-500">
+                            S/N: {asset.serialNumber}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400 uppercase tracking-wide mt-1">
+                          {asset.assetTag || "—"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4 px-6">
+                      <Badge className="bg-gray-100 text-gray-700 border-gray-200">
+                        {formatCategory(asset.category)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4 px-6">
+                      <Badge
+                        className={`${getStatusBadgeColor(
+                          asset.availableStatus
+                        )} shadow-sm`}
+                      >
+                        {asset.availableStatus.replace(/_/g, " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4 px-6">
+                      <Badge
+                        className={`${getConditionBadgeColor(
+                          asset.currentCondition
+                        )} shadow-sm`}
+                      >
+                        {asset.currentCondition.replace(/_/g, " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-4 px-6">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <MapPin className="h-4 w-4 text-gray-400" />
+                        <span>
+                          {asset.locationName ||
+                            asset.roomOrArea ||
+                            "Not specified"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4 px-6 text-right">
+                      <div className="flex items-center justify-end gap-3 text-sm">
+                        <Button
+                          asChild
+                          type="button"
+                          variant="outline"
+                          className="inline-flex items-center gap-2 rounded-full border-gray-200 text-gray-600 hover:bg-gray-100"
+                        >
+                          <Link href={`/assets/${asset.$id}`}>
+                            <Eye className="w-4 h-4" />
+                            View
+                          </Link>
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {assets.map((asset) => {
@@ -427,61 +617,58 @@ export default function AssetsPage() {
                         </Badge>
                       </div>
 
-                      <div className="text-sm text-gray-500 mb-4 space-y-1">
-                        <p className="font-medium">Tag: {asset.assetTag}</p>
-                        <p>Location: {asset.locationName || "Not specified"}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600 mb-4">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-gray-400" />
+                          <span>
+                            {asset.locationName ||
+                              asset.roomOrArea ||
+                              "Not specified"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-400" />
+                          <span>
+                            Updated{" "}
+                            <span className="font-medium text-gray-800">
+                              {asset.$updatedAt
+                                ? new Date(
+                                    asset.$updatedAt
+                                  ).toLocaleDateString()
+                                : "–"}
+                            </span>
+                          </span>
+                        </div>
                       </div>
 
-                      <Button
-                        asChild
-                        className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white shadow-md hover:shadow-lg transition-all duration-300"
-                      >
-                        <Link
-                          href={`/assets/${asset.$id}`}
-                          className="flex items-center justify-center gap-2"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </Link>
-                      </Button>
+                      <div className="flex items-center justify-between text-sm text-gray-500">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-900">
+                            {asset.assetTag || "—"}
+                          </span>
+                          <span className="text-xs uppercase tracking-wide">
+                            Asset Tag
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            asChild
+                            type="button"
+                            variant="outline"
+                            className="flex items-center gap-2 rounded-full border-gray-200 text-gray-600 hover:bg-gray-100"
+                          >
+                            <Link href={`/assets/${asset.$id}`}>
+                              <Eye className="w-4 h-4" />
+                              View
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               );
             })}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center space-x-4 mt-12">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="text-gray-600 border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Previous
-            </Button>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-gray-700">
-                Page {currentPage} of {totalPages}
-              </span>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setCurrentPage(Math.min(totalPages, currentPage + 1))
-              }
-              disabled={currentPage === totalPages}
-              className="text-gray-600 border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Next
-            </Button>
           </div>
         )}
       </div>

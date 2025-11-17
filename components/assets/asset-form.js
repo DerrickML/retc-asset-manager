@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
+import { Query } from "appwrite"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
@@ -10,11 +11,15 @@ import { Textarea } from "../ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Checkbox } from "../ui/checkbox"
 import { Alert, AlertDescription } from "../ui/alert"
-import { assetsService, departmentsService, staffService } from "../../lib/appwrite/provider.js"
+import { assetsService, departmentsService, staffService, projectsService } from "../../lib/appwrite/provider.js"
 import { ENUMS } from "../../lib/appwrite/config.js"
 import { getCurrentStaff } from "../../lib/utils/auth.js"
 import { validateAssetTag } from "../../lib/utils/validation.js"
 import { formatCategory, mapToPublicCondition } from "../../lib/utils/mappings.js"
+import { useOrgTheme } from "../providers/org-theme-provider"
+import { getCurrentOrgId } from "../../lib/utils/org"
+import { ImageUpload } from "../ui/image-upload"
+import { assetImageService } from "../../lib/appwrite/image-service.js"
 
 
 export function AssetForm({ asset, onSuccess }) {
@@ -24,6 +29,54 @@ export function AssetForm({ asset, onSuccess }) {
   const [departments, setDepartments] = useState([])
   const [staff, setStaff] = useState([])
   const [currentStaff, setCurrentStaff] = useState(null)
+  const [projects, setProjects] = useState([])
+  const { orgCode, theme } = useOrgTheme()
+  const isNrepOrg = useMemo(() => orgCode?.toUpperCase() === "NREP", [orgCode])
+  const activeOrgId = useMemo(() => theme?.appwriteOrgId || getCurrentOrgId(), [theme?.appwriteOrgId])
+  const allowedProjectIdsRaw = useMemo(() => {
+    const ids = theme?.projects?.allowedIds
+    return Array.isArray(ids)
+      ? ids.map((id) => id?.toString()).filter(Boolean)
+      : []
+  }, [theme?.projects?.allowedIds])
+  const allowedProjectIds = useMemo(
+    () => allowedProjectIdsRaw.map((id) => id.toLowerCase()),
+    [allowedProjectIdsRaw]
+  )
+  const defaultProjectId = theme?.projects?.defaultId
+
+  const parseImages = (images) => {
+    if (!images) return []
+    if (Array.isArray(images)) return images
+    if (typeof images === "object" && images !== null) {
+      return [
+        images.assetViewUrl?.toString(),
+        images.assetFileId?.toString().replace(/\/","/g, ""),
+      ].filter(Boolean)
+    }
+    if (typeof images === "string") {
+      try {
+        return JSON.parse(images)
+      } catch (error) {
+        console.warn("Failed to parse public images", error)
+        return []
+      }
+    }
+    return []
+  }
+
+  const sanitiseAssetImage = (value) => {
+    if (!value) return ""
+    const trimmed = value.toString().trim()
+    if (trimmed === "null" || trimmed === "undefined") return ""
+    return trimmed
+  }
+  const sanitiseAssetFileId = (value) => {
+    if (!value) return ""
+    const trimmed = value.toString().trim()
+    if (trimmed === "null" || trimmed === "undefined") return ""
+    return trimmed
+  }
 
   // Form data
   const [formData, setFormData] = useState({
@@ -61,11 +114,13 @@ export function AssetForm({ asset, onSuccess }) {
     publicSummary: "",
     publicLocationLabel: "",
     publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW,
+    projectId: "",
   })
+  const [publicImages, setPublicImages] = useState(() => parseImages(null))
 
   useEffect(() => {
     loadInitialData()
-  }, [])
+  }, [isNrepOrg, activeOrgId])
 
   useEffect(() => {
     if (asset) {
@@ -91,9 +146,14 @@ export function AssetForm({ asset, onSuccess }) {
         publicSummary: asset.publicSummary || "",
         publicLocationLabel: asset.publicLocationLabel || "",
         publicConditionLabel: asset.publicConditionLabel || mapToPublicCondition(asset.currentCondition),
+        projectId: isNrepOrg ? asset.projectId || defaultProjectId || "" : "",
       })
+      const images = parseImages(asset.publicImages)
+      setPublicImages(images)
+    } else {
+      setPublicImages([])
     }
-  }, [asset])
+  }, [asset, isNrepOrg, defaultProjectId])
 
   const loadInitialData = async () => {
     try {
@@ -106,6 +166,39 @@ export function AssetForm({ asset, onSuccess }) {
       setDepartments(deptResult.documents)
       setStaff(staffResult.documents)
       setCurrentStaff(currentUser)
+
+      if (isNrepOrg) {
+        const projectQueries = []
+        if (allowedProjectIdsRaw.length > 0) {
+          projectQueries.push(Query.equal("$id", allowedProjectIdsRaw))
+        }
+
+        const projectResult = await projectsService.list(projectQueries)
+        const filteredProjects = (projectResult.documents || []).filter((project) => {
+          const projectId = project.$id?.toString()?.toLowerCase()
+          if (allowedProjectIds.length > 0) {
+            return allowedProjectIds.includes(projectId)
+          }
+          const projectOrgCode = (project.orgCode || project.organizationCode || project.code || "").toUpperCase()
+          if (projectOrgCode && orgCode) {
+            return projectOrgCode === orgCode.toUpperCase()
+          }
+          const projectOrgId = project.orgId || project.organizationId
+          if (projectOrgId && activeOrgId) {
+            return projectOrgId === activeOrgId
+          }
+          return false
+        })
+        setProjects(filteredProjects)
+        const initialProjectId = filteredProjects.find((project) => {
+          if (!defaultProjectId) return false
+          return project.$id === defaultProjectId
+        })?.$id || filteredProjects[0]?.$id || ""
+        setFormData((prev) => ({ ...prev, projectId: initialProjectId }))
+      } else {
+        setProjects([])
+        setFormData((prev) => ({ ...prev, projectId: "" }))
+      }
     } catch (error) {
       console.error("Failed to load form data:", error)
     }
@@ -120,9 +213,34 @@ export function AssetForm({ asset, onSuccess }) {
       // Validate asset tag
       validateAssetTag(formData.assetTag)
 
+      if (isNrepOrg && !formData.projectId) {
+        throw new Error("Please select a project before saving this asset.")
+      }
+
       // Prepare data for submission
+      const mergedPublicImages = Array.isArray(publicImages)
+        ? publicImages
+        : parseImages(publicImages)
+
+      const firstUploadId = Array.isArray(mergedPublicImages)
+        ? mergedPublicImages.find((img) => typeof img === "string" && !img.startsWith("http"))
+        : undefined
+      const firstImageUrl = mergedPublicImages.find(
+        (img) => typeof img === "string" && img.startsWith("http")
+      )
+
+      // Build submitData, explicitly handling projectId based on organization
+      // RETC doesn't use projects - only NREP requires projectId
+      const { projectId: formProjectId, ...formDataWithoutProjectId } = formData;
+      
       const submitData = {
-        ...formData,
+        ...formDataWithoutProjectId,
+        publicImages: JSON.stringify(mergedPublicImages || []),
+        assetImage:
+          firstImageUrl ||
+          sanitiseAssetImage(asset?.assetImage) ||
+          (firstUploadId ? assetImageService.getPublicImageUrl(firstUploadId) : ""),
+        itemType: asset?.itemType || ENUMS.ITEM_TYPE.ASSET,
         // Convert dates to ISO strings
         purchaseDate: formData.purchaseDate ? new Date(formData.purchaseDate).toISOString() : null,
         warrantyExpiryDate: formData.warrantyExpiryDate ? new Date(formData.warrantyExpiryDate).toISOString() : null,
@@ -131,15 +249,37 @@ export function AssetForm({ asset, onSuccess }) {
 
         // Initialize arrays
         attachmentFileIds: asset?.attachmentFileIds || [],
-        publicImages: asset?.publicImages || [],
+      }
+
+      // Handle projectId based on organization
+      // Note: Appwrite schema requires projectId, so we must send a value
+      // NREP requires a valid projectId, RETC uses a placeholder value
+      const currentOrgCode = orgCode?.toUpperCase() || "";
+      const isNrep = currentOrgCode === "NREP";
+      
+      if (isNrep) {
+        // For NREP, require a valid projectId (validated above)
+        const validProjectId = formProjectId && formProjectId.trim() !== "" ? formProjectId.trim() : null;
+        if (validProjectId) {
+          submitData.projectId = validProjectId;
+        } else {
+          // If NREP but no project selected, this will be caught by validation above
+          // But we still don't want to send empty string
+          delete submitData.projectId;
+        }
+      } else {
+        // For RETC (or any non-NREP org), send a placeholder value
+        // Since Appwrite schema requires projectId, we must send a value
+        // Using a clearly identifiable placeholder that won't conflict with real project IDs
+        submitData.projectId = "RETC_NO_PROJECT";
       }
 
       if (asset) {
         // Update existing asset
-        await assetsService.update(asset.$id, submitData, currentStaff.$id, "Asset updated via form")
+        await assetsService.update(asset.$id, submitData, currentStaff?.$id, "Asset updated via form")
       } else {
         // Create new asset
-        await assetsService.create(submitData, currentStaff.$id)
+        await assetsService.create(submitData, currentStaff?.$id)
       }
 
       if (onSuccess) {
@@ -148,7 +288,11 @@ export function AssetForm({ asset, onSuccess }) {
         router.push("/assets")
       }
     } catch (err) {
-      setError(err.message || "Failed to save asset")
+      if (err?.code === "asset_tag_conflict") {
+        setError("An asset with this tag already exists for this organisation. Please choose a different tag.")
+      } else {
+        setError(err.message || "Failed to save asset")
+      }
     } finally {
       setLoading(false)
     }
@@ -179,7 +323,7 @@ export function AssetForm({ asset, onSuccess }) {
                 id="assetTag"
                 value={formData.assetTag}
                 onChange={(e) => updateField("assetTag", e.target.value)}
-                placeholder="RETC-LAP-001"
+                placeholder={isNrepOrg ? "NREP-LAP-001" : "RETC-LAP-001"}
                 required
                 disabled={loading}
               />
@@ -290,6 +434,33 @@ export function AssetForm({ asset, onSuccess }) {
               </Select>
             </div>
 
+            {isNrepOrg && (
+              <div className="space-y-2">
+                <Label htmlFor="projectId">Project *</Label>
+                <Select
+                  value={formData.projectId}
+                  onValueChange={(value) => updateField("projectId", value)}
+                  disabled={loading || projects.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={projects.length ? "Select project" : "No projects available"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.$id} value={project.$id}>
+                        {project.name || project.title || "Unnamed project"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {projects.length === 0 && (
+                  <p className="text-sm text-amber-600">
+                    No projects found for NREP. Create a project first to link this asset.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="custodianStaffId">Custodian</Label>
               <Select
@@ -387,61 +558,74 @@ export function AssetForm({ asset, onSuccess }) {
           <CardTitle>Public Visibility</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="isPublic"
-              checked={formData.isPublic}
-              onCheckedChange={(checked) => updateField("isPublic", checked)}
-            />
-            <Label htmlFor="isPublic">Make this asset visible in the guest portal</Label>
-          </div>
-
-          {formData.isPublic && (
-            <div className="space-y-4 pl-6 border-l-2 border-blue-200">
-              <div className="space-y-2">
-                <Label htmlFor="publicSummary">Public Summary</Label>
-                <Textarea
-                  id="publicSummary"
-                  value={formData.publicSummary}
-                  onChange={(e) => updateField("publicSummary", e.target.value)}
-                  placeholder="Brief description for public viewing..."
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="publicLocationLabel">Public Location</Label>
-                  <Input
-                    id="publicLocationLabel"
-                    value={formData.publicLocationLabel}
-                    onChange={(e) => updateField("publicLocationLabel", e.target.value)}
-                    placeholder="Main Lab"
-                    disabled={loading}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="publicConditionLabel">Public Condition</Label>
-                  <Select
-                    value={formData.publicConditionLabel}
-                    onValueChange={(value) => updateField("publicConditionLabel", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.values(ENUMS.PUBLIC_CONDITION_LABEL).map((condition) => (
-                        <SelectItem key={condition} value={condition}>
-                          {condition.replace(/_/g, " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+          {!isNrepOrg && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isPublic"
+                checked={formData.isPublic}
+                onCheckedChange={(checked) => updateField("isPublic", checked)}
+              />
+              <Label htmlFor="isPublic">Make this asset visible in the guest portal</Label>
             </div>
           )}
+
+          {(!isNrepOrg && formData.isPublic) || isNrepOrg ? (
+            <div className={`${!isNrepOrg ? "pl-6 border-l-2 border-blue-200 space-y-4" : "space-y-4"}`}>
+              {!isNrepOrg && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="publicSummary">Public Summary</Label>
+                    <Textarea
+                      id="publicSummary"
+                      value={formData.publicSummary}
+                      onChange={(e) => updateField("publicSummary", e.target.value)}
+                      placeholder="Brief description for public viewing..."
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="publicLocationLabel">Public Location</Label>
+                      <Input
+                        id="publicLocationLabel"
+                        value={formData.publicLocationLabel}
+                        onChange={(e) => updateField("publicLocationLabel", e.target.value)}
+                        placeholder="Main Lab"
+                        disabled={loading}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="publicConditionLabel">Public Condition</Label>
+                      <Select
+                        value={formData.publicConditionLabel}
+                        onValueChange={(value) => updateField("publicConditionLabel", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.values(ENUMS.PUBLIC_CONDITION_LABEL).map((condition) => (
+                            <SelectItem key={condition} value={condition}>
+                              {condition.replace(/_/g, " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <ImageUpload
+                assetId={asset?.$id || "new"}
+                existingImages={publicImages}
+                onImagesChange={setPublicImages}
+                maxImages={10}
+              />
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

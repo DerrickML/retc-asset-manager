@@ -138,7 +138,7 @@ export default function AdminDashboard() {
     try {
       // In a real implementation, this would generate and download reports
       // Mock export functionality
-      toast.success(`${type} report exported successfully!`);
+      toast.success(`${type} report downloaded successfully!`);
     } catch (error) {
       // Silent fail for export
     }
@@ -174,11 +174,11 @@ export default function AdminDashboard() {
           <div className="flex gap-2">
             <Button onClick={() => exportData("Assets")} variant="outline">
               <Download className="w-4 h-4 mr-2" />
-              Export Assets
+              Download Assets PDF
             </Button>
             <Button onClick={() => exportData("Requests")} variant="outline">
               <Download className="w-4 h-4 mr-2" />
-              Export Requests
+              Download Requests PDF
             </Button>
           </div>
         </div>

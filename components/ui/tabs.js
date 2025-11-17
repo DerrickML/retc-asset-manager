@@ -7,18 +7,18 @@ const TabsContext = createContext({})
 
 function Tabs({ children, defaultValue, value, onValueChange, className = "", ...props }) {
   const [activeTab, setActiveTab] = useState(value || defaultValue || "")
-  
+
   React.useEffect(() => {
     if (value !== undefined) {
       setActiveTab(value)
     }
   }, [value])
-  
+
   const handleValueChange = (newValue) => {
     setActiveTab(newValue)
     onValueChange?.(newValue)
   }
-  
+
   return (
     <TabsContext.Provider value={{ activeTab, setActiveTab: handleValueChange }}>
       <div className={className} {...props}>
@@ -30,7 +30,7 @@ function Tabs({ children, defaultValue, value, onValueChange, className = "", ..
 
 function TabsList({ children, className = "", ...props }) {
   return (
-    <div className={`inline-flex h-10 items-center justify-center rounded-md bg-gray-100 p-1 text-gray-500 ${className}`} {...props}>
+    <div className={`org-tabs-list ${className}`.trim()} {...props}>
       {children}
     </div>
   )
@@ -39,14 +39,18 @@ function TabsList({ children, className = "", ...props }) {
 function TabsTrigger({ children, value, className = "", ...props }) {
   const { activeTab, setActiveTab } = useContext(TabsContext)
   const isActive = activeTab === value
-  
+
+  const triggerClasses = [
+    "org-tabs-trigger",
+    isActive ? "org-tabs-trigger--active" : "org-tabs-trigger--inactive",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ")
+
   return (
     <button
-      className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
-        isActive 
-          ? "bg-white text-gray-950 shadow-sm" 
-          : "hover:bg-gray-200 hover:text-gray-900"
-      } ${className}`}
+      className={triggerClasses}
       onClick={() => setActiveTab(value)}
       {...props}
     >
@@ -57,13 +61,16 @@ function TabsTrigger({ children, value, className = "", ...props }) {
 
 function TabsContent({ children, value, className = "", ...props }) {
   const { activeTab } = useContext(TabsContext)
-  
+
   if (activeTab !== value) {
     return null
   }
-  
+
   return (
-    <div className={`mt-2 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 ${className}`} {...props}>
+    <div
+      className={`mt-2 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 ${className}`.trim()}
+      {...props}
+    >
       {children}
     </div>
   )

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -18,6 +18,8 @@ import { assetsService } from "../../lib/appwrite/provider.js";
 import { useAuth } from "../../lib/appwrite/provider.js";
 import { useToastContext } from "../providers/toast-provider";
 import { Package, Plus, Minus } from "lucide-react";
+import { useOrgTheme } from "../providers/org-theme-provider";
+import { getCurrentStaff } from "../../lib/utils/auth";
 
 export function ConsumableStockForm({ consumable, onStockUpdated }) {
   const { staff } = useAuth();
@@ -28,20 +30,57 @@ export function ConsumableStockForm({ consumable, onStockUpdated }) {
     adjustment: "",
     notes: "",
   });
+  const { theme } = useOrgTheme();
+  const primaryColor = theme?.colors?.primary || "#0E6370";
+  const primaryDark = theme?.colors?.primaryDark || "#0A4E57";
+  const mutedBg = theme?.colors?.muted || "rgba(222, 243, 245, 0.6)";
+  const accentColor = theme?.colors?.accent || primaryColor;
+  const accentDark = theme?.colors?.accentDark || primaryDark;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!staff?.$id) return;
+    const parsedAdjustment = Number(formData.adjustment);
+
+    let actorStaffId = staff?.$id;
+    if (!actorStaffId) {
+      try {
+        const refreshedStaff = await getCurrentStaff();
+        actorStaffId = refreshedStaff?.$id;
+      } catch (error) {
+        console.error("Failed to load staff profile for stock adjustment", error);
+      }
+    }
+
+    if (!actorStaffId) {
+      toast.show({
+        type: "error",
+        message: "Unable to load your staff profile. Please refresh and try again.",
+      });
+      return;
+    }
+
+    console.log("Submitting consumable stock adjustment", {
+      consumableId: consumable.$id,
+      adjustment: parsedAdjustment,
+      staffId: actorStaffId,
+    });
+    if (Number.isNaN(parsedAdjustment) || formData.adjustment.trim() === "") {
+      toast.show({
+        type: "error",
+        message: "Enter a valid adjustment amount.",
+      });
+      return;
+    }
 
     setLoading(true);
     try {
-      await assetsService.adjustConsumableStock(
+      const result = await assetsService.adjustConsumableStock(
         consumable.$id,
-        parseInt(formData.adjustment),
-        staff.$id,
+        parsedAdjustment,
+        actorStaffId,
         formData.notes ||
-          `Stock adjusted by ${formData.adjustment > 0 ? "+" : ""}${
-            formData.adjustment
+          `Stock adjusted by ${parsedAdjustment > 0 ? "+" : ""}${
+            parsedAdjustment
           }`
       );
 
@@ -55,24 +94,40 @@ export function ConsumableStockForm({ consumable, onStockUpdated }) {
       if (onStockUpdated) {
         onStockUpdated();
       }
-      toast.success(
-        `Stock ${
-          isPositive ? "increased" : isNegative ? "decreased" : "adjusted"
-        } successfully!`
-      );
+      toast.show({
+        type: "success",
+        message: `Stock ${
+          parsedAdjustment > 0
+            ? "increased"
+            : parsedAdjustment < 0
+            ? "decreased"
+            : "adjusted"
+        } successfully!`,
+      });
     } catch (error) {
-      toast.error("Failed to adjust stock: " + error.message);
+      toast.show({
+        type: "error",
+        message: "Failed to adjust stock: " + error.message,
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleInputChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: String(value) }));
   };
 
-  const isPositive = parseInt(formData.adjustment) > 0;
-  const isNegative = parseInt(formData.adjustment) < 0;
+  const currentAdjustment = Number(formData.adjustment);
+  const safeAdjustment = Number.isNaN(currentAdjustment) ? 0 : currentAdjustment;
+  const isPositive = safeAdjustment > 0;
+  const isNegative = safeAdjustment < 0;
+
+  const actionButtonClass = useMemo(() => {
+    if (isPositive) return "bg-emerald-600 hover:bg-emerald-700";
+    if (isNegative) return "bg-rose-600 hover:bg-rose-700";
+    return "bg-slate-600 hover:bg-slate-700";
+  }, [isPositive, isNegative]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -82,108 +137,117 @@ export function ConsumableStockForm({ consumable, onStockUpdated }) {
           Adjust Stock
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Adjust Stock for {consumable.name}</DialogTitle>
-          <DialogDescription>
-            Current stock: {consumable.currentStock}{" "}
-            {consumable.unit?.toLowerCase()}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="adjustment">Stock Adjustment *</Label>
-            <div className="flex items-center space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const current = parseInt(formData.adjustment) || 0;
-                  handleInputChange("adjustment", current - 1);
-                }}
-                className="px-2"
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <Input
-                id="adjustment"
-                type="number"
-                value={formData.adjustment}
-                onChange={(e) =>
-                  handleInputChange("adjustment", e.target.value)
-                }
-                placeholder="Enter adjustment amount"
-                className="text-center"
-                required
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const current = parseInt(formData.adjustment) || 0;
-                  handleInputChange("adjustment", current + 1);
-                }}
-                className="px-2"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+      <DialogContent className="max-w-lg p-0 overflow-hidden shadow-2xl border-0">
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: `linear-gradient(160deg, ${mutedBg} 0%, #ffffff 35%, #ffffff 100%)`,
+          }}
+        >
+          <div className="px-6 pt-6 pb-4 border-b border-black/5">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-semibold text-slate-900">
+                    Adjust Stock for {consumable.name}
+                  </DialogTitle>
+                  <DialogDescription className="text-sm text-slate-500">
+                    Current stock: {consumable.currentStock}{" "}
+                    {consumable.unit?.toLowerCase()}
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Use positive numbers to add stock, negative to remove
-            </p>
           </div>
 
-          <div>
-            <Label htmlFor="notes">Reason for Adjustment</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => handleInputChange("notes", e.target.value)}
-              placeholder="Why are you adjusting the stock?"
-              rows={3}
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="adjustment" className="text-sm font-medium text-slate-700">
+                Stock Adjustment
+              </Label>
+              <div className="flex items-center rounded-full border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = Number(formData.adjustment) || 0;
+                    handleInputChange("adjustment", String(current - 1));
+                  }}
+                  className="h-11 w-11 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <Input
+                  id="adjustment"
+                  type="number"
+                  value={formData.adjustment}
+                  onChange={(e) => handleInputChange("adjustment", e.target.value)}
+                  placeholder="Enter amount"
+                  className="h-11 flex-1 border-0 text-center focus-visible:ring-0"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = Number(formData.adjustment) || 0;
+                    handleInputChange("adjustment", String(current + 1));
+                  }}
+                  className="h-11 w-11 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">
+                Use positive numbers to add stock, negative numbers to remove stock.
+              </p>
+            </div>
 
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm font-medium text-gray-700">
-              New Stock Will Be:
-            </p>
-            <p className="text-lg font-bold text-gray-900">
-              {consumable.currentStock + (parseInt(formData.adjustment) || 0)}{" "}
-              {consumable.unit?.toLowerCase()}
-            </p>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes" className="text-sm font-medium text-slate-700">
+                Reason for Adjustment
+              </Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => handleInputChange("notes", e.target.value)}
+                placeholder="Add an optional note for audit trail"
+                rows={3}
+                className="resize-none rounded-xl border border-slate-200 focus-visible:ring-1 focus-visible:ring-[var(--org-primary)]"
+              />
+            </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading || !formData.adjustment}
-              className={
-                isPositive
-                  ? "bg-green-600 hover:bg-green-700"
-                  : isNegative
-                  ? "bg-orange-600 hover:bg-orange-700"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }
-            >
-              {loading
-                ? "Updating..."
-                : `${
-                    isPositive ? "Add" : isNegative ? "Remove" : "Adjust"
-                  } Stock`}
-            </Button>
-          </DialogFooter>
-        </form>
+            <div className="rounded-xl border border-slate-100 bg-white/70 px-4 py-3">
+              <p className="text-sm text-slate-500">New stock will be</p>
+              <p className="text-2xl font-semibold text-slate-900">
+                {consumable.currentStock + safeAdjustment}{" "}
+                {consumable.unit?.toLowerCase()}
+              </p>
+            </div>
+
+            <DialogFooter className="flex justify-between items-center pt-2 pb-4 space-x-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setOpen(false)}
+                className="px-6 border border-slate-200 text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  loading ||
+                  formData.adjustment.trim() === "" ||
+                  Number.isNaN(currentAdjustment)
+                }
+                className={`px-6 text-white ${actionButtonClass}`}
+              >
+                {loading
+                  ? "Updating..."
+                  : `${isPositive ? "Add" : isNegative ? "Remove" : "Adjust"} Stock`}
+              </Button>
+            </DialogFooter>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

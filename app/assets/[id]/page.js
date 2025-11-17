@@ -159,7 +159,7 @@ export default function AssetDetailPage() {
             {/* Request Asset button for regular users */}
             {getCurrentViewMode() === "user" && (
               <Button
-                onClick={() => router.push("/requests/new")}
+                onClick={() => router.push("/requests/new?type=asset")}
                 className="bg-primary-600 hover:bg-primary-700 text-white w-full sm:w-auto"
               >
                 <FileText className="w-4 h-4 mr-2" />

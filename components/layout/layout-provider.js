@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import Sidebar from "./sidebar";
 import { Navbar } from "./navbar";
@@ -9,24 +9,36 @@ import { getCurrentStaff } from "../../lib/utils/auth.js";
 import { settingsService } from "../../lib/appwrite/provider.js";
 import { useToastContext } from "../providers/toast-provider";
 import { useInactivityLogout } from "../../lib/hooks/useInactivityLogout.js";
+import { PageLoading, LoadingSpinner } from "../ui/loading";
+import { useOrgTheme } from "../providers/org-theme-provider";
 
 export default function LayoutProvider({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
   const toast = useToastContext();
   const [staff, setStaff] = useState(null);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { theme, orgCode } = useOrgTheme();
+  const colors = theme?.colors || {};
+  const primaryColor = colors.primary || "#0E6370";
+  const accentColor = colors.accent || "#1F8B99";
+  const backgroundColor = colors.background || "#f1f5f9";
+  const gradientFrom = colors.gradientFrom || `${primaryColor}d0`;
+  const gradientTo = colors.gradientTo || `${accentColor}c0`;
 
   // Determine route types early for hook configuration
   const isNoLayout =
     pathname.startsWith("/login") || pathname.startsWith("/setup");
   const isTopNavOnly = pathname.startsWith("/guest");
 
-  // Always call the hook (React hooks rule) but control enablement via config
+  // Session timeout configuration
+  // Users will be logged out after 8 minutes of inactivity
+  // Warning modal appears at 6 minutes (2 minutes before logout)
   const { WarningModal } = useInactivityLogout({
-    inactivityTimeout: 15 * 60 * 1000, // 15 minutes
-    warningTimeout: 2 * 60 * 1000, // 2 minutes warning before logout
+    inactivityTimeout: 8 * 60 * 1000, // 8 minutes of inactivity before logout
+    warningTimeout: 2 * 60 * 1000, // 2 minutes warning before logout (shows at 6 minutes)
     enabled: !isNoLayout && !isTopNavOnly && staff !== null, // Only enable for authenticated staff
   });
 
@@ -34,9 +46,9 @@ export default function LayoutProvider({ children }) {
     try {
       setError(null);
 
-      // Load staff data with timeout
+      // Load staff data with timeout and proper error handling
       const staffPromise = getCurrentStaff().catch((err) => {
-        // Silent fail for staff - user can still use the app
+        console.warn("Failed to load staff:", err);
         return null;
       });
 
@@ -46,16 +58,59 @@ export default function LayoutProvider({ children }) {
         return null;
       });
 
-      // Wait for both with a timeout
-      const [currentStaff, systemSettings] = await Promise.all([
-        staffPromise,
-        settingsPromise,
-      ]);
+      // Wait for both with a timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Data loading timeout")), 8000)
+      );
+
+      const [currentStaff, systemSettings] = await Promise.race([
+        Promise.all([staffPromise, settingsPromise]),
+        timeoutPromise,
+      ]).catch((err) => {
+        // If timeout, return null values
+        if (err.message === "Data loading timeout") {
+          console.warn("Data loading timed out");
+          return [null, null];
+        }
+        throw err;
+      });
 
       setStaff(currentStaff);
       setSettings(systemSettings);
+
+      // If user is authenticated but no staff record exists, handle gracefully
+      if (currentStaff === null) {
+        // Check if user is actually authenticated
+        try {
+          const { getCurrentUser } = await import("../../lib/utils/auth.js");
+          const user = await getCurrentUser();
+          if (user && typeof window !== "undefined") {
+            // User is authenticated but no staff record - redirect to error page
+            // Only redirect if not already on unauthorized page to prevent loops
+            if (!pathname.startsWith("/unauthorized")) {
+              try {
+                // Clear any cached auth data
+                localStorage.removeItem("auth_staff");
+                localStorage.removeItem("auth_user");
+                // Redirect to a page that explains the issue
+                window.location.href = "/unauthorized?reason=no_staff_record";
+                return;
+              } catch (redirectError) {
+                console.error("Redirect error:", redirectError);
+                // Fallback: try router.push
+                router.push("/unauthorized?reason=no_staff_record");
+                return;
+              }
+            }
+          }
+        } catch (userError) {
+          // User not authenticated - will be handled by redirect below
+          console.warn("Could not verify user authentication:", userError);
+        }
+      }
     } catch (error) {
-      setError(error.message);
+      console.error("Error loading app data:", error);
+      setError(error.message || "Failed to load application data");
     } finally {
       setLoading(false);
     }
@@ -87,20 +142,34 @@ export default function LayoutProvider({ children }) {
   }, [toast]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Loading...</span>
-      </div>
-    );
+    return <PageLoading message="Loading workspace..." />;
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-red-600 mb-4">Error loading application</div>
-          <div className="text-gray-600 mb-4">{error}</div>
+      <div
+        className="min-h-screen flex items-center justify-center px-6"
+        style={{
+          backgroundColor,
+          backgroundImage: `radial-gradient(circle at 18% 18%, ${primaryColor}14, transparent 55%), radial-gradient(circle at 82% 78%, ${accentColor}12, transparent 60%)`,
+        }}
+      >
+        <div className="relative max-w-lg w-full bg-white/90 backdrop-blur-md border border-gray-200/60 shadow-2xl rounded-3xl p-10 text-center">
+          <div
+            className="mx-auto mb-6 h-16 w-16 rounded-3xl flex items-center justify-center"
+            style={{
+              backgroundImage: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})`,
+              boxShadow: `0 20px 40px -22px ${primaryColor}`,
+            }}
+          >
+            <LoadingSpinner size="lg" className="h-16 w-16" thickness={4} />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">
+            We couldn’t load the application
+          </h2>
+          <p className="text-slate-600 mb-6">
+            {error || "Something went wrong while preparing your workspace."}
+          </p>
           <button
             onClick={() => {
               setError(null);
@@ -108,43 +177,23 @@ export default function LayoutProvider({ children }) {
               loadAppData();
             }}
             disabled={loading}
-            className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white font-medium shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundImage: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
+            }}
           >
-            {loading ? (
-              <>
-                <svg
-                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Retrying...
-              </>
-            ) : (
-              "Retry"
-            )}
+            {loading ? "Retrying..." : "Retry"}
           </button>
+          <p className="mt-4 text-xs tracking-[0.3em] text-slate-400 uppercase">
+            {orgCode || "RETC"}
+          </p>
         </div>
       </div>
     );
   }
 
   // Define routes that don't need any layout
-  const noLayoutRoutes = ["/login", "/setup"];
+  const noLayoutRoutes = ["/login", "/setup", "/select-org"];
 
   // Define routes that only need top navigation (like guest portal)
   const topNavOnlyRoutes = ["/guest"];
@@ -205,12 +254,27 @@ export default function LayoutProvider({ children }) {
     );
   }
 
+  const shouldRedirectToLogin =
+    !loading &&
+    !staff &&
+    !finalIsNoLayout &&
+    !finalIsTopNavOnly &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/unauthorized");
+
+  useEffect(() => {
+    if (shouldRedirectToLogin) {
+      router.push("/login");
+    }
+  }, [shouldRedirectToLogin, router]);
+
   // Default: redirect to login if not authenticated, otherwise show with sidebar
   if (!staff) {
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <PageLoading message="Checking authentication..." />
+      </div>
+    );
   }
 
   // Fallback layout

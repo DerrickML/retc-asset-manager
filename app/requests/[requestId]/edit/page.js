@@ -44,9 +44,11 @@ import {
   getCurrentViewMode,
 } from "../../../../lib/utils/auth.js";
 import { ENUMS } from "../../../../lib/appwrite/config.js";
+import { useOrgTheme } from "../../../../components/providers/org-theme-provider";
 import { validateRequestDates } from "../../../../lib/utils/validation.js";
 import { formatCategory } from "../../../../lib/utils/mappings.js";
 import { Query } from "appwrite";
+import { Dialog, DialogContent } from "../../../../components/ui/dialog";
 
 export default function EditRequestPage() {
   const params = useParams();
@@ -69,6 +71,12 @@ export default function EditRequestPage() {
   // Search and filter
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const { theme } = useOrgTheme();
+  const primaryColor = theme?.colors?.primary || "#0E6370";
+  const primaryDark = theme?.colors?.primaryDark || "#0A4E57";
+  const headerGradient = `linear-gradient(135deg, rgba(14, 99, 112, 0.08), rgba(14, 99, 112, 0.02))`;
+  const mutedBackground = theme?.colors?.muted || "rgba(14, 99, 112, 0.08)";
 
   useEffect(() => {
     loadData();
@@ -198,7 +206,6 @@ export default function EditRequestPage() {
     try {
       const queries = [
         Query.equal("availableStatus", ENUMS.AVAILABLE_STATUS.AVAILABLE),
-        Query.equal("isPublic", true),
         Query.orderAsc("name"),
       ];
 
@@ -210,7 +217,7 @@ export default function EditRequestPage() {
         queries.push(Query.search("name", searchTerm));
       }
 
-      const result = await assetsService.getPublicAssets(queries);
+      const result = await assetsService.getAssets(queries);
       setAvailableAssets(result.documents);
     } catch (error) {
       console.error("Failed to load assets:", error);
@@ -337,7 +344,7 @@ export default function EditRequestPage() {
                 asChild
                 variant="ghost"
                 size="sm"
-                className="text-gray-600 hover:text-green-600 hover:bg-green-50"
+                className="text-gray-600 hover:text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
               >
                 <Link
                   href={`/requests/${request.$id}`}
@@ -349,11 +356,11 @@ export default function EditRequestPage() {
               </Button>
             </div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
+              <div className="p-2 rounded-lg bg-[var(--org-primary)]/15">
                 <Edit3 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold text-slate-900">
                   Edit Request #{request.$id.slice(-8)}
                 </h1>
                 <p className="text-gray-600 mt-1">
@@ -374,15 +381,16 @@ export default function EditRequestPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Request Details */}
-        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-          <CardHeader className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-100">
+        <Card className="border-0 shadow-lg bg-white/85 backdrop-blur-sm">
+          <CardHeader
+            className="border-b"
+            style={{ background: headerGradient, borderColor: `${primaryColor}1a` }}
+          >
             <CardTitle className="flex items-center gap-3 text-xl">
-              <div className="p-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
-                <CalendarDays className="w-5 h-5 text-white" />
+              <div className="p-2 rounded-lg bg-[var(--org-primary)]/15">
+                <CalendarDays className="w-5 h-5 text-[var(--org-primary)]" />
               </div>
-              <span className="bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                Request Details
-              </span>
+              <span className="text-slate-900">Request Details</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 p-6">
@@ -399,7 +407,7 @@ export default function EditRequestPage() {
                 onChange={(e) => handleInputChange("purpose", e.target.value)}
                 placeholder="Describe why you need these assets..."
                 rows={4}
-                className="mt-1 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                className="mt-1 border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)] rounded-lg"
                 required
               />
             </div>
@@ -419,7 +427,7 @@ export default function EditRequestPage() {
                   onChange={(e) =>
                     handleInputChange("issueDate", e.target.value)
                   }
-                  className="mt-1 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                  className="mt-1 border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)] rounded-lg"
                   required
                 />
               </div>
@@ -437,7 +445,7 @@ export default function EditRequestPage() {
                   onChange={(e) =>
                     handleInputChange("expectedReturnDate", e.target.value)
                   }
-                  className="mt-1 border-gray-200 focus:border-green-500 focus:ring-green-500 rounded-lg"
+                  className="mt-1 border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)] rounded-lg"
                   required
                 />
               </div>
@@ -446,16 +454,26 @@ export default function EditRequestPage() {
         </Card>
 
         {/* Asset Selection */}
-        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 border-b border-blue-100">
+        <Card className="border-0 shadow-lg bg-white/85 backdrop-blur-sm">
+          <CardHeader
+            className="border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            style={{ background: headerGradient, borderColor: `${primaryColor}1a` }}
+          >
             <CardTitle className="flex items-center gap-3 text-xl">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                <Package className="w-5 h-5 text-white" />
+              <div className="p-2 rounded-lg bg-[var(--org-primary)]/15">
+                <Package className="w-5 h-5 text-[var(--org-primary)]" />
               </div>
-              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="text-slate-900">
                 Select Assets ({selectedAssets.length} selected)
               </span>
             </CardTitle>
+            <Button
+              type="button"
+              onClick={() => setAssetPickerOpen(true)}
+              className="w-full sm:w-auto bg-org-gradient text-white shadow-md hover:shadow-lg"
+            >
+              Add Asset
+            </Button>
           </CardHeader>
           <CardContent className="space-y-6 p-6">
             {/* Selected Assets */}
@@ -472,7 +490,12 @@ export default function EditRequestPage() {
                     >
                       <div className="flex items-start gap-3">
                         {/* Asset Image */}
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                        <div
+                          className="w-16 h-16 rounded-lg flex items-center justify-center overflow-hidden"
+                          style={{
+                            background: `linear-gradient(140deg, ${mutedBackground}, #ffffff)`
+                          }}
+                        >
                           {asset.assetImage ? (
                             <img
                               src={
@@ -528,143 +551,6 @@ export default function EditRequestPage() {
                 </div>
               </div>
             )}
-
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <Input
-                  type="search"
-                  placeholder="Search assets..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-lg"
-                />
-              </div>
-              <div className="w-full sm:w-48">
-                <Select
-                  value={categoryFilter}
-                  onValueChange={setCategoryFilter}
-                >
-                  <SelectTrigger className="border-gray-200 focus:border-blue-500 focus:ring-blue-500 rounded-lg">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {Object.values(ENUMS.CATEGORY).map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {formatCategory(category)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Available Assets */}
-            <div className="space-y-3 max-h-96 overflow-y-auto border border-gray-200 rounded-xl p-4 bg-gray-50/50">
-              {filteredAssets.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <div className="p-4 bg-gradient-to-r from-gray-100 to-gray-200 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <Package className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p className="text-lg font-medium mb-2">No assets found</p>
-                  {searchTerm && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSearchTerm("")}
-                      className="mt-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    >
-                      Clear search
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                filteredAssets.map((asset) => {
-                  const isSelected = selectedAssets.some(
-                    (selected) => selected.$id === asset.$id
-                  );
-                  return (
-                    <div
-                      key={asset.$id}
-                      className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
-                        isSelected
-                          ? "bg-gradient-to-r from-green-50 to-blue-50 border-green-200 shadow-md"
-                          : "bg-white hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 hover:border-blue-200 hover:shadow-sm"
-                      }`}
-                      onClick={() => handleAssetToggle(asset)}
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        readOnly
-                        className={`${
-                          isSelected
-                            ? "border-green-500 bg-green-500"
-                            : "border-gray-300"
-                        }`}
-                      />
-
-                      {/* Asset Image */}
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {asset.assetImage ? (
-                          <img
-                            src={
-                              asset.assetImage.startsWith("http")
-                                ? asset.assetImage
-                                : assetImageService.getPublicImageUrl(
-                                    asset.assetImage
-                                  )
-                            }
-                            alt={asset.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.style.display = "none";
-                              e.target.nextSibling.style.display = "flex";
-                            }}
-                          />
-                        ) : null}
-                        <div
-                          className="w-full h-full flex items-center justify-center text-gray-400"
-                          style={{
-                            display: asset.assetImage ? "none" : "flex",
-                          }}
-                        >
-                          <ImageIcon className="w-5 h-5" />
-                        </div>
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h4 className="font-semibold text-gray-900 truncate">
-                            {asset.name}
-                          </h4>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs shrink-0 ${
-                              isSelected
-                                ? "border-blue-500 text-blue-600 bg-blue-50"
-                                : "border-gray-300 text-gray-600"
-                            }`}
-                          >
-                            {formatCategory(asset.category)}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-600 truncate mb-1">
-                          📍 {asset.locationName}
-                          {asset.roomOrArea && ` - ${asset.roomOrArea}`}
-                        </p>
-                        {asset.publicSummary && (
-                          <p className="text-xs text-gray-500 line-clamp-2">
-                            {asset.publicSummary}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
           </CardContent>
         </Card>
 
@@ -688,13 +574,177 @@ export default function EditRequestPage() {
           <Button
             type="submit"
             disabled={saving || selectedAssets.length === 0}
-            className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-8 py-2 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-org-gradient text-white px-8 py-2 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4 mr-2" />
             {saving ? "Updating..." : "Update Request"}
           </Button>
         </div>
       </form>
+
+      <Dialog open={assetPickerOpen} onOpenChange={setAssetPickerOpen}>
+        <DialogContent className="max-w-5xl">
+          <Card className="border-0 shadow-none">
+            <CardHeader className="space-y-2 p-0 pb-4">
+              <CardTitle className="text-xl font-semibold text-gray-900">
+                Add Assets to Request
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Browse available assets and toggle them to add or remove from this request.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5 p-0">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <Input
+                    type="search"
+                    placeholder="Search assets..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)] rounded-lg"
+                  />
+                </div>
+                <div className="w-full sm:w-48">
+                  <Select
+                    value={categoryFilter}
+                    onValueChange={setCategoryFilter}
+                  >
+                    <SelectTrigger className="border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)] rounded-lg">
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {Object.values(ENUMS.CATEGORY).map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {formatCategory(category)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="max-h-[28rem] overflow-y-auto space-y-3 pr-1">
+                {filteredAssets.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <div className="p-4 rounded-full mx-auto mb-4 flex items-center justify-center"
+                      style={{ background: `linear-gradient(135deg, ${mutedBackground}, #ffffff)` }}
+                    >
+                      <Package className="w-8 h-8 text-[var(--org-primary)]" />
+                    </div>
+                    <p className="text-lg font-medium mb-2">No assets found</p>
+                    {searchTerm && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSearchTerm("")}
+                        className="mt-2 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
+                      >
+                        Clear search
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  filteredAssets.map((asset) => {
+                    const isSelected = selectedAssets.some(
+                      (selected) => selected.$id === asset.$id
+                    );
+                    return (
+                      <div
+                        key={asset.$id}
+                        className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                          isSelected
+                            ? "bg-[var(--org-primary)]/10 border-[var(--org-primary)]/40 shadow-sm"
+                            : "bg-white hover:bg-[var(--org-primary)]/5 hover:border-[var(--org-primary)]/30"
+                        }`}
+                        onClick={() => handleAssetToggle(asset)}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          readOnly
+                          className={
+                            isSelected
+                              ? "border-[var(--org-primary)] bg-[var(--org-primary)]"
+                              : "border-gray-300"
+                          }
+                        />
+                        <div className="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
+                          style={{ background: `linear-gradient(140deg, ${mutedBackground}, #ffffff)` }}
+                        >
+                          {asset.assetImage ? (
+                            <img
+                              src={
+                                asset.assetImage.startsWith("http")
+                                  ? asset.assetImage
+                                  : assetImageService.getPublicImageUrl(
+                                      asset.assetImage
+                                    )
+                              }
+                              alt={asset.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = "none";
+                                e.target.nextSibling.style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className="w-full h-full flex items-center justify-center text-gray-400"
+                            style={{
+                              display: asset.assetImage ? "none" : "flex",
+                            }}
+                          >
+                            <ImageIcon className="w-5 h-5" />
+                          </div>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h4 className="font-semibold text-gray-900 truncate">
+                              {asset.name}
+                            </h4>
+                            <Badge
+                              variant="outline"
+                              className={`text-xs shrink-0 ${
+                                isSelected
+                                  ? "border-[var(--org-primary)] text-[var(--org-primary)] bg-[var(--org-primary)]/10"
+                                  : "border-gray-300 text-gray-600"
+                              }`}
+                            >
+                              {formatCategory(asset.category)}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 truncate">
+                            📍 {asset.locationName}
+                            {asset.roomOrArea && ` - ${asset.roomOrArea}`}
+                          </p>
+                          {asset.publicSummary && (
+                            <p className="text-xs text-gray-500 line-clamp-2 mt-1">
+                              {asset.publicSummary}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAssetPickerOpen(false)}
+                  className="rounded-full px-6 border-[var(--org-primary)]/30 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
+                >
+                  Done
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

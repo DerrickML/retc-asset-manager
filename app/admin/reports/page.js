@@ -51,6 +51,8 @@ import {
   Filter,
   ShoppingCart,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import {
   assetsService,
@@ -319,81 +321,79 @@ export default function AdminReports() {
     breakdowns = null
   ) => {
     if (!data || data.length === 0) {
-      alert("No data to export");
+      alert("No data to download");
       return;
     }
 
     // Use custom formatter if provided, otherwise use default
     const formattedData = formatData ? formatData(data) : data;
 
-    // Escape values that contain commas or quotes
-    const escapeCSVValue = (value) => {
-      if (value === null || value === undefined) return "";
-      const stringValue = String(value);
-      if (
-        stringValue.includes(",") ||
-        stringValue.includes('"') ||
-        stringValue.includes("\n")
-      ) {
-        return `"${stringValue.replace(/"/g, '""')}"`;
-      }
-      return stringValue;
-    };
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const now = new Date();
+    const readableTitle = filename.replace(/-|_/g, " ");
+    doc.setFontSize(16);
+    doc.text(`${readableTitle} Report`, 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${now.toLocaleString()}`, 40, 60);
+    doc.text(`Total Records: ${data.length}`, 40, 74);
 
-    // Build CSV content
-    let csvContent = "";
+    let currentY = 100;
 
-    // Add report metadata header
-    csvContent += `Report: ${filename}\n`;
-    csvContent += `Generated: ${new Date().toLocaleString()}\n`;
-    csvContent += `Total Records: ${data.length}\n`;
-    csvContent += `\n`;
-
-    // Add summary statistics
     if (summaryMatrix) {
-      csvContent += `=== SUMMARY STATISTICS ===\n`;
-      Object.entries(summaryMatrix).forEach(([key, value]) => {
-        csvContent += `${escapeCSVValue(key)},${escapeCSVValue(value)}\n`;
-      });
-      csvContent += `\n`;
+      const summaryRows = Object.entries(summaryMatrix);
+      if (summaryRows.length > 0) {
+        autoTable(doc, {
+          startY: currentY,
+          head: [["Metric", "Value"]],
+          body: summaryRows,
+          styles: { fontSize: 10, cellPadding: 6 },
+          headStyles: { fillColor: [5, 150, 105], textColor: 255 },
+          margin: { left: 40, right: 40 },
+        });
+        currentY = doc.lastAutoTable.finalY + 20;
+      }
     }
 
-    // Add breakdown matrices
     if (breakdowns) {
       Object.entries(breakdowns).forEach(([title, breakdown]) => {
-        csvContent += `=== ${title.toUpperCase()} ===\n`;
-        csvContent += `Category,Count\n`;
-        Object.entries(breakdown).forEach(([category, count]) => {
-          csvContent += `${escapeCSVValue(category)},${escapeCSVValue(
-            count
-          )}\n`;
+        const breakdownRows = Object.entries(breakdown);
+        if (breakdownRows.length === 0) return;
+        autoTable(doc, {
+          startY: currentY,
+          head: [[`${title} Category`, "Count"]],
+          body: breakdownRows,
+          styles: { fontSize: 9, cellPadding: 4 },
+          headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+          margin: { left: 40, right: 40 },
         });
-        csvContent += `\n`;
+        currentY = doc.lastAutoTable.finalY + 20;
       });
     }
 
-    // Add detailed data table
     if (formattedData.length > 0) {
       const headers = Object.keys(formattedData[0]);
-      csvContent += `=== DETAILED DATA ===\n`;
-      csvContent += headers.join(",") + "\n";
-      csvContent += formattedData
-        .map((row) =>
-          headers.map((header) => escapeCSVValue(row[header])).join(",")
-        )
-        .join("\n");
+      autoTable(doc, {
+        startY: currentY,
+        head: [headers],
+        body: formattedData.map((row) =>
+          headers.map((header) => {
+            const value = row[header];
+            if (value === null || value === undefined || value === "") {
+              return "—";
+            }
+            if (typeof value === "number") {
+              return value.toLocaleString();
+            }
+            return value;
+          })
+        ),
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+        margin: { left: 40, right: 40 },
+      });
     }
 
-    // Create and download file
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${filename}_${new Date().toISOString().split("T")[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    doc.save(`${filename}_${now.toISOString().split("T")[0]}.pdf`);
   };
 
   const formatCurrency = (amount) => {
@@ -1074,7 +1074,7 @@ export default function AdminReports() {
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       <Download className="w-4 h-4 mr-2" />
-                      Export CSV
+                      Download PDF
                     </Button>
                   </div>
                 </CardHeader>
@@ -1150,7 +1150,7 @@ export default function AdminReports() {
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-sm font-medium text-slate-700 text-center">
                         Showing first 50 of {reportData.assets.length} assets.
-                        Export for full report.
+                        Download for full report.
                       </p>
                     </div>
                   )}
@@ -1192,7 +1192,7 @@ export default function AdminReports() {
                       className="bg-orange-600 hover:bg-orange-700 text-white"
                     >
                       <Download className="w-4 h-4 mr-2" />
-                      Export CSV
+                      Download PDF
                     </Button>
                   </div>
                 </CardHeader>
@@ -1438,7 +1438,7 @@ export default function AdminReports() {
                             (item) => item.itemType === "CONSUMABLE"
                           ).length
                         }{" "}
-                        consumables. Export for full report.
+                        consumables. Download for full report.
                       </p>
                     </div>
                   )}
@@ -1478,7 +1478,7 @@ export default function AdminReports() {
                       className="bg-purple-600 hover:bg-purple-700 text-white"
                     >
                       <Download className="w-4 h-4 mr-2" />
-                      Export CSV
+                      Download PDF
                     </Button>
                   </div>
                 </CardHeader>
@@ -1552,7 +1552,7 @@ export default function AdminReports() {
                     <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
                       <p className="text-sm font-medium text-slate-700 text-center">
                         Showing first 50 of {reportData.requests.length}{" "}
-                        requests. Export for full report.
+                        requests. Download for full report.
                       </p>
                     </div>
                   )}
@@ -1587,7 +1587,7 @@ export default function AdminReports() {
                       className="bg-indigo-600 hover:bg-indigo-700 text-white"
                     >
                       <Download className="w-4 h-4 mr-2" />
-                      Export CSV
+                      Download PDF
                     </Button>
                   </div>
                 </CardHeader>

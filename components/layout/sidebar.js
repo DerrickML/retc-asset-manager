@@ -36,6 +36,7 @@ import { getCurrentStaff, permissions, logout } from "../../lib/utils/auth.js";
 import { assetRequestsService } from "../../lib/appwrite/provider.js";
 import { Query } from "appwrite";
 import { ENUMS } from "../../lib/appwrite/config.js";
+import { useOrgTheme } from "../providers/org-theme-provider";
 
 export default function Sidebar() {
   const [staff, setStaff] = useState(null);
@@ -56,12 +57,24 @@ export default function Sidebar() {
     requests: false,
   });
   const pathname = usePathname();
+  const { theme } = useOrgTheme();
+  const orgLogo =
+    theme?.branding?.logoProxy ||
+    theme?.branding?.logo ||
+    "https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a";
+  const orgName = theme?.name || "Asset Manager";
+  const orgTagline = theme?.branding?.tagline || "Asset Management";
+  const systemName = "Assets Manager";
+  const orgCode = theme?.code || "RETC";
+  const isAdminView = viewMode === "admin";
 
   // Function to update view mode and persist it
   const updateViewMode = (mode) => {
     setViewMode(mode);
     if (typeof window !== "undefined") {
       localStorage.setItem("viewMode", mode);
+      // Dispatch custom event so other components can react immediately
+      window.dispatchEvent(new CustomEvent("viewModeChanged", { detail: { mode } }));
     }
   };
 
@@ -286,6 +299,10 @@ export default function Sidebar() {
   ];
 
   const NavigationItem = ({ item, isActive, level = 0 }) => {
+    // Use the same blue to green gradient for both active and hover
+    const activeClass = "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"; // Blue to green gradient for active
+    const hoverClass = "hover:bg-gradient-to-r hover:from-sky-400/60 hover:to-emerald-300/50 hover:text-white hover:shadow-lg hover:scale-[1.02]"; // Bright blue to light green gradient hover
+
     const ItemContent = (
       <>
         <div className="flex items-center flex-1 min-w-0">
@@ -300,7 +317,10 @@ export default function Sidebar() {
                 {item.label}
               </span>
               {item.badge && (
-                <Badge className="ml-auto bg-sidebar-500 text-white text-xs px-1.5 py-0.5 min-w-[1.25rem] h-5">
+                <Badge
+                  className="ml-auto text-xs px-2 py-0.5 min-w-[1.45rem] h-5 font-semibold text-[var(--org-primary)] shadow"
+                  style={{ background: "rgba(255,255,255,0.95)" }}
+                >
                   {item.badge}
                 </Badge>
               )}
@@ -311,7 +331,7 @@ export default function Sidebar() {
           <ChevronRight
             className={`w-4 h-4 transition-transform ${
               expandedSections[item.href] ? "rotate-90" : ""
-            }`}
+            } text-white/70`}
           />
         )}
       </>
@@ -326,12 +346,8 @@ export default function Sidebar() {
                 href={item.href}
                 className={`group flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? viewMode === "admin"
-                      ? "bg-gradient-to-r from-sidebar-500 to-sidebar-600 text-white shadow-lg shadow-sidebar-500/25"
-                      : "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25"
-                    : viewMode === "admin"
-                    ? "text-white hover:text-white hover:bg-sidebar-800/50"
-                    : "text-white hover:text-white hover:bg-blue-600/80 hover:shadow-lg hover:shadow-blue-500/25"
+                    ? `${activeClass}`
+                    : `text-white/80 ${hoverClass}`
                 } ${level > 0 ? "ml-4" : ""}`}
               >
                 {ItemContent}
@@ -340,7 +356,10 @@ export default function Sidebar() {
             <TooltipContent side="right" className="font-medium">
               <p>{item.label}</p>
               {item.badge && (
-                <Badge className="ml-2 bg-sidebar-500 text-white text-xs">
+                <Badge
+                  className="ml-2 text-xs font-semibold text-[var(--org-primary)] shadow"
+                  style={{ background: "rgba(255,255,255,0.95)" }}
+                >
                   {item.badge}
                 </Badge>
               )}
@@ -355,12 +374,8 @@ export default function Sidebar() {
         href={item.href}
         className={`group flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 ${
           isActive
-            ? viewMode === "admin"
-              ? "bg-gradient-to-r from-sidebar-500 to-sidebar-600 text-white shadow-lg shadow-sidebar-500/25"
-              : "bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25"
-            : viewMode === "admin"
-            ? "text-white hover:text-white hover:bg-sidebar-800/50"
-            : "text-white hover:text-white hover:bg-blue-600/80 hover:shadow-lg hover:shadow-blue-500/25"
+            ? `${activeClass}`
+            : `text-white/80 ${hoverClass}`
         } ${level > 0 ? "ml-6" : ""}`}
       >
         {ItemContent}
@@ -384,15 +399,19 @@ export default function Sidebar() {
 
       {/* Floating Menu Button - Bottom Left */}
       <button
-        className={`fixed bottom-6 left-6 z-50 md:hidden w-14 h-14 rounded-full text-white shadow-2xl border-0 transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 flex items-center justify-center ${
-          isMobileOpen
-            ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/25"
-            : "bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 shadow-primary-500/25"
-        }`}
+        className="fixed bottom-6 left-6 z-50 md:hidden w-14 h-14 rounded-full text-white shadow-2xl border-0 transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 flex items-center justify-center"
         onClick={() => {
           setIsMobileOpen(!isMobileOpen);
         }}
         type="button"
+        style={
+          isMobileOpen
+            ? undefined
+            : {
+                background: "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                boxShadow: "0 10px 25px rgba(0, 0, 0, 0.25)",
+              }
+        }
       >
         {isMobileOpen ? (
           <X className="w-6 h-6" />
@@ -402,7 +421,12 @@ export default function Sidebar() {
 
         {/* Subtle floating animation pulse */}
         {!isMobileOpen && (
-          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary-600 to-primary-700 opacity-20 animate-ping pointer-events-none"></div>
+          <div
+            className="absolute inset-0 rounded-full opacity-20 animate-ping pointer-events-none"
+            style={{
+              background: "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+            }}
+          ></div>
         )}
 
         {/* Notification badge for mobile */}
@@ -415,36 +439,44 @@ export default function Sidebar() {
 
       {/* Desktop Sidebar - Inline */}
       <div
-        className={`hidden md:flex flex-col bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 border-r border-primary-800/50 transition-all duration-300 ease-in-out ${
+        className={`hidden md:flex flex-col border-r transition-all duration-300 ease-in-out ${
           isCollapsed ? "w-20" : "w-72"
         }`}
+        style={{
+          background: "linear-gradient(180deg, var(--org-primary-dark), var(--org-primary))",
+          borderColor: "var(--org-primary-dark)",
+        }}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-6">
             {!isCollapsed ? (
-              <div className="flex items-center space-x-3">
-                <div className="relative w-12 h-12 overflow-hidden rounded-full">
+              <div
+                className="flex items-center space-x-3 px-3 py-2 rounded-2xl shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, var(--org-primary), var(--org-primary-dark))",
+                }}
+              >
+                <div className="relative w-12 h-12 overflow-hidden rounded-xl bg-white flex items-center justify-center shadow-sm">
                   <img
-                    src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
-                    alt="Logo"
-                    className="absolute inset-0 w-full h-full object-contain scale-[1.3]"
+                    src={orgLogo}
+                    alt={`${systemName} logo`}
+                    className="absolute inset-0 w-full h-full object-contain p-1.5"
                     style={{ objectPosition: "center" }}
                   />
                 </div>
                 <div>
-                  <h1 className="text-white font-bold text-lg">
-                    Asset Manager
+                  <h1 className="text-white font-bold text-xl leading-tight">
+                    {systemName}
                   </h1>
-                  <p className="text-primary-300 text-xs">RETC Management</p>
                 </div>
               </div>
             ) : (
-              <div className="relative w-12 h-12 mx-auto overflow-hidden rounded-full">
+              <div className="relative w-12 h-12 mx-auto overflow-hidden rounded-full bg-white shadow-sm">
                 <img
-                  src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
-                  alt="Logo"
-                  className="absolute inset-0 w-full h-full object-contain scale-[1.3] mx-auto"
+                  src={orgLogo}
+                  alt={`${orgName} logo`}
+                  className="absolute inset-0 w-full h-full object-contain scale-[1.3] mx-auto p-1.5"
                   style={{ objectPosition: "center" }}
                 />
               </div>
@@ -453,7 +485,11 @@ export default function Sidebar() {
             <Button
               variant="ghost"
               size="sm"
-              className="hidden md:flex text-orange-400 hover:text-white hover:bg-orange-800/50 p-2"
+              className="hidden md:flex items-center justify-center rounded-full text-white p-2 shadow-lg hover:shadow-xl transition-transform"
+              style={{
+                background: "linear-gradient(140deg, var(--org-primary), var(--org-highlight))",
+                border: "1px solid rgba(255, 255, 255, 0.35)",
+              }}
               onClick={toggleSidebar}
             >
               <ChevronLeft
@@ -498,10 +534,10 @@ export default function Sidebar() {
                     <p className="text-white font-semibold text-sm truncate">
                       {staff.name}
                     </p>
-                    <p className="text-primary-300 text-xs truncate">
+                    <p className="text-org-tagline text-xs truncate">
                       {staff.email}
                     </p>
-                    <p className="text-primary-400 text-xs">
+                    <p className="text-org-tagline text-xs">
                       {staff.department || "Staff"}
                     </p>
                   </div>
@@ -514,28 +550,28 @@ export default function Sidebar() {
                       <Button
                         variant={viewMode === "user" ? "default" : "ghost"}
                         size="sm"
-                        className={`flex-1 text-xs h-8 ${
+                        className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-medium ${
                           viewMode === "user"
-                            ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
-                            : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
+                            ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
+                            : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
                         }`}
                         onClick={() => switchViewMode("user")}
                       >
-                        <Eye className="w-3 h-3 mr-1" />
-                        User
+                        <Eye className="w-3 h-3 mr-1 !text-white" />
+                        <span className="!text-white">User</span>
                       </Button>
                       <Button
                         variant={viewMode === "admin" ? "default" : "ghost"}
                         size="sm"
-                        className={`flex-1 text-xs h-8 ${
+                        className={`sidebar-user-toggle flex-1 text-xs h-8 transition-all duration-200 font-medium ${
                           viewMode === "admin"
-                            ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
-                            : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
+                            ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
+                            : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
                         }`}
                         onClick={() => switchViewMode("admin")}
                       >
-                        <Shield className="w-3 h-3 mr-1" />
-                        Admin
+                        <Shield className="w-3 h-3 mr-1 !text-white" />
+                        <span className="!text-white">Admin</span>
                       </Button>
                     </div>
                   </div>
@@ -562,10 +598,11 @@ export default function Sidebar() {
               {!isCollapsed && (
                 <div className="px-3 py-2">
                   <Badge
-                    className={`text-xs font-medium ${
+                    variant="outline"
+                    className={`badge-mode ${
                       viewMode === "admin"
-                        ? "bg-sidebar-500/20 text-sidebar-300 border-sidebar-500/30"
-                        : "bg-primary-500/20 text-primary-300 border-primary-500/30"
+                        ? "badge-mode--admin"
+                        : "badge-mode--user"
                     }`}
                   >
                     {viewMode === "admin" ? "Admin Mode" : "User Mode"}
@@ -623,10 +660,10 @@ export default function Sidebar() {
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="w-12 h-12 mx-auto flex items-center justify-center text-red-500 hover:text-white hover:bg-red-600 rounded-xl"
+                      className="sidebar-signout w-12 h-12 mx-auto flex items-center justify-center text-red-500 border-[3px] border-white bg-gradient-to-r from-sky-400/60 to-emerald-300/50 hover:from-sky-400/70 hover:to-emerald-300/60 hover:border-white hover:shadow-2xl rounded-xl transition-all duration-200 font-bold shadow-2xl ring-4 ring-white/50"
                       onClick={handleLogout}
                     >
-                      <LogOut className="w-5 h-5" />
+                      <LogOut className="w-6 h-6 text-red-500" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right">
@@ -637,11 +674,11 @@ export default function Sidebar() {
             ) : (
               <Button
                 variant="ghost"
-                className="w-full justify-start text-red-500 hover:text-white hover:bg-red-600 transition-all duration-200"
+                className="sidebar-signout w-full justify-start text-red-500 border-[3px] border-white bg-gradient-to-r from-sky-400/60 to-emerald-300/50 hover:from-sky-400/70 hover:to-emerald-300/60 hover:border-white hover:shadow-2xl transition-all duration-200 font-bold rounded-lg shadow-2xl ring-4 ring-white/50 py-3"
                 onClick={handleLogout}
               >
-                <LogOut className="mr-3 h-4 w-4 text-red-500" />
-                Sign Out
+                <LogOut className="mr-3 h-5 w-5 text-red-500" />
+                <span className="text-red-500">Sign Out</span>
               </Button>
             )}
           </div>
@@ -650,25 +687,29 @@ export default function Sidebar() {
 
       {/* Mobile Sidebar - Fixed Overlay */}
       <div
-        className={`fixed left-0 top-0 z-40 h-full w-72 md:hidden bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 border-r border-primary-800/50 transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 z-40 h-full w-72 md:hidden border-r transition-transform duration-300 ease-in-out ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={{
+          background: "linear-gradient(180deg, var(--org-primary-dark), var(--org-primary))",
+          borderColor: "var(--org-primary-dark)",
+        }}
       >
         <div className="flex flex-col h-full">
           {/* Mobile Header */}
           <div className="flex items-center justify-between px-4 py-6">
             <div className="flex items-center space-x-3">
-              <div className="relative w-12 h-12 overflow-hidden rounded-full">
+              <div className="relative w-12 h-12 overflow-hidden rounded-full bg-white shadow-sm">
                 <img
-                  src="https://appwrite.nrep.ug/v1/storage/buckets/68aa099d001f36378da4/files/68aa09f10037892a3872/view?project=68926e9b000ac167ec8a&mode=admin"
-                  alt="Logo"
-                  className="absolute inset-0 w-full h-full object-contain scale-[1.3]"
+                  src={orgLogo}
+                  alt={`${orgName} logo`}
+                  className="absolute inset-0 w-full h-full object-contain scale-[1.3] p-1.5"
                   style={{ objectPosition: "center" }}
                 />
               </div>
               <div>
-                <h1 className="text-white font-bold text-lg">Asset Manager</h1>
-                <p className="text-primary-300 text-xs">RETC Management</p>
+                <h1 className="text-white font-bold text-lg">{orgName}</h1>
+                <p className="text-xs text-org-tagline">{orgTagline}</p>
               </div>
             </div>
 
@@ -684,10 +725,15 @@ export default function Sidebar() {
 
           {/* Mobile User Info */}
           <div className="px-4 pb-6">
-            <div className="bg-orange-800/30 backdrop-blur-sm rounded-xl p-4 border border-orange-700/50">
+            <div
+              className="backdrop-blur-sm rounded-xl p-4 border border-org-muted"
+              style={{ backgroundColor: "rgba(255, 255, 255, 0.08)" }}
+            >
               <div className="flex items-center space-x-3 mb-4">
-                <Avatar className="w-12 h-12 ring-2 ring-sidebar-600">
-                  <AvatarFallback className="bg-gradient-to-br from-sidebar-500 to-sidebar-600 text-white font-semibold">
+                <Avatar className="w-12 h-12 ring-2"
+                  style={{ boxShadow: "0 0 0 2px rgba(255,255,255,0.25) inset" }}
+                >
+                  <AvatarFallback className="bg-org-gradient text-white font-semibold">
                     {staff.name?.charAt(0)?.toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
@@ -695,10 +741,10 @@ export default function Sidebar() {
                   <p className="text-white font-semibold text-sm truncate">
                     {staff.name}
                   </p>
-                  <p className="text-primary-300 text-xs truncate">
+                  <p className="text-org-tagline text-xs truncate">
                     {staff.email}
                   </p>
-                  <p className="text-primary-400 text-xs">
+                  <p className="text-org-tagline text-xs">
                     {staff.department || "Staff"}
                   </p>
                 </div>
@@ -711,28 +757,28 @@ export default function Sidebar() {
                     <Button
                       variant={viewMode === "user" ? "default" : "ghost"}
                       size="sm"
-                      className={`flex-1 text-xs h-8 ${
+                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium ${
                         viewMode === "user"
-                          ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
-                          : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
+                          ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
+                          : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
                       }`}
                       onClick={() => switchViewMode("user")}
                     >
-                      <Eye className="w-3 h-3 mr-1" />
-                      User
+                      <Eye className="w-3 h-3 mr-1 !text-white" />
+                      <span className="!text-white">User</span>
                     </Button>
                     <Button
                       variant={viewMode === "admin" ? "default" : "ghost"}
                       size="sm"
-                      className={`flex-1 text-xs h-8 ${
+                      className={`flex-1 text-xs h-8 transition-all duration-200 font-medium ${
                         viewMode === "admin"
-                          ? "bg-sidebar-600 hover:bg-sidebar-700 text-white"
-                          : "text-primary-300 hover:text-white hover:bg-primary-700/50 border border-primary-600/50"
+                          ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
+                          : "!text-white border-2 border-white/60 bg-gradient-to-r from-sky-400/50 to-emerald-300/40 hover:from-sky-400/60 hover:to-emerald-300/50 hover:!text-white hover:shadow-lg hover:scale-[1.02] hover:border-white"
                       }`}
                       onClick={() => switchViewMode("admin")}
                     >
-                      <Shield className="w-3 h-3 mr-1" />
-                      Admin
+                      <Shield className="w-3 h-3 mr-1 !text-white" />
+                      <span className="!text-white">Admin</span>
                     </Button>
                   </div>
                 </div>
@@ -746,11 +792,7 @@ export default function Sidebar() {
               {/* Current View Label */}
               <div className="px-3 py-2">
                 <Badge
-                  className={`text-xs font-medium ${
-                    viewMode === "admin"
-                      ? "bg-sidebar-500/20 text-sidebar-300 border-sidebar-500/30"
-                      : "bg-primary-500/20 text-primary-300 border-primary-500/30"
-                  }`}
+                  className={`bg-org-gradient text-white text-xs font-medium border-org-muted`}
                 >
                   {viewMode === "admin" ? "Admin Mode" : "User Mode"}
                 </Badge>
@@ -770,8 +812,8 @@ export default function Sidebar() {
                       href={item.href}
                       className={`group flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 ${
                         isActivePath(item.href)
-                          ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
-                          : "text-white hover:text-white hover:bg-blue-600/80 hover:shadow-lg hover:shadow-blue-500/25"
+                          ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
+                          : `text-white/80 hover:bg-gradient-to-r hover:from-sky-400/60 hover:to-emerald-300/50 hover:text-white hover:shadow-lg hover:scale-[1.02]`
                       }`}
                       onClick={() => setIsMobileOpen(false)}
                     >
@@ -780,7 +822,10 @@ export default function Sidebar() {
                         {item.label}
                       </span>
                       {item.badge && (
-                        <Badge className="ml-auto bg-sidebar-500 text-white text-xs px-1.5 py-0.5 min-w-[1.25rem] h-5">
+                        <Badge
+                          className="ml-auto text-xs px-2 py-0.5 min-w-[1.45rem] h-5 font-semibold text-[var(--org-primary)] shadow"
+                          style={{ background: "rgba(255,255,255,0.95)" }}
+                        >
                           {item.badge}
                         </Badge>
                       )}
@@ -793,8 +838,8 @@ export default function Sidebar() {
               {viewMode === "admin" && isAdmin && (
                 <div className="space-y-1">
                   <div className="px-3 py-2">
-                    <p className="text-xs font-semibold text-sidebar-300 uppercase tracking-wider">
-                      Admin Menu
+                    <p className="text-xs font-semibold text-orange-300 uppercase tracking-wider">
+                      {viewMode === "admin" ? "Admin Menu" : "User Menu"}
                     </p>
                   </div>
                   {adminNavItems.map((item) => (
@@ -803,8 +848,8 @@ export default function Sidebar() {
                       href={item.href}
                       className={`group flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 ${
                         isActivePath(item.href)
-                          ? "bg-gradient-to-r from-sidebar-500 to-sidebar-600 text-white shadow-lg shadow-sidebar-500/25"
-                          : "text-sidebar-300 hover:text-white hover:bg-sidebar-800/50"
+                          ? "bg-gradient-to-r from-sky-400/70 to-emerald-300/60 text-white shadow-lg scale-[1.02]"
+                          : "text-white/80 hover:bg-gradient-to-r hover:from-sky-400/60 hover:to-emerald-300/50 hover:text-white hover:shadow-lg hover:scale-[1.02]"
                       }`}
                       onClick={() => setIsMobileOpen(false)}
                     >
@@ -813,7 +858,10 @@ export default function Sidebar() {
                         {item.label}
                       </span>
                       {item.badge && (
-                        <Badge className="ml-auto bg-sidebar-500 text-white text-xs px-1.5 py-0.5 min-w-[1.25rem] h-5">
+                        <Badge
+                          className="ml-auto text-xs px-2 py-0.5 min-w-[1.45rem] h-5 font-semibold text-[var(--org-primary)] shadow"
+                          style={{ background: "rgba(255,255,255,0.95)" }}
+                        >
                           {item.badge}
                         </Badge>
                       )}
@@ -828,11 +876,11 @@ export default function Sidebar() {
           <div className="p-4 border-t border-orange-800/50">
             <Button
               variant="ghost"
-              className="w-full justify-start text-red-500 hover:text-white hover:bg-red-600 transition-all duration-200"
+              className="sidebar-signout w-full justify-start text-red-500 border-[3px] border-white bg-gradient-to-r from-sky-400/60 to-emerald-300/50 hover:from-sky-400/70 hover:to-emerald-300/60 hover:border-white hover:shadow-2xl transition-all duration-200 font-bold rounded-lg shadow-2xl ring-4 ring-white/50 py-3"
               onClick={handleLogout}
             >
-              <LogOut className="mr-3 h-4 w-4 text-red-500" />
-              Sign Out
+              <LogOut className="mr-3 h-5 w-5 text-red-500" />
+              <span className="text-red-500">Sign Out</span>
             </Button>
           </div>
         </div>

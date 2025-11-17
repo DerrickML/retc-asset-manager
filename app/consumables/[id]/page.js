@@ -136,10 +136,7 @@ export default function ConsumableDetailPage() {
           </div>
         </div>
         <Button
-          onClick={() => {
-            // TODO: Implement request functionality
-            // Request consumable functionality
-          }}
+          onClick={() => router.push("/requests/new?type=consumable")}
           className="bg-green-600 hover:bg-green-700"
           disabled={getConsumableStatus(consumable) === "OUT_OF_STOCK"}
         >
