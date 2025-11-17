@@ -4,6 +4,7 @@ import LayoutProvider from "../components/layout/layout-provider";
 import QueryProvider from "../lib/providers/query-provider";
 import ErrorBoundary from "../components/error-boundary";
 import { ToastProvider } from "../components/providers/toast-provider";
+import { OrgThemeProvider } from "../components/providers/org-theme-provider";
 import "./globals.css";
 
 export const metadata = {
@@ -98,7 +99,9 @@ html {
         <ErrorBoundary>
           <QueryProvider>
             <ToastProvider>
-              <LayoutProvider>{children}</LayoutProvider>
+              <OrgThemeProvider>
+                <LayoutProvider>{children}</LayoutProvider>
+              </OrgThemeProvider>
             </ToastProvider>
           </QueryProvider>
         </ErrorBoundary>

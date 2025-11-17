@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -10,6 +10,9 @@ import { settingsService, assetsService } from "../../lib/appwrite/provider.js";
 import { assetImageService } from "../../lib/appwrite/image-service.js";
 import { formatCategory } from "../../lib/utils/mappings.js";
 import { Query } from "appwrite";
+import { useOrgTheme } from "../../components/providers/org-theme-provider";
+import { setCurrentOrgCode } from "../../lib/utils/org";
+import { DEFAULT_ORG_CODE } from "../../lib/constants/org-branding";
 import {
   Search,
   Package,
@@ -28,19 +31,23 @@ import {
   Calendar,
   MapPin,
   Star,
+  LogIn,
 } from "lucide-react";
 
 // Masonry Card Component (for assets only - consumables are internal)
 const MasonryCard = ({ item }) => {
   return (
     <div className="break-inside-avoid mb-8 group">
-      <Card className="relative bg-white/80 backdrop-blur-sm border border-gray-200/40 hover:border-gray-300/60 hover:shadow-2xl hover:shadow-primary-200/20 transition-all duration-500 hover:scale-105 group overflow-hidden h-full flex flex-col rounded-2xl">
+      <Card className="relative bg-white/80 backdrop-blur-sm border border-gray-200/40 hover:border-gray-300/60 hover:shadow-2xl transition-all duration-500 hover:scale-105 group overflow-hidden h-full flex flex-col rounded-2xl">
         {/* Animated Background Elements */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-gray-50/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-        <div className="absolute -top-4 -right-4 w-8 h-8 bg-gradient-to-br from-primary-200/30 to-blue-200/30 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+        <div className="absolute inset-0" style={{ opacity: 0.05, background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }}></div>
         <div
-          className="absolute -bottom-4 -left-4 w-6 h-6 bg-gradient-to-br from-cyan-200/20 to-purple-200/20 rounded-full group-hover:scale-125 transition-transform duration-700"
-          style={{ animationDelay: "0.2s" }}
+          className="absolute -top-4 -right-4 w-8 h-8 rounded-full group-hover:scale-150 transition-transform duration-700"
+          style={{ background: "linear-gradient(135deg, var(--org-primary), var(--org-accent))", opacity: 0.25 }}
+        ></div>
+        <div
+          className="absolute -bottom-4 -left-4 w-6 h-6 rounded-full group-hover:scale-125 transition-transform duration-700"
+          style={{ background: "linear-gradient(135deg, var(--org-accent), var(--org-primary))", opacity: 0.2, animationDelay: "0.2s" }}
         ></div>
 
         <CardContent className="relative p-0 flex flex-col h-full">
@@ -73,38 +80,50 @@ const MasonryCard = ({ item }) => {
             </div>
 
             {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 55%)", opacity: 0, transition: "opacity 0.5s" }}></div>
 
             {/* Type Badge */}
             <div className="absolute top-4 left-4">
-              <Badge className="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg font-semibold px-4 py-2 rounded-full border-0 backdrop-blur-sm">
-                Asset
+              <Badge 
+                variant="outline"
+                className="font-semibold px-4 py-2 rounded-full border-0 shadow-lg backdrop-blur-sm"
+                style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%)" }}>
+                <span style={{ color: "white" }}>Asset</span>
               </Badge>
             </div>
 
             {/* Status Badge */}
             <div className="absolute top-4 right-4">
               <Badge
-                className={`${
-                  item.availableStatus === "AVAILABLE"
-                    ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg"
-                    : "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
-                } font-semibold px-4 py-2 rounded-full border-0 backdrop-blur-sm`}
+                variant="outline"
+                className="font-semibold px-4 py-2 rounded-full border-0 shadow-lg backdrop-blur-sm"
+                style={{
+                  background:
+                    item.availableStatus === "AVAILABLE"
+                      ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                      : "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                }}
               >
-                {item.availableStatus === "AVAILABLE" ? "Available" : "On Loan"}
+                <span style={{ color: "white" }}>{item.availableStatus === "AVAILABLE" ? "Available" : "On Loan"}</span>
               </Badge>
             </div>
           </div>
 
           {/* Content Section */}
           <div className="p-6 flex flex-col h-full">
-            <h3 className="font-bold text-gray-900 text-xl mb-4 group-hover:text-primary-700 transition-colors duration-300 line-clamp-2 leading-tight">
+            <h3 className="font-bold text-gray-900 text-xl mb-4 transition-colors duration-300 line-clamp-2 leading-tight group-hover:text-[var(--org-primary)]">
               {item.name}
             </h3>
 
-            <p className="text-sm font-semibold text-primary-600 mb-5 bg-gradient-to-r from-primary-50 to-blue-50 px-4 py-2 rounded-full inline-block self-start border border-primary-200/50">
-              {formatCategory(item.category)}
-            </p>
+            <Badge
+              variant="outline"
+              className="text-sm font-semibold mb-5 px-4 py-2 rounded-full inline-block self-start shadow-md"
+              style={{
+                background: "linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%)",
+              }}
+            >
+              <span style={{ color: "white" }}>{formatCategory(item.category)}</span>
+            </Badge>
 
             {item.description && (
               <p className="text-sm text-gray-600 mb-5 line-clamp-3 leading-relaxed flex-grow">
@@ -119,14 +138,15 @@ const MasonryCard = ({ item }) => {
             <div className="flex justify-center mt-6">
               <Button
                 size="sm"
-                className="group/btn relative bg-gradient-to-r from-primary-600 via-primary-700 to-blue-600 hover:from-primary-700 hover:via-blue-600 hover:to-primary-800 text-white px-8 py-3 shadow-lg hover:shadow-xl transition-all duration-300 min-w-[140px] rounded-xl font-semibold overflow-hidden"
+                className="relative text-white px-8 py-3 shadow-lg hover:shadow-xl transition-all duration-300 min-w-[140px] rounded-xl font-semibold overflow-hidden"
+                style={{ background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }}
                 asChild
               >
                 <Link
                   href={`/guest/assets/${item.$id}`}
                   className="flex items-center justify-center relative z-10"
                 >
-                  <Eye className="w-5 h-5 mr-2 group-hover/btn:scale-110 transition-transform duration-300" />
+                  <Eye className="w-5 h-5 mr-2 transition-transform duration-300" />
                   View Details
                 </Link>
               </Button>
@@ -139,6 +159,7 @@ const MasonryCard = ({ item }) => {
 };
 
 export default function GuestHomePage() {
+  const { orgCode, setOrgCode } = useOrgTheme();
   const [settings, setSettings] = useState(null);
   const [stats, setStats] = useState({
     totalAssets: 0,
@@ -161,6 +182,21 @@ export default function GuestHomePage() {
   const [allItems, setAllItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedOrg, setSelectedOrg] = useState(
+    () => orgCode?.toUpperCase() || DEFAULT_ORG_CODE
+  );
+
+  useEffect(() => {
+    // Guest portal is always RETC
+    const normalised = orgCode?.toUpperCase() || DEFAULT_ORG_CODE;
+    if (normalised !== "RETC") {
+      setCurrentOrgCode("RETC");
+      setOrgCode("RETC");
+      setSelectedOrg("RETC");
+    } else {
+      setSelectedOrg("RETC");
+    }
+  }, [orgCode, setOrgCode]);
 
   // Loading spinner component (inline to avoid new files)
   const LoadingSpinner = ({ message = "Loading..." }) => (
@@ -283,58 +319,11 @@ export default function GuestHomePage() {
     subtitle,
     color = "blue",
   }) => {
-    const colorClasses = {
-      blue: {
-        bg: "from-blue-50/80 to-indigo-50/80",
-        border: "border-blue-200/50",
-        icon: "from-blue-500 to-indigo-600",
-        text: "text-blue-700",
-        value: "text-blue-800",
-        title: "text-blue-600",
-        subtitle: "text-blue-500",
-        glow: "shadow-blue-200/50",
-      },
-      green: {
-        bg: "from-green-50/80 to-emerald-50/80",
-        border: "border-green-200/50",
-        icon: "from-green-500 to-emerald-600",
-        text: "text-green-700",
-        value: "text-green-800",
-        title: "text-green-600",
-        subtitle: "text-green-500",
-        glow: "shadow-green-200/50",
-      },
-      cyan: {
-        bg: "from-cyan-50/80 to-teal-50/80",
-        border: "border-cyan-200/50",
-        icon: "from-cyan-500 to-teal-600",
-        text: "text-cyan-700",
-        value: "text-cyan-800",
-        title: "text-cyan-600",
-        subtitle: "text-cyan-500",
-        glow: "shadow-cyan-200/50",
-      },
-      purple: {
-        bg: "from-purple-50/80 to-violet-50/80",
-        border: "border-purple-200/50",
-        icon: "from-purple-500 to-violet-600",
-        text: "text-purple-700",
-        value: "text-purple-800",
-        title: "text-purple-600",
-        subtitle: "text-purple-500",
-        glow: "shadow-purple-200/50",
-      },
-    };
-
-    const colors = colorClasses[color] || colorClasses.blue;
-
     return (
-      <Card
-        className={`group relative overflow-hidden bg-white/60 backdrop-blur-sm border ${colors.border} hover:shadow-2xl hover:shadow-${colors.glow} transition-all duration-500 hover:scale-105 hover:-translate-y-2`}
-      >
+      <Card className="group relative overflow-hidden bg-white/60 backdrop-blur-sm border border-gray-200/60 transition-all duration-500 hover:scale-105 hover:-translate-y-2">
         {/* Background Gradient */}
-        <div
-          className={`absolute inset-0 bg-gradient-to-br ${colors.bg} opacity-50 group-hover:opacity-70 transition-opacity duration-500`}
+        <div className="absolute inset-0 opacity-50 group-hover:opacity-70 transition-opacity duration-500"
+          style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)" }}
         ></div>
 
         {/* Animated Background Elements */}
@@ -347,28 +336,31 @@ export default function GuestHomePage() {
         <CardContent className="relative text-center py-8 px-6">
           {/* Icon with Enhanced Styling */}
           <div
-            className={`w-20 h-20 bg-gradient-to-br ${colors.icon} rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300`}
+            className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300"
+            style={{ background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }}
           >
             <Icon className="w-10 h-10 text-white" />
           </div>
 
           {/* Value with Animation */}
           <div
-            className={`text-5xl font-bold ${colors.value} mb-3 group-hover:scale-110 transition-transform duration-300`}
+            className="text-5xl font-bold mb-3 group-hover:scale-110 transition-transform duration-300"
+            style={{ color: "var(--org-primary)" }}
           >
             {value}
           </div>
 
           {/* Title */}
           <div
-            className={`${colors.title} font-semibold text-lg mb-2 group-hover:text-opacity-80 transition-colors duration-300`}
+            className="font-semibold text-lg mb-2 group-hover:text-opacity-80 transition-colors duration-300"
+            style={{ color: "var(--org-primary-dark)" }}
           >
             {title}
           </div>
 
           {/* Subtitle */}
           {subtitle && (
-            <div className={`${colors.subtitle} text-sm font-medium`}>
+            <div className="text-sm font-medium" style={{ color: "var(--org-primary)" }}>
               {subtitle}
             </div>
           )}
@@ -377,24 +369,7 @@ export default function GuestHomePage() {
     );
   };
 
-  useEffect(() => {
-    // Load data immediately - loadData function handles its own error states
-    loadData();
-  }, []);
-
-  // Apply filters when dependencies change
-  useEffect(() => {
-    if (allItems.length > 0) {
-      applyFilters();
-    }
-  }, [searchQuery, activeTab, categoryFilter, statusFilter, sortBy, allItems]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, activeTab, categoryFilter, statusFilter, sortBy]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       // Set default settings first to prevent infinite loading
       const defaultSettings = {
@@ -502,7 +477,27 @@ export default function GuestHomePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, orgCode]);
+
+  // Apply filters when dependencies change
+  useEffect(() => {
+    if (allItems.length > 0) {
+      applyFilters();
+    }
+  }, [searchQuery, activeTab, categoryFilter, statusFilter, sortBy, allItems]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab, categoryFilter, statusFilter, sortBy]);
 
   if (isLoading || !settings) {
     return <LoadingSpinner message="Loading guest portal..." />;
@@ -517,10 +512,19 @@ export default function GuestHomePage() {
   // Check if guest portal is enabled
   if (!settings.guestPortal) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-        <Card className="w-full max-w-md bg-white/90 backdrop-blur-sm border-2 border-primary-200 shadow-2xl">
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)" }}
+      >
+        <Card
+          className="w-full max-w-md bg-white/90 backdrop-blur-sm border shadow-2xl"
+          style={{ borderColor: "var(--org-muted)" }}
+        >
           <CardContent className="text-center py-12">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
+              style={{ background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-primary-dark) 100%)" }}
+            >
               <Shield className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
@@ -531,7 +535,8 @@ export default function GuestHomePage() {
             </p>
             <Button
               asChild
-              className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800"
+              className="text-white"
+              style={{ background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-primary-dark) 100%)" }}
             >
               <Link href="/login">Staff Sign In</Link>
             </Button>
@@ -542,112 +547,84 @@ export default function GuestHomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-      {/* Hero Section */}
-      <section className="relative py-24 bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/30 overflow-hidden">
-        {/* Background Elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-primary-200/20 to-blue-200/20 rounded-full blur-3xl animate-pulse"></div>
+     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+       {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, var(--org-background) 0%, var(--org-surface) 100%)" }}></div>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
-            className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-cyan-200/20 to-purple-200/20 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: "1s" }}
+            className="absolute -top-32 -left-32 w-72 h-72 rounded-full blur-3xl opacity-20"
+            style={{ backgroundColor: "var(--org-primary)" }}
           ></div>
           <div
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-br from-green-200/10 to-blue-200/10 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: "2s" }}
+            className="absolute bottom-0 right-0 w-[28rem] h-[28rem] rounded-full blur-3xl opacity-20"
+            style={{ backgroundColor: "var(--org-accent)" }}
           ></div>
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 text-center">
-          {/* Status Badge */}
-          <div className="inline-flex items-center px-6 py-3 bg-white/80 backdrop-blur-sm rounded-full border border-primary-200/50 shadow-lg mb-8 hover:shadow-xl transition-all duration-300">
-            <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
-            <span className="text-sm font-semibold text-gray-700">
-              Asset Management System
-            </span>
-          </div>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-20 lg:py-28 flex flex-col items-center text-center gap-12">
+            <div className="space-y-6 max-w-3xl">
+              <span className="inline-flex items-center px-5 py-2 rounded-full bg-white shadow-md border border-[color-mix(in srgb,var(--org-primary) 20%,white)] text-sm font-semibold text-gray-700">
+                <span className="inline-flex w-2 h-2 rounded-full bg-[var(--org-primary)] mr-2"></span>
+                Asset Management System
+              </span>
 
-          {/* Main Heading */}
-          <h1 className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-gray-900 via-primary-600 to-blue-600 bg-clip-text text-transparent mb-8 leading-tight">
-            Explore Our
-            <br />
-            <span className="bg-gradient-to-r from-primary-500 to-blue-500 bg-clip-text text-transparent">
-              Assets Catalog
-            </span>
-          </h1>
-
-          {/* Subtitle */}
-          <p className="text-xl md:text-2xl text-gray-600 mb-16 max-w-4xl mx-auto leading-relaxed font-light">
-            Discover our comprehensive collection of renewable energy training
-            assets and resources.
-            <span className="text-primary-600 font-semibold">
-              {" "}
-              Sign in to request assets
-            </span>{" "}
-            for your projects.
-          </p>
-
-          {/* Enhanced Search Bar */}
-          <div className="max-w-3xl mx-auto mb-16">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary-500/20 to-blue-500/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-500"></div>
-              <form
-                onSubmit={handleSearch}
-                className="relative flex gap-0 p-2 bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20"
-              >
-                <div className="flex-1 relative">
-                  <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400 w-6 h-6 group-hover:text-primary-500 transition-colors duration-300" />
-                  <Input
-                    type="text"
-                    placeholder="Search assets, tools, or resources..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-16 pr-6 py-6 text-lg border-0 bg-transparent focus:ring-0 placeholder:text-gray-400 text-gray-700 rounded-l-3xl rounded-r-none"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="px-10 py-6 bg-gradient-to-r from-primary-600 via-primary-700 to-blue-600 hover:from-primary-700 hover:via-blue-600 hover:to-primary-800 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 rounded-3xl font-semibold text-lg"
-                >
-                  <Search className="w-5 h-5 mr-3" />
-                  Search
-                </Button>
-              </form>
+              <div className="space-y-4">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-gray-900">
+                  Explore Our
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[var(--org-primary)] to-[var(--org-accent)]">
+                    Assets Catalog
+                  </span>
+                </h1>
+                <p className="text-lg md:text-xl text-gray-700 font-normal mx-auto max-w-2xl leading-relaxed" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+                  Discover available assets, track availability, and request access with a modern, user-friendly interface designed for both administrators and guests.
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-            <StatsCard
-              icon={Package}
-              title="Total Assets"
-              value={stats.totalAssets}
-              color="sidebar"
-            />
-            <StatsCard
-              icon={CheckCircle}
-              title="Available Assets"
-              value={stats.availableAssets}
-              color="primary"
-            />
-            <StatsCard
-              icon={Tag}
-              title="Categories"
-              value={stats.categories}
-              color="purple"
-            />
-          </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-4xl">
+              <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
+                <div className="flex justify-center items-center text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                  <Package className="w-5 h-5 mr-2 text-[var(--org-primary)]" />
+                  Total Assets
+                </div>
+                <div className="text-4xl font-bold text-gray-900 mb-1">{stats.totalAssets}</div>
+                <p className="text-sm text-gray-500">
+                  All available assets across all organisations
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
+                <div className="flex justify-center items-center text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                  <CheckCircle className="w-5 h-5 mr-2 text-[var(--org-primary)]" />
+                  Available Assets
+                </div>
+                <div className="text-4xl font-bold text-gray-900 mb-1">{stats.availableAssets}</div>
+                <p className="text-sm text-gray-500">
+                  Assets currently available for request
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6">
+                <div className="flex justify-center items-center text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                  <Tag className="w-5 h-5 mr-2 text-[var(--org-primary)]" />
+                  Categories
+                </div>
+                <div className="text-4xl font-bold text-gray-900 mb-1">{stats.categories}</div>
+                <p className="text-sm text-gray-500">Unique asset categories</p>
+              </div>
+            </div>
 
-          <Button
-            asChild
-            size="lg"
-            className="bg-gradient-to-r from-primary-600 via-primary-700 to-sidebar-600 hover:from-primary-700 hover:via-sidebar-600 hover:to-primary-800 text-lg px-8 py-4 shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
-          >
-            <Link href="/guest/assets" className="flex items-center">
-              Browse All Assets
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Link>
-          </Button>
+            <Button
+              asChild
+              size="lg"
+              className="bg-[var(--org-primary)] hover:bg-[var(--org-primary-dark)] text-white text-base px-8 py-4 shadow-lg transition-transform duration-300 hover:-translate-y-0.5"
+            >
+              <Link href="/guest/assets" className="inline-flex items-center">
+                Browse All Assets
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -662,9 +639,14 @@ export default function GuestHomePage() {
                 onClick={() => setActiveTab("all")}
                 className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
                   activeTab === "all"
-                    ? "bg-gradient-to-r from-primary-600 to-blue-600 text-white shadow-lg transform scale-105"
+                    ? "text-white shadow-lg transform scale-105"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 }`}
+                style={
+                  activeTab === "all"
+                    ? { background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }
+                    : undefined
+                }
               >
                 All Items ({filteredItems.length})
               </button>
@@ -672,9 +654,14 @@ export default function GuestHomePage() {
                 onClick={() => setActiveTab("assets")}
                 className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
                   activeTab === "assets"
-                    ? "bg-gradient-to-r from-primary-600 to-blue-600 text-white shadow-lg transform scale-105"
+                    ? "text-white shadow-lg transform scale-105"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 }`}
+                style={
+                  activeTab === "assets"
+                    ? { background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }
+                    : undefined
+                }
               >
                 Assets (
                 {
@@ -697,9 +684,14 @@ export default function GuestHomePage() {
                   onClick={() => setViewMode("masonry")}
                   className={`p-3 rounded-xl transition-all duration-300 ${
                     viewMode === "masonry"
-                      ? "bg-gradient-to-r from-primary-600 to-blue-600 text-white shadow-lg transform scale-105"
+                      ? "text-white shadow-lg transform scale-105"
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
+                  style={
+                    viewMode === "masonry"
+                      ? { background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }
+                      : undefined
+                  }
                 >
                   <Grid3X3 className="w-5 h-5" />
                 </button>
@@ -707,9 +699,14 @@ export default function GuestHomePage() {
                   onClick={() => setViewMode("grid")}
                   className={`p-3 rounded-xl transition-all duration-300 ${
                     viewMode === "grid"
-                      ? "bg-gradient-to-r from-primary-600 to-blue-600 text-white shadow-lg transform scale-105"
+                      ? "text-white shadow-lg transform scale-105"
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
+                  style={
+                    viewMode === "grid"
+                      ? { background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }
+                      : undefined
+                  }
                 >
                   <List className="w-5 h-5" />
                 </button>
@@ -846,9 +843,14 @@ export default function GuestHomePage() {
                       size="sm"
                       className={`w-12 h-10 rounded-xl font-semibold transition-all duration-300 ${
                         currentPage === pageNum
-                          ? "bg-gradient-to-r from-primary-600 to-blue-600 text-white shadow-lg transform scale-105"
+                          ? "text-white shadow-lg transform scale-105"
                           : "bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-lg hover:shadow-xl"
                       }`}
+                      style={
+                        currentPage === pageNum
+                          ? { background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }
+                          : undefined
+                      }
                     >
                       {pageNum}
                     </Button>
@@ -867,9 +869,14 @@ export default function GuestHomePage() {
                       size="sm"
                       className={`w-12 h-10 rounded-xl font-semibold transition-all duration-300 ${
                         currentPage === totalPages
-                          ? "bg-gradient-to-r from-primary-600 to-blue-600 text-white shadow-lg transform scale-105"
+                          ? "text-white shadow-lg transform scale-105"
                           : "bg-white/80 backdrop-blur-sm border border-gray-200/50 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-lg hover:shadow-xl"
                       }`}
+                      style={
+                        currentPage === totalPages
+                          ? { background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }
+                          : undefined
+                      }
                     >
                       {totalPages}
                     </Button>
@@ -895,46 +902,62 @@ export default function GuestHomePage() {
       </section>
 
       {/* Call to Action */}
-      <section className="py-12 bg-gradient-to-br from-primary-50 via-primary-100/50 to-sidebar-50">
-        <div className="max-w-2xl mx-auto px-4 text-center">
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 border-2 border-primary-200/60 shadow-lg">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Users className="w-6 h-6 text-white" />
+      <section className="py-12" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.75) 100%)" }}>
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl p-8 border shadow-lg text-center" style={{ borderColor: "var(--org-muted)" }}>
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
+              style={{ background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-primary-dark) 100%)" }}
+            >
+              <Users className="w-8 h-8 text-white" />
             </div>
-            <h3 className="text-xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent mb-3">
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">
               Need to Request Assets?
             </h3>
-            <p className="text-sm text-gray-700 mb-4 leading-relaxed">
-              Sign in to your staff account to request assets, track your
-              requests, and manage your asset loans.
+            <p className="text-gray-600 text-base mb-8 max-w-2xl mx-auto">
+              Sign in to your staff account to request assets, track your requests, and manage your asset loans.
             </p>
-            <Button
-              asChild
-              size="sm"
-              className="bg-gradient-to-r from-primary-600 via-primary-700 to-sidebar-600 hover:from-primary-700 hover:via-sidebar-600 hover:to-primary-800 text-sm px-6 py-2 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-            >
-              <Link href="/login" className="flex items-center">
-                <Users className="w-4 h-4 mr-2" />
-                Sign In to Request Assets
-              </Link>
-            </Button>
+            <div className="flex justify-center">
+              <Button
+                className="text-base px-8 py-3 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 rounded-xl font-semibold"
+                style={{ background: "linear-gradient(135deg, var(--org-primary) 0%, var(--org-accent) 100%)" }}
+              >
+                <Link href="/login" className="flex items-center">
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Sign In to Request Assets
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gradient-to-r from-primary-800 via-primary-900 to-sidebar-800 text-white py-6">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <div className="flex items-center justify-center mb-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-500 rounded-lg flex items-center justify-center mr-2">
-              <Zap className="w-4 h-4 text-white" />
+      <footer className="text-white py-8" style={{ background: "linear-gradient(135deg, var(--org-primary-dark) 0%, var(--org-accent) 100%)" }}>
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(255, 255, 255, 0.2)" }}>
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-base">
+                  {settings.branding?.orgName || "Asset Management"}
+                </p>
+                <p className="text-white/80 text-xs mt-1">
+                  Asset Management System
+                </p>
+              </div>
             </div>
-            <h4 className="text-lg font-bold">{settings.branding.orgName}</h4>
+            <div className="text-center md:text-right">
+              <p className="text-white/90 text-sm font-medium">
+                © {new Date().getFullYear()} {settings.branding?.orgName || "Asset Management"}
+              </p>
+              <p className="text-white/70 text-xs mt-1">
+                All rights reserved
+              </p>
+            </div>
           </div>
-          <p className="text-primary-200 text-sm">
-            &copy; 2025 {settings.branding.orgName}. All rights reserved. •
-            Asset Management System
-          </p>
         </div>
       </footer>
     </div>

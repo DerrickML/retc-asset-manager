@@ -2,6 +2,14 @@ import { NodemailerService } from '../../../../lib/services/nodemailer.js'
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
+  // Disable test endpoint in production
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { success: false, error: 'Test endpoint is disabled in production' },
+      { status: 403 }
+    )
+  }
+
   try {
     const body = await request.json()
     const { type = 'request_submitted', recipient } = body
@@ -68,12 +76,8 @@ export async function POST(request) {
       )
     }
 
-    console.log(`Sending test email: ${type} to ${recipient}`)
-
     // Send the test email
     const result = await NodemailerService.sendNotification(type, recipient, data)
-
-    console.log('Test email sent successfully:', result.messageId)
 
     return NextResponse.json({
       success: true,
@@ -100,6 +104,14 @@ export async function POST(request) {
 
 // Handle unsupported methods
 export async function GET() {
+  // Disable test endpoint in production
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Test endpoint is disabled in production' },
+      { status: 403 }
+    )
+  }
+
   return NextResponse.json({
     message: 'Email Test API',
     usage: 'POST with { type: "email_type", recipient: "email@example.com" }',

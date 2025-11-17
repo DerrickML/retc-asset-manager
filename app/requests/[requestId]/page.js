@@ -59,7 +59,9 @@ import {
   getCurrentViewMode,
 } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
+import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import { Query } from "appwrite";
+import { formatCategory, hexToRgba, getConsumableStatus, extractDenialReason } from "../../../lib/utils/mappings.js";
 
 export default function RequestDetailsPage() {
   const params = useParams();
@@ -80,6 +82,19 @@ export default function RequestDetailsPage() {
   const [resubmitDialogOpen, setResubmitDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [resubmitReason, setResubmitReason] = useState("");
+  const { theme } = useOrgTheme();
+  const primaryColor = theme?.colors?.primary || "#0E6370";
+  const primaryDark = theme?.colors?.primaryDark || "#0A4E57";
+  const accentColor = theme?.colors?.accent || primaryColor;
+  const mutedColor = theme?.colors?.muted || "rgba(14, 99, 112, 0.08)";
+  const highlightColor = theme?.colors?.highlight || "#f7901e";
+
+  const highlightSoft = hexToRgba(highlightColor, 0.12);
+  const highlightBorder = hexToRgba(highlightColor, 0.35);
+  const highlightBadge = `linear-gradient(135deg, ${hexToRgba(
+    highlightColor,
+    0.18
+  )}, ${hexToRgba(primaryColor, 0.07)})`;
 
   useEffect(() => {
     loadData();
@@ -172,16 +187,15 @@ export default function RequestDetailsPage() {
       }
 
       if (
-        requestData.status === ENUMS.REQUEST_STATUS.DENIED &&
-        requestData.deniedAt
+        requestData.status === ENUMS.REQUEST_STATUS.DENIED
       ) {
         timelineItems.push({
           id: "denied",
           type: "denied",
-          timestamp: requestData.deniedAt,
+          timestamp: requestData.deniedAt || requestData.$updatedAt,
           title: "Request Denied",
           description: `Denied by ${approver?.name || "Admin"}`,
-          notes: requestData.denialReason,
+          notes: extractDenialReason(requestData.purpose) || requestData.denialReason || requestData.notes,
           icon: XCircle,
           color: "red",
         });
@@ -395,15 +409,18 @@ export default function RequestDetailsPage() {
 
   return (
     <div
-      className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40 relative"
-      style={{ zIndex: 1 }}
+      className="relative"
+      style={{
+        zIndex: 1,
+        background: theme?.colors?.background || "#f5f5f5",
+      }}
     >
       {/* Background Pattern */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMwNTk2NjkiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40"></div>
 
       <div className="relative max-w-6xl mx-auto space-y-8">
         {/* Header */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -770,7 +787,10 @@ export default function RequestDetailsPage() {
                   </div>
                 )}
 
-                {(request.denialReason || request.decisionNotes) && (
+                {((request.status === ENUMS.REQUEST_STATUS.DENIED && extractDenialReason(request.purpose)) || 
+                  (request.status === ENUMS.REQUEST_STATUS.APPROVED && request.notes) ||
+                  request.denialReason || 
+                  request.decisionNotes) && (
                   <div>
                     <Label className="text-sm font-medium text-slate-700">
                       {request.status === ENUMS.REQUEST_STATUS.APPROVED
@@ -788,7 +808,11 @@ export default function RequestDetailsPage() {
                           : "bg-slate-50 border-slate-200"
                       }`}
                     >
-                      {request.denialReason || request.decisionNotes}
+                      {request.status === ENUMS.REQUEST_STATUS.DENIED 
+                        ? (extractDenialReason(request.purpose) || request.denialReason || request.decisionNotes || request.notes)
+                        : request.status === ENUMS.REQUEST_STATUS.APPROVED
+                        ? (request.notes || request.decisionNotes)
+                        : (request.denialReason || request.decisionNotes)}
                     </div>
                   </div>
                 )}
@@ -797,7 +821,9 @@ export default function RequestDetailsPage() {
 
             {/* Requested Assets */}
             <Card className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl">
-              <CardHeader className="bg-gradient-to-r from-sidebar-50 to-sidebar-100/50 rounded-t-2xl">
+              <CardHeader className="rounded-t-2xl" style={{
+                background: `linear-gradient(135deg, ${theme?.colors?.muted || "rgba(14,99,112,0.08)"}, #ffffff)`
+              }}>
                 <CardTitle className="flex items-center gap-3 text-slate-900">
                   <div className="p-2 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-lg">
                     <Package className="w-5 h-5 text-white" />
@@ -807,39 +833,126 @@ export default function RequestDetailsPage() {
               </CardHeader>
               <CardContent className="p-6">
                 <div className="space-y-4">
-                  {assets.map((asset) => (
+                  {assets.map((asset, index) => (
                     <div
-                      key={asset.$id}
-                      className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors duration-200"
+                      key={`${asset.$id || asset.id || index}-${index}`}
+                      className={`flex items-center justify-between p-4 rounded-lg border transition-colors duration-200 ${
+                        index % 2 === 0
+                          ? "border-[var(--org-primary)]/10 bg-[var(--org-primary)]/5"
+                          : "border-[var(--org-primary)]/15 bg-white"
+                      }`}
                     >
                       <div className="flex items-center gap-4 flex-1">
                         {/* Asset Image */}
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {asset.assetImage ? (
-                            <img
-                              src={
-                                asset.assetImage.startsWith("http")
-                                  ? asset.assetImage
-                                  : assetImageService.getPublicImageUrl(
-                                      asset.assetImage
-                                    )
+                        <div
+                          className="w-16 h-16 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 border"
+                          style={{
+                            background: highlightBadge,
+                            borderColor: highlightBorder,
+                          }}
+                        >
+                          {(() => {
+                            const assetType = (asset.itemType || "")
+                              .toString()
+                              .toUpperCase();
+                            const assetName =
+                              asset.name ||
+                              asset.assetName ||
+                              asset.itemName ||
+                              "Unnamed item";
+                            const initial = assetName.charAt(0).toUpperCase();
+
+                            const resolveImageUrl = (path) => {
+                              if (!path) return "";
+                              if (path.startsWith("http")) return path;
+                              try {
+                                return assetImageService.getPublicImageUrl(path);
+                              } catch (error) {
+                                return "";
                               }
-                              alt={asset.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.style.display = "none";
-                                e.target.nextSibling.style.display = "flex";
-                              }}
-                            />
-                          ) : null}
-                          <div
-                            className="w-full h-full flex items-center justify-center text-gray-400"
-                            style={{
-                              display: asset.assetImage ? "none" : "flex",
-                            }}
-                          >
-                            <Package className="w-6 h-6" />
-                          </div>
+                            };
+
+                            let primaryImage =
+                              resolveImageUrl(asset.assetImage) ||
+                              resolveImageUrl(asset.imageUrl) ||
+                              resolveImageUrl(asset.image) ||
+                              resolveImageUrl(asset.thumbnail) ||
+                              resolveImageUrl(asset.thumbnailUrl) ||
+                              "";
+
+                            if (!primaryImage) {
+                              try {
+                                const urls = assetImageService.getAssetImageUrls(
+                                  asset.publicImages
+                                );
+                                if (urls && urls.length > 0) {
+                                  primaryImage = urls[0];
+                                }
+                              } catch (error) {
+                                // fall back to placeholder
+                              }
+                            }
+
+                            if (primaryImage && primaryImage.trim() !== "") {
+                              return (
+                                <>
+                                  <img
+                                    src={primaryImage}
+                                    alt={assetName}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.style.display = "none";
+                                      e.target.nextSibling.style.display = "flex";
+                                    }}
+                                  />
+                                  <div className="hidden w-full h-full flex items-center justify-center">
+                                    <div className="text-center space-y-2">
+                                      <div
+                                        className="w-8 h-8 rounded-full flex items-center justify-center mx-auto text-white font-semibold shadow-md"
+                                        style={{
+                                          background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
+                                        }}
+                                      >
+                                        {initial}
+                                      </div>
+                                      <p
+                                        className="text-[10px] font-semibold uppercase tracking-wide"
+                                        style={{ color: highlightColor }}
+                                      >
+                                        {assetType ===
+                                        ENUMS.ITEM_TYPE.CONSUMABLE
+                                          ? "Consumable"
+                                          : "Asset"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            }
+
+                            return (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <div className="text-center space-y-2">
+                                  <div
+                                    className="w-8 h-8 rounded-full flex items-center justify-center mx-auto text-white font-semibold shadow-md"
+                                    style={{
+                                      background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
+                                    }}
+                                  >
+                                    {initial}
+                                  </div>
+                                  <p
+                                    className="text-[10px] font-semibold uppercase tracking-wide"
+                                    style={{ color: highlightColor }}
+                                  >
+                                    {assetType === ENUMS.ITEM_TYPE.CONSUMABLE
+                                      ? "Consumable"
+                                      : "Asset"}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="flex-1">
@@ -850,7 +963,12 @@ export default function RequestDetailsPage() {
                             {asset.assetTag && (
                               <Badge
                                 variant="outline"
-                                className="text-xs bg-sidebar-50 text-sidebar-700 border-sidebar-200"
+                                className="text-xs border px-3 py-1 shadow-sm"
+                                style={{
+                                  background: highlightSoft,
+                                  borderColor: highlightBorder,
+                                  color: highlightColor,
+                                }}
                               >
                                 {asset.assetTag}
                               </Badge>
@@ -870,11 +988,29 @@ export default function RequestDetailsPage() {
                             {asset.roomOrArea && ` - ${asset.roomOrArea}`}
                           </p>
                           {asset.currentCondition && (
-                            <p className="text-xs text-slate-500 mt-1">
+                            <p
+                              className="text-xs text-slate-500 mt-1"
+                              style={{ color: highlightColor }}
+                            >
                               Condition:{" "}
                               {asset.currentCondition.replace(/_/g, " ")}
                             </p>
                           )}
+                          <div className="mt-2">
+                            <Badge
+                              className="text-xs border px-3 py-1 shadow-sm"
+                              style={{
+                                background: highlightSoft,
+                                borderColor: highlightBorder,
+                                color: highlightColor,
+                              }}
+                            >
+                              {asset.itemType === ENUMS.ITEM_TYPE.CONSUMABLE
+                                ? getConsumableStatus(asset) || "In Stock"
+                                : asset.availableStatus?.replace(/_/g, " ") ||
+                                  "Available"}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
                       {!asset.notFound && (
@@ -882,7 +1018,7 @@ export default function RequestDetailsPage() {
                           asChild
                           variant="outline"
                           size="sm"
-                          className="hover:bg-sidebar-100 hover:text-sidebar-700 hover:border-sidebar-300"
+                          className="hover:bg-[var(--org-primary)]/10 hover:text-[var(--org-primary)] hover:border-[var(--org-primary)]/30"
                         >
                           <Link href={`/assets/${asset.$id}`}>
                             <Eye className="w-4 h-4 mr-1" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../../components/ui/select";
-import { ImageUpload } from "../../../../components/ui/image-upload";
 import {
   ArrowLeft,
   Package,
@@ -28,21 +27,40 @@ import {
   Info,
   MapPin,
   BarChart3,
-  Image,
   Eye,
 } from "lucide-react";
 import { getCurrentStaff, permissions } from "../../../../lib/utils/auth.js";
-import { assetsService } from "../../../../lib/appwrite/provider.js";
+import { assetsService, projectsService } from "../../../../lib/appwrite/provider.js";
 import { useToastContext } from "../../../../components/providers/toast-provider";
 import { ENUMS } from "../../../../lib/appwrite/config.js";
 import { formatCategory } from "../../../../lib/utils/mappings.js";
+import { useOrgTheme } from "../../../../components/providers/org-theme-provider";
+import { getConsumableCategoriesForOrg } from "../../../../lib/constants/consumable-categories.js";
 
 export default function NewConsumablePage() {
   const router = useRouter();
   const toast = useToastContext();
+  const { orgCode, theme } = useOrgTheme();
+  const normalizedOrgCode = (orgCode || theme?.code || "").toUpperCase();
+  const isNrepOrg = normalizedOrgCode === "NREP";
+  const ADMIN_PLACEHOLDER_PROJECT_ID = "ADMIN";
+  const allowedProjectIds = useMemo(() => {
+    if (!isNrepOrg) return [];
+    const ids = theme?.projects?.allowedIds;
+    return Array.isArray(ids)
+      ? ids
+          .map((id) => id?.toString().toLowerCase())
+          .filter((id) => typeof id === "string" && id.length > 0)
+      : [];
+  }, [isNrepOrg, theme?.projects?.allowedIds]);
+  const defaultProjectId = useMemo(() => {
+    if (!isNrepOrg) return "";
+    return theme?.projects?.defaultId || "";
+  }, [isNrepOrg, theme?.projects?.defaultId]);
   const [currentStaff, setCurrentStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [projects, setProjects] = useState([]);
 
   // Manual ID assignment state
   const [manualIdAssignment, setManualIdAssignment] = useState(false);
@@ -60,12 +78,80 @@ export default function NewConsumablePage() {
     roomOrArea: "",
     isPublic: false,
     publicSummary: "",
-    publicImages: [],
+    consumableScope: isNrepOrg
+      ? ENUMS.CONSUMABLE_SCOPE.PROJECT
+      : ENUMS.CONSUMABLE_SCOPE.ADMIN,
+    projectId: "",
   });
 
   useEffect(() => {
     checkPermissions();
   }, []);
+
+  useEffect(() => {
+    if (isNrepOrg) {
+      setConsumable((prev) => ({
+        ...prev,
+        projectId:
+          prev.projectId || defaultProjectId || projects[0]?.$id || "",
+      }));
+    } else {
+      setConsumable((prev) => ({
+        ...prev,
+        projectId: "",
+      }));
+    }
+  }, [defaultProjectId, isNrepOrg, projects]);
+
+  const formCategoryOptions = useMemo(() => {
+    if (!isNrepOrg) {
+      return Object.values(ENUMS.CONSUMABLE_CATEGORY);
+    }
+    return getConsumableCategoriesForOrg(orgCode, consumable.consumableScope);
+  }, [isNrepOrg, orgCode, consumable.consumableScope]);
+
+  useEffect(() => {
+    if (!isNrepOrg) return;
+    const categories = formCategoryOptions;
+    setConsumable((prev) => {
+      let nextCategory = prev.consumableCategory;
+      let nextProjectId = prev.projectId;
+
+      if (
+        Array.isArray(categories) &&
+        categories.length > 0 &&
+        !categories.includes(prev.consumableCategory)
+      ) {
+        nextCategory = categories[0];
+      }
+
+      if (prev.consumableScope === ENUMS.CONSUMABLE_SCOPE.PROJECT) {
+        nextProjectId =
+          prev.projectId || defaultProjectId || projects[0]?.$id || "";
+      } else {
+        nextProjectId = ADMIN_PLACEHOLDER_PROJECT_ID;
+      }
+
+      if (
+        nextCategory === prev.consumableCategory &&
+        nextProjectId === prev.projectId
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        consumableCategory: nextCategory,
+        projectId: nextProjectId,
+      };
+    });
+  }, [
+    isNrepOrg,
+    formCategoryOptions,
+    defaultProjectId,
+    projects,
+    consumable.consumableScope,
+  ]);
 
   const checkPermissions = async () => {
     try {
@@ -76,6 +162,10 @@ export default function NewConsumablePage() {
         router.push("/unauthorized");
         return;
       }
+
+      if (isNrepOrg) {
+        await loadProjects();
+      }
     } catch (error) {
       console.error("Failed to check permissions:", error);
       router.push("/login");
@@ -84,12 +174,45 @@ export default function NewConsumablePage() {
     }
   };
 
+  const loadProjects = async () => {
+    try {
+      const result = await projectsService.list();
+      let docs = Array.isArray(result?.documents) ? result.documents : [];
+      docs = docs.map((project) => ({
+        ...project,
+        $id: project?.$id || project?.id || "",
+      }));
+      if (allowedProjectIds.length > 0) {
+        docs = docs.filter((project) =>
+          allowedProjectIds.includes((project.$id || "").toLowerCase())
+        );
+      }
+      setProjects(docs);
+      setConsumable((prev) => ({
+        ...prev,
+        projectId:
+          prev.projectId || defaultProjectId || docs[0]?.$id || "",
+      }));
+    } catch (error) {
+      console.error("Failed to load projects", error);
+      setProjects([]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
 
     try {
-      // Prepare consumable data
+      const isProjectScope =
+        isNrepOrg &&
+        consumable.consumableScope === ENUMS.CONSUMABLE_SCOPE.PROJECT;
+      if (isProjectScope && !consumable.projectId) {
+        toast.error("Please select a project for this consumable.");
+        setSaving(false);
+        return;
+      }
+
       const consumableData = {
         assetTag:
           manualIdAssignment && consumable.assetTag
@@ -117,16 +240,11 @@ export default function NewConsumablePage() {
         // Public information
         isPublic: consumable.isPublic || false,
         publicSummary: consumable.publicSummary || "",
-        publicImages: JSON.stringify(consumable.publicImages || []),
+        publicImages: JSON.stringify([]),
         publicLocationLabel: "",
         publicConditionLabel: ENUMS.PUBLIC_CONDITION_LABEL.NEW,
         assetImage:
-          consumable.publicImages && consumable.publicImages.length > 0
-            ? `https://appwrite.nrep.ug/v1/storage/buckets/68a2fbbc002e7db3db22/files/${consumable.publicImages[0]}/view?project=${
-                process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID ||
-                "6745fd58001e7fcbf850"
-              }`
-            : "",
+          "https://via.placeholder.com/400x300.png?text=Consumable",
 
         // Required fields for ASSETS collection
         departmentId: "",
@@ -141,6 +259,11 @@ export default function NewConsumablePage() {
         retirementDate: null,
         disposalDate: null,
         attachmentFileIds: [],
+        projectId: isNrepOrg
+          ? isProjectScope
+            ? consumable.projectId || defaultProjectId || projects[0]?.$id || ""
+            : ADMIN_PLACEHOLDER_PROJECT_ID
+          : null,
       };
 
       await assetsService.create(consumableData, currentStaff.$id);
@@ -218,6 +341,47 @@ export default function NewConsumablePage() {
               </div>
             </CardHeader>
             <CardContent className="p-6 space-y-6 bg-white">
+              {isNrepOrg && (
+                <div className="flex items-center gap-2 bg-white/80 border border-gray-200/70 rounded-full px-1.5 py-1 shadow-sm w-fit">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setConsumable((prev) => ({
+                        ...prev,
+                        consumableScope: ENUMS.CONSUMABLE_SCOPE.PROJECT,
+                      }))
+                    }
+                    className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
+                      consumable.consumableScope ===
+                      ENUMS.CONSUMABLE_SCOPE.PROJECT
+                        ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
+                        : "text-slate-600 hover:text-[var(--org-primary)]"
+                    }`}
+                  >
+                    Project
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setConsumable((prev) => ({
+                        ...prev,
+                        consumableScope: ENUMS.CONSUMABLE_SCOPE.ADMIN,
+                      }))
+                    }
+                    className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all ${
+                      consumable.consumableScope ===
+                      ENUMS.CONSUMABLE_SCOPE.ADMIN
+                        ? "bg-org-gradient text-white shadow-md hover:bg-org-gradient"
+                        : "text-slate-600 hover:text-[var(--org-primary)]"
+                    }`}
+                  >
+                    Administrative
+                  </Button>
+                </div>
+              )}
+
               {/* Manual ID Assignment */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -291,7 +455,7 @@ export default function NewConsumablePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.values(ENUMS.CONSUMABLE_CATEGORY).map((category) => (
+                      {formCategoryOptions.map((category) => (
                         <SelectItem key={category} value={category}>
                           {formatCategory(category)}
                         </SelectItem>
@@ -299,6 +463,33 @@ export default function NewConsumablePage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {isNrepOrg &&
+                  consumable.consumableScope ===
+                    ENUMS.CONSUMABLE_SCOPE.PROJECT && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700">
+                        Project <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={consumable.projectId}
+                        onValueChange={(value) =>
+                          setConsumable({ ...consumable, projectId: value })
+                        }
+                      >
+                        <SelectTrigger className="h-11 border-slate-300 focus:border-orange-500 focus:ring-orange-500">
+                          <SelectValue placeholder="Select project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {projects.map((project) => (
+                            <SelectItem key={project.$id} value={project.$id}>
+                              {project.name || project.title || project.code || project.$id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                 <div className="space-y-2">
                   <Label htmlFor="unit" className="text-sm font-medium text-slate-700">
@@ -498,28 +689,6 @@ export default function NewConsumablePage() {
             </CardContent>
           </Card>
 
-          {/* Consumable Images */}
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="border-b border-slate-100 bg-white">
-              <div className="flex items-center space-x-2">
-                <Image className="w-5 h-5 text-orange-600" />
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Consumable Images
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 bg-white">
-              <ImageUpload
-                assetId={consumable.assetTag || `temp-${Date.now()}`}
-                existingImages={consumable.publicImages || []}
-                onImagesChange={(newImages) => {
-                  setConsumable({ ...consumable, publicImages: newImages });
-                }}
-                maxImages={10}
-              />
-            </CardContent>
-          </Card>
-
           {/* Form Actions */}
           <div className="flex items-center justify-end space-x-3 pt-6 pb-8">
             <Button
@@ -536,7 +705,11 @@ export default function NewConsumablePage() {
               disabled={
                 saving ||
                 !consumable.name ||
-                (manualIdAssignment && !consumable.assetTag)
+                (manualIdAssignment && !consumable.assetTag) ||
+                (isNrepOrg &&
+                  consumable.consumableScope ===
+                    ENUMS.CONSUMABLE_SCOPE.PROJECT &&
+                  !consumable.projectId)
               }
               className="h-11 px-6 bg-orange-600 hover:bg-orange-700 text-white"
             >

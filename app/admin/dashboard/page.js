@@ -603,7 +603,7 @@ export default function AdminDashboard() {
             <div className="space-y-1">
               {staff && (
                 <h1 className="text-3xl font-bold text-slate-900">
-                  {getTimeBasedGreeting()}, <span className="text-blue-600">{staff.name}</span>!
+                  {getTimeBasedGreeting()}, <span className="text-org-primary">{staff.name}</span>!
                 </h1>
               )}
               <p className="text-slate-600">
@@ -624,7 +624,7 @@ export default function AdminDashboard() {
                 onClick={handleRefresh}
                 variant="outline"
                 disabled={refreshing}
-                className="h-10 px-4 border-slate-300 hover:bg-slate-50"
+                className="h-10 px-4 border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft"
               >
                 <RefreshCw
                   className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
@@ -633,7 +633,7 @@ export default function AdminDashboard() {
               </Button>
               <Button
                 onClick={() => exportData("Dashboard")}
-                className="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white"
+                className="h-10 px-6 bg-org-gradient text-white shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5"
               >
                 <Download className="w-4 h-4 mr-2" />
                 Export Report
@@ -762,7 +762,7 @@ export default function AdminDashboard() {
                   {dashboardData.metrics.totalAssets + dashboardData.metrics.totalConsumables}
                 </h3>
                 <p className="text-sm font-medium text-slate-600">Total Inventory</p>
-                <div className="flex items-center space-x-2 text-sm text-slate-600">
+                <div className="flex items-center space-x-2 text-slate-600">
                   <span>{dashboardData.metrics.totalAssets} assets</span>
                   <span>•</span>
                   <span>{dashboardData.metrics.totalConsumables} consumables</span>

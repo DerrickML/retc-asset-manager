@@ -44,6 +44,21 @@ export async function POST(request) {
     // Send notification using NodemailerService with rendered template
     const result = await NodemailerService.sendNotification(type, recipient, data, renderedEmail)
 
+    if (result?.skipped) {
+      console.warn('Email notification skipped:', result.reason)
+      return NextResponse.json(
+        {
+          success: true,
+          skipped: true,
+          reason: result.reason,
+          message: 'Email notification skipped because SMTP is not configured',
+          recipient,
+          type,
+        },
+        { status: 202 }
+      )
+    }
+
     console.log('Email sent successfully:', result.messageId)
 
     return NextResponse.json({

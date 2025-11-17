@@ -46,11 +46,29 @@ import {
   getStatusBadgeColor,
   getConditionBadgeColor,
 } from "../../../../../lib/utils/mappings.js";
+import { useOrgTheme } from "../../../../../components/providers/org-theme-provider";
+import { PageLoading } from "../../../../../components/ui/loading";
 
 export default function EditAsset() {
   const params = useParams();
   const router = useRouter();
   const toast = useToastContext();
+  const { orgCode, theme } = useOrgTheme();
+  const normalizedOrgCode = (orgCode || theme?.code || "").toUpperCase();
+  const isNrepOrg = normalizedOrgCode === "NREP";
+  const primaryGradient = isNrepOrg
+    ? "from-[var(--org-primary)] to-[var(--org-accent)]"
+    : "from-primary-500 to-primary-600";
+  const secondaryGradient = isNrepOrg
+    ? "from-[var(--org-primary-dark)] to-[var(--org-accent)]"
+    : "from-sidebar-500 to-sidebar-600";
+  const surfaceClass = isNrepOrg
+    ? "bg-white/95 border border-[var(--org-primary)]/10"
+    : "bg-white border border-white/20";
+  const subCardBaseClass = isNrepOrg
+    ? "rounded-xl p-4 bg-white border border-[var(--org-primary)]/15 shadow-sm"
+    : "rounded-xl p-4";
+
   // Custom delete dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [staff, setStaff] = useState(null);
@@ -265,11 +283,7 @@ export default function EditAsset() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoading message="Loading asset details..." />;
   }
 
   if (!asset) {
@@ -294,47 +308,45 @@ export default function EditAsset() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-primary-50/30">
       <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {/* Mobile-optimized Header */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm p-4 sm:p-6">
-          <div className="space-y-4">
+        <div className={`rounded-2xl shadow-xl backdrop-blur-sm p-4 sm:p-6 ${surfaceClass}`}>
+          <div className="flex flex-col gap-4">
             {/* Back Button - Full width on mobile */}
-            <div className="flex justify-start">
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="bg-green-100 hover:bg-green-200 text-green-700 border border-green-200 transition-colors duration-200 w-auto"
-              >
-                <Link href="/admin/assets">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Assets
-                </Link>
-              </Button>
-            </div>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-full bg-org-gradient text-white shadow-md hover:shadow-lg transition-colors duration-200 hover:from-[var(--org-primary-dark)] hover:to-[var(--org-primary)]"
+            >
+              <Link href="/admin/assets">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Assets
+              </Link>
+            </Button>
 
             {/* Title Section */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary-500 to-sidebar-500 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-[var(--org-primary)] to-[var(--org-accent)]">
                   <Package className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-900 via-primary-600 to-sidebar-600 bg-clip-text text-transparent">
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-gray-900 via-[var(--org-primary)] to-[var(--org-accent)] bg-clip-text text-transparent">
                     Edit Asset
                   </h1>
-                  <p className="text-gray-600 font-medium text-sm sm:text-base truncate max-w-xs sm:max-w-none">
+                  <p className="text-gray-600 font-medium text-sm sm:text-base break-words max-w-xs sm:max-w-none">
                     {asset.name}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Action Buttons - Responsive grid */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+            {/* Action Buttons - Responsive layout */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3">
               <Button
                 asChild
                 variant="outline"
                 size="sm"
-                className="border-2 border-sidebar-200 text-sidebar-700 hover:bg-sidebar-50 hover:border-sidebar-300 transition-all duration-200 flex items-center justify-center"
+                className="w-full sm:w-auto justify-center border-[var(--org-primary)]/25 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10 transition-all duration-200"
               >
                 <Link href={`/assets/${asset.$id}`}>
                   <Eye className="w-4 h-4 mr-2" />
@@ -346,18 +358,17 @@ export default function EditAsset() {
                 asChild
                 variant="outline"
                 size="sm"
-                className="border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 flex items-center justify-center"
+                className="w-full sm:w-auto justify-center border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
               >
                 <Link href={`/admin/assets/${asset.$id}/history`}>
                   <History className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">History</span>
-                  <span className="sm:hidden">History</span>
+                  History
                 </Link>
               </Button>
               <Button
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-gradient-to-r from-primary-600 via-primary-700 to-sidebar-600 hover:from-primary-700 hover:via-primary-800 hover:to-sidebar-700 text-white font-semibold px-4 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center col-span-2 sm:col-span-1"
+                className="w-full sm:w-auto justify-center bg-org-gradient hover:from-[var(--org-primary-dark)] hover:to-[var(--org-primary)] text-white font-semibold px-4 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 <Save className="w-4 h-4 mr-2" />
                 <span className="hidden sm:inline">
@@ -370,7 +381,7 @@ export default function EditAsset() {
               <Button
                 variant="destructive"
                 onClick={handleDelete}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-4 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center col-span-2 sm:col-span-1"
+                className="w-full sm:w-auto justify-center bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-semibold px-4 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete
@@ -380,19 +391,25 @@ export default function EditAsset() {
         </div>
 
         {/* Enhanced Current Status */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-primary-500 to-sidebar-500 p-6">
+        <div className={`rounded-2xl shadow-xl backdrop-blur-sm overflow-hidden ${surfaceClass}`}>
+          <div className={`bg-gradient-to-r ${primaryGradient} p-6`}>
             <h2 className="text-2xl font-bold text-white flex items-center">
               <CheckCircle className="w-6 h-6 mr-3" />
               Current Status
             </h2>
-            <p className="text-primary-100 mt-1">Overview of asset details</p>
+            <p className="text-white/80 mt-1">Overview of asset details</p>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-4 border border-primary-200">
+              <div
+                className={`${subCardBaseClass} ${
+                  isNrepOrg
+                    ? ""
+                    : "bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200"
+                }`}
+              >
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-primary-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Status
                   </Label>
                   <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
@@ -407,9 +424,15 @@ export default function EditAsset() {
                 </Badge>
               </div>
 
-              <div className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 rounded-xl p-4 border border-sidebar-200">
+              <div
+                className={`${subCardBaseClass} ${
+                  isNrepOrg
+                    ? ""
+                    : "bg-gradient-to-br from-sidebar-50 to-sidebar-100 border border-sidebar-200"
+                }`}
+              >
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-sidebar-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Condition
                   </Label>
                   <Package className="w-4 h-4 text-sidebar-500" />
@@ -424,26 +447,44 @@ export default function EditAsset() {
                 </Badge>
               </div>
 
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
+              <div
+                className={`${subCardBaseClass} ${
+                  isNrepOrg
+                    ? ""
+                    : "bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200"
+                }`}
+              >
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-gray-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Category
                   </Label>
                   <div className="w-4 h-4 bg-gray-500 rounded"></div>
                 </div>
-                <Badge className="bg-gray-500 text-white border-0 text-sm font-semibold px-3 py-1">
+                <Badge
+                  className={`text-sm font-semibold px-3 py-1 ${
+                    isNrepOrg
+                      ? "bg-[var(--org-primary)]/12 text-[var(--org-primary)] border border-[var(--org-primary)]/25"
+                      : "bg-gray-500 text-white border-0"
+                  }`}
+                >
                   {formatCategory(asset.category)}
                 </Badge>
               </div>
 
-              <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-4 border border-primary-200">
+              <div
+                className={`${subCardBaseClass} ${
+                  isNrepOrg
+                    ? ""
+                    : "bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-200"
+                }`}
+              >
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-primary-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Asset ID
                   </Label>
                   <div className="w-4 h-4 bg-primary-500 rounded-full"></div>
                 </div>
-                <div className="text-2xl font-bold text-primary-700">
+                <div className="text-2xl font-bold text-[var(--org-primary)]">
                   {asset.$id?.slice(-6) || "N/A"}
                 </div>
               </div>
@@ -453,13 +494,13 @@ export default function EditAsset() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Enhanced Basic Information */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 p-6">
+          <div className={`rounded-2xl shadow-xl backdrop-blur-sm overflow-hidden ${surfaceClass}`}>
+            <div className={`bg-gradient-to-r ${secondaryGradient} p-6`}>
               <h3 className="text-xl font-bold text-white flex items-center">
                 <Package className="w-5 h-5 mr-3" />
                 Basic Information
               </h3>
-              <p className="text-sidebar-100 text-sm mt-1">
+              <p className="text-white/80 text-sm mt-1">
                 Core asset details
               </p>
             </div>
@@ -551,13 +592,13 @@ export default function EditAsset() {
           </div>
 
           {/* Enhanced Technical Details */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-6">
+          <div className={`rounded-2xl shadow-xl backdrop-blur-sm overflow-hidden ${surfaceClass}`}>
+            <div className={`bg-gradient-to-r ${primaryGradient} p-6`}>
               <h3 className="text-xl font-bold text-white flex items-center">
                 <CheckCircle className="w-5 h-5 mr-3" />
                 Technical Details
               </h3>
-              <p className="text-primary-100 text-sm mt-1">
+              <p className="text-white/80 text-sm mt-1">
                 Technical specifications and hardware info
               </p>
             </div>
@@ -640,13 +681,13 @@ export default function EditAsset() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Enhanced Status & Location */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 p-6">
+          <div className={`rounded-2xl shadow-xl backdrop-blur-sm overflow-hidden ${surfaceClass}`}>
+            <div className={`bg-gradient-to-r ${secondaryGradient} p-6`}>
               <h3 className="text-xl font-bold text-white flex items-center">
                 <Package className="w-5 h-5 mr-3" />
                 Status & Location
               </h3>
-              <p className="text-sidebar-100 text-sm mt-1">
+              <p className="text-white/80 text-sm mt-1">
                 Asset status and location details
               </p>
             </div>
@@ -664,15 +705,15 @@ export default function EditAsset() {
                     setAsset({ ...asset, availableStatus: value })
                   }
                 >
-                  <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl">
+                  <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[var(--org-primary)] focus:ring-4 focus:ring-[var(--org-primary)]/20 transition-all duration-200 rounded-xl bg-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-2 border-gray-200 shadow-xl">
+                  <SelectContent className="z-[999] rounded-xl border-2 border-gray-200 shadow-2xl bg-white">
                     {Object.values(ENUMS.AVAILABLE_STATUS).map((status) => (
                       <SelectItem
                         key={status}
                         value={status}
-                        className="rounded-lg"
+                        className="rounded-lg text-gray-800 focus:bg-[var(--org-primary)] focus:text-white"
                       >
                         {status.replace(/_/g, " ")}
                       </SelectItem>
@@ -694,15 +735,15 @@ export default function EditAsset() {
                     setAsset({ ...asset, currentCondition: value })
                   }
                 >
-                  <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl">
+                  <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[var(--org-primary)] focus:ring-4 focus:ring-[var(--org-primary)]/20 transition-all duration-200 rounded-xl bg-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-2 border-gray-200 shadow-xl">
+                  <SelectContent className="z-[999] rounded-xl border-2 border-gray-200 shadow-2xl bg-white">
                     {Object.values(ENUMS.CURRENT_CONDITION).map((condition) => (
                       <SelectItem
                         key={condition}
                         value={condition}
-                        className="rounded-lg"
+                        className="rounded-lg text-gray-800 focus:bg-[var(--org-primary)] focus:text-white"
                       >
                         {condition.replace(/_/g, " ")}
                       </SelectItem>
@@ -750,13 +791,13 @@ export default function EditAsset() {
           </div>
 
           {/* Enhanced Financial Information */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-6">
+          <div className={`rounded-2xl shadow-xl backdrop-blur-sm overflow-hidden ${surfaceClass}`}>
+            <div className={`bg-gradient-to-r ${primaryGradient} p-6`}>
               <h3 className="text-xl font-bold text-white flex items-center">
                 <CheckCircle className="w-5 h-5 mr-3" />
                 Financial Information
               </h3>
-              <p className="text-primary-100 text-sm mt-1">
+              <p className="text-white/80 text-sm mt-1">
                 Purchase and valuation details
               </p>
             </div>
@@ -843,13 +884,13 @@ export default function EditAsset() {
         </div>
 
         {/* Enhanced Internal Notes */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-6">
+        <div className={`rounded-2xl shadow-xl backdrop-blur-sm overflow-hidden ${surfaceClass}`}>
+          <div className={`bg-gradient-to-r ${primaryGradient} p-6`}>
             <h3 className="text-xl font-bold text-white flex items-center">
               <Package className="w-5 h-5 mr-3" />
               Internal Notes
             </h3>
-            <p className="text-primary-100 text-sm mt-1">
+            <p className="text-white/80 text-sm mt-1">
               Internal comments and notes (not visible to guests)
             </p>
           </div>
@@ -859,7 +900,7 @@ export default function EditAsset() {
               onChange={(e) => setAsset({ ...asset, notes: e.target.value })}
               rows={4}
               placeholder="Add internal notes and comments..."
-              className="border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl resize-none"
+              className="border-2 border-gray-200 focus:border-[var(--org-primary)] focus:ring-4 focus:ring-[var(--org-primary)]/20 transition-all duration-200 rounded-xl resize-none"
             />
           </div>
         </div>

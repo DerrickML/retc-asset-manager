@@ -8,6 +8,7 @@ const PUBLIC_ROUTES = [
   "/guest",
   "/guest/assets",
   "/api/guest",
+  "/select-org",
 ];
 
 // Routes that require authentication
@@ -21,6 +22,15 @@ const PROTECTED_ROUTES = [
 
 // Admin-only routes
 const ADMIN_ROUTES = ["/admin"];
+
+const ORG_REQUIRED_ROUTES = [
+  "/dashboard",
+  "/admin",
+  "/assets",
+  "/consumables",
+  "/requests",
+  "/api",
+];
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
@@ -65,9 +75,16 @@ export async function middleware(request) {
     pathname.startsWith(route)
   );
 
+  const orgCookie = request.cookies.get("currentOrgCode");
+
   // Handle root redirect
   if (pathname === "/") {
     if (isAuthenticated) {
+      if (!orgCookie?.value) {
+        const selectUrl = new URL("/select-org", request.url);
+        selectUrl.searchParams.set("callback", "/dashboard");
+        return NextResponse.redirect(selectUrl);
+      }
       return NextResponse.redirect(new URL("/dashboard", request.url));
     } else {
       return NextResponse.redirect(new URL("/login", request.url));
@@ -76,6 +93,11 @@ export async function middleware(request) {
 
   // Prevent authenticated users from accessing login page
   if (pathname === "/login" && isAuthenticated) {
+    if (!orgCookie?.value) {
+      const selectUrl = new URL("/select-org", request.url);
+      selectUrl.searchParams.set("callback", "/dashboard");
+      return NextResponse.redirect(selectUrl);
+    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
@@ -87,6 +109,20 @@ export async function middleware(request) {
       loginUrl.searchParams.set("callback", pathname + request.nextUrl.search);
     }
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (
+    isAuthenticated &&
+    !orgCookie?.value &&
+    pathname !== "/select-org" &&
+    ORG_REQUIRED_ROUTES.some((route) => pathname.startsWith(route))
+  ) {
+    const selectUrl = new URL("/select-org", request.url);
+    selectUrl.searchParams.set(
+      "callback",
+      pathname + request.nextUrl.search
+    );
+    return NextResponse.redirect(selectUrl);
   }
 
   // Add security headers

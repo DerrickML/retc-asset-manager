@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -22,7 +22,6 @@ import {
   SelectValue,
 } from "../../../../../components/ui/select";
 import { Badge } from "../../../../../components/ui/badge";
-import { ImageUpload } from "../../../../../components/ui/image-upload";
 import {
   ArrowLeft,
   Save,
@@ -30,28 +29,60 @@ import {
   Eye,
   History,
   Package,
-  Image,
   CheckCircle,
   X,
 } from "lucide-react";
 import {
   assetsService,
   assetEventsService,
+  projectsService,
 } from "../../../../../lib/appwrite/provider.js";
 import { getCurrentStaff, permissions } from "../../../../../lib/utils/auth.js";
 import { useToastContext } from "../../../../../components/providers/toast-provider";
 // Removed useConfirmation import - using custom dialog instead
-import { ENUMS, COLLECTIONS } from "../../../../../lib/appwrite/config.js";
+import { ENUMS } from "../../../../../lib/appwrite/config.js";
 import {
   formatCategory,
   getStatusBadgeColor,
   getConditionBadgeColor,
+  getConsumableStatusEnum,
+  getCurrentStock,
+  getMinStock,
+  getMaxStock,
+  getConsumableUnit,
+  getConsumableCategory,
 } from "../../../../../lib/utils/mappings.js";
+import { useOrgTheme } from "../../../../../components/providers/org-theme-provider";
 
 export default function EditConsumable() {
   const params = useParams();
   const router = useRouter();
   const toast = useToastContext();
+  const { orgCode, theme } = useOrgTheme();
+  const normalizedOrgCode = (orgCode || theme?.code || "").toUpperCase();
+  const isNrepOrg = normalizedOrgCode === "NREP";
+  const primaryGradient = isNrepOrg
+    ? "from-[var(--org-primary)] to-[var(--org-accent)]"
+    : "from-primary-500 to-primary-600";
+  const secondaryGradient = isNrepOrg
+    ? "from-[var(--org-primary-dark)] to-[var(--org-accent)]"
+    : "from-sidebar-500 to-sidebar-600";
+  const mutedSurface = isNrepOrg
+    ? "bg-white/95 border border-[var(--org-primary)]/10"
+    : "bg-white border border-white/20";
+  const allowedProjectIds = useMemo(() => {
+    if (!isNrepOrg) return [];
+    const ids = theme?.projects?.allowedIds;
+    return Array.isArray(ids)
+      ? ids
+          .map((id) => id?.toString().toLowerCase())
+          .filter((id) => typeof id === "string" && id.length > 0)
+      : [];
+  }, [isNrepOrg, theme?.projects?.allowedIds]);
+  const defaultProjectId = useMemo(() => {
+    if (!isNrepOrg) return "";
+    return theme?.projects?.defaultId || "";
+  }, [isNrepOrg, theme?.projects?.defaultId]);
   // Custom delete dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [staff, setStaff] = useState(null);
@@ -60,86 +91,26 @@ export default function EditConsumable() {
   const [saving, setSaving] = useState(false);
   const [originalConsumable, setOriginalConsumable] = useState(null);
   const [consumableId, setConsumableId] = useState(null);
+  const [projects, setProjects] = useState([]);
 
-  // Helper functions to extract data - using proper fields with fallback
-  const getCurrentStock = (consumable) => {
-    // Use new proper field first
-    if (consumable?.currentStock !== undefined) {
-      return consumable.currentStock;
+  useEffect(() => {
+    if (!isNrepOrg || !consumable) return;
+    if (!consumable.projectId && (defaultProjectId || projects[0]?.$id)) {
+      setConsumable((prev) => ({
+        ...prev,
+        projectId: defaultProjectId || projects[0]?.$id || "",
+      }));
     }
-    // Fallback to old encoded format
-    if (
-      consumable?.serialNumber &&
-      consumable.serialNumber.startsWith("STOCK:")
-    ) {
-      return parseInt(consumable.serialNumber.replace("STOCK:", "")) || 0;
-    }
-    return 0;
-  };
+  }, [isNrepOrg, consumable, defaultProjectId, projects]);
 
-  const getMinStock = (consumable) => {
-    // Use new proper field first
-    if (consumable?.minimumStock !== undefined) {
-      return consumable.minimumStock;
-    }
-    // Fallback to old encoded format
-    if (consumable?.model && consumable.model.startsWith("MIN:")) {
-      return parseInt(consumable.model.replace("MIN:", "")) || 0;
-    }
-    return 0;
-  };
+  // Stock functions are imported from mappings.js
 
-  const getMaxStock = (consumable) => {
-    // Use new proper field first (if added in future)
-    if (consumable?.maximumStock !== undefined) {
-      return consumable.maximumStock;
-    }
-    // Fallback to old encoded format
-    if (
-      consumable?.manufacturer &&
-      consumable.manufacturer.startsWith("MAX:")
-    ) {
-      return parseInt(consumable.manufacturer.replace("MAX:", "")) || 0;
-    }
-    return 0;
-  };
-
+  // Use utility function for status - returns enum value
   const getStatus = (consumable) => {
-    // Calculate status based on current stock vs minimum
-    const current = getCurrentStock(consumable);
-    const min = getMinStock(consumable);
-
-    if (current === 0) return ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK;
-    if (current <= min && min > 0) return ENUMS.CONSUMABLE_STATUS.LOW_STOCK;
-    return ENUMS.CONSUMABLE_STATUS.IN_STOCK;
+    return getConsumableStatusEnum(consumable) || ENUMS.CONSUMABLE_STATUS.IN_STOCK;
   };
 
-  const getUnit = (consumable) => {
-    // Use new proper field first
-    if (consumable?.unit) {
-      return consumable.unit;
-    }
-    // Fallback to old encoded format
-    if (consumable?.subcategory && consumable.subcategory.includes("|")) {
-      return (
-        consumable.subcategory.split("|")[0] || ENUMS.CONSUMABLE_UNIT.PIECE
-      );
-    }
-    return ENUMS.CONSUMABLE_UNIT.PIECE;
-  };
-
-  const getConsumableCategory = (consumable) => {
-    // Use subcategory directly if it's a valid category
-    if (consumable?.subcategory && !consumable.subcategory.includes("|")) {
-      return consumable.subcategory;
-    }
-    // Fallback to old encoded format
-    if (consumable?.subcategory && consumable.subcategory.includes("|")) {
-      const parts = consumable.subcategory.split("|");
-      return parts[2] || ENUMS.CONSUMABLE_CATEGORY.FLIERS;
-    }
-    return ENUMS.CONSUMABLE_CATEGORY.FLIERS;
-  };
+  // Unit and category functions are imported from mappings.js
 
   useEffect(() => {
     // For Next.js 15, params is already unwrapped in the component
@@ -148,6 +119,12 @@ export default function EditConsumable() {
       checkPermissionsAndLoadConsumable(params.id);
     }
   }, [params]);
+
+  useEffect(() => {
+    if (isNrepOrg) {
+      loadProjects();
+    }
+  }, [isNrepOrg, allowedProjectIds]);
 
   const checkPermissionsAndLoadConsumable = async (id) => {
     try {
@@ -181,12 +158,13 @@ export default function EditConsumable() {
         minStock: getMinStock(consumableData),
         maxStock: getMaxStock(consumableData),
         status: getStatus(consumableData),
-        unit: getUnit(consumableData),
+        unit: getConsumableUnit(consumableData),
         consumableCategory: getConsumableCategory(consumableData),
         // Parse publicImages if it's a string
         publicImages: typeof consumableData.publicImages === 'string'
           ? JSON.parse(consumableData.publicImages || '[]')
           : (consumableData.publicImages || []),
+        projectId: consumableData.projectId || "",
       };
 
       setConsumable(processedConsumable);
@@ -197,9 +175,35 @@ export default function EditConsumable() {
     }
   };
 
+  const loadProjects = async () => {
+    try {
+      const result = await projectsService.list();
+      let docs = Array.isArray(result?.documents) ? result.documents : [];
+      docs = docs.map((project) => ({
+        ...project,
+        $id: project?.$id || project?.id || "",
+      }));
+      if (allowedProjectIds.length > 0) {
+        docs = docs.filter((project) =>
+          allowedProjectIds.includes((project.$id || "").toLowerCase())
+        );
+      }
+      setProjects(docs);
+    } catch (error) {
+      console.error("Failed to load projects", error);
+      setProjects([]);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
+      if (isNrepOrg && !consumable.projectId) {
+        toast.error("Please select a project before saving.");
+        setSaving(false);
+        return;
+      }
+
       // Only include changed fields
       const changedFields = {};
 
@@ -229,6 +233,11 @@ export default function EditConsumable() {
         changedFields.unit = consumable.unit;
       }
 
+      // Check status field
+      if (consumable.status !== originalConsumable.status) {
+        changedFields.status = consumable.status;
+      }
+
       // Check location fields
       if (consumable.locationName !== originalConsumable.locationName) {
         changedFields.locationName = consumable.locationName || "";
@@ -238,6 +247,10 @@ export default function EditConsumable() {
         changedFields.roomOrArea = consumable.roomOrArea || "";
       }
 
+      if (isNrepOrg && consumable.projectId !== originalConsumable.projectId) {
+        changedFields.projectId = consumable.projectId || "";
+      }
+
       // Check public fields
       if (consumable.isPublic !== originalConsumable.isPublic) {
         changedFields.isPublic = consumable.isPublic || false;
@@ -245,22 +258,6 @@ export default function EditConsumable() {
 
       if (consumable.publicSummary !== originalConsumable.publicSummary) {
         changedFields.publicSummary = consumable.publicSummary || "";
-      }
-
-      // Check images - compare arrays
-      const originalImages = Array.isArray(originalConsumable.publicImages)
-        ? originalConsumable.publicImages
-        : [];
-      const currentImages = Array.isArray(consumable.publicImages)
-        ? consumable.publicImages
-        : [];
-
-      if (JSON.stringify(originalImages) !== JSON.stringify(currentImages)) {
-        changedFields.publicImages = JSON.stringify(currentImages);
-        // Update assetImage with first image or empty
-        changedFields.assetImage = currentImages.length > 0
-          ? `https://appwrite.nrep.ug/v1/storage/buckets/${COLLECTIONS.ATTACHMENTS}/files/${currentImages[0]}/view?project=${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID || '6745fd58001e7fcbf850'}`
-          : "";
       }
 
       // If no changes, show message and return
@@ -372,36 +369,38 @@ export default function EditConsumable() {
       <div className="container mx-auto px-4 py-8 space-y-8">
         {/* Enhanced Header */}
         <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-4 sm:gap-6">
               <Button
                 asChild
                 variant="ghost"
                 size="sm"
-                className="bg-green-100 hover:bg-green-200 text-green-700 border border-green-200 transition-colors duration-200"
+                className="w-full sm:w-auto justify-center bg-[var(--org-muted)] text-[var(--org-primary)] border border-[var(--org-primary)]/20 hover:bg-[var(--org-muted)]/80 transition-colors duration-200"
               >
                 <Link href="/admin/consumables">
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to Consumables
                 </Link>
               </Button>
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-sidebar-500 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-[var(--org-primary)] to-[var(--org-accent)]">
                   <Package className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-primary-600 to-sidebar-600 bg-clip-text text-transparent">
+                  <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 via-[var(--org-primary)] to-[var(--org-accent)] bg-clip-text text-transparent">
                     Edit Consumable
                   </h1>
-                  <p className="text-gray-600 font-medium">{consumable.name}</p>
+                  <p className="text-gray-600 font-medium break-words max-w-xs sm:max-w-none">
+                    {consumable.name}
+                  </p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 w-full lg:w-auto">
               <Button
                 asChild
                 variant="outline"
-                className="border-sidebar-200 text-sidebar-600 hover:bg-sidebar-50 transition-all duration-200"
+                className="w-full sm:w-auto justify-center border-[var(--org-primary)]/30 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10 transition-all duration-200"
               >
                 <Link href={`/admin/consumables/${consumable.$id}`}>
                   <Eye className="w-4 h-4 mr-2" />
@@ -411,7 +410,7 @@ export default function EditConsumable() {
               <Button
                 asChild
                 variant="outline"
-                className="border-gray-200 text-gray-600 hover:bg-gray-50 transition-all duration-200"
+                className="w-full sm:w-auto justify-center border-gray-200 text-gray-600 hover:bg-gray-100 transition-all duration-200"
               >
                 <Link href={`/admin/consumables/${consumable.$id}/history`}>
                   <History className="w-4 h-4 mr-2" />
@@ -421,7 +420,7 @@ export default function EditConsumable() {
               <Button
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                className="w-full sm:w-auto justify-center bg-org-gradient hover:from-[var(--org-primary-dark)] hover:to-[var(--org-primary)] text-white font-semibold px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? "Saving..." : "Save Changes"}
@@ -429,7 +428,7 @@ export default function EditConsumable() {
               <Button
                 variant="destructive"
                 onClick={handleDelete}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                className="w-full sm:w-auto justify-center bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-semibold px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete
@@ -440,72 +439,69 @@ export default function EditConsumable() {
 
         {/* Enhanced Current Status */}
         <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-primary-500 to-sidebar-500 p-6">
+          <div className={`bg-gradient-to-r ${primaryGradient} p-6`}>
             <h2 className="text-2xl font-bold text-white flex items-center">
               <CheckCircle className="w-6 h-6 mr-3" />
               Current Status
             </h2>
-            <p className="text-primary-100 mt-1">
+            <p className="text-white/80 mt-1">
               Overview of consumable details
             </p>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-4 border border-primary-200">
+              <div className={`rounded-xl p-4 ${mutedSurface}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-primary-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Status
                   </Label>
                   <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
                 </div>
                 <Badge
-                  className={
+                  className={`text-sm font-semibold px-3 py-1 border ${
                     consumable.status === ENUMS.CONSUMABLE_STATUS.IN_STOCK
-                      ? "bg-green-500 text-white border-0 text-sm font-semibold px-3 py-1"
+                      ? "bg-[var(--org-primary)]/10 text-[var(--org-primary)] border-[var(--org-primary)]/30"
                       : consumable.status === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
-                      ? "bg-yellow-500 text-white border-0 text-sm font-semibold px-3 py-1"
-                      : consumable.status ===
-                        ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
-                      ? "bg-red-500 text-white border-0 text-sm font-semibold px-3 py-1"
-                      : "bg-gray-500 text-white border-0 text-sm font-semibold px-3 py-1"
-                  }
+                      ? "bg-amber-100 text-amber-700 border-amber-200"
+                      : "bg-rose-100 text-rose-700 border-rose-200"
+                  }`}
                 >
                   {consumable.status.replace(/_/g, " ")}
                 </Badge>
               </div>
 
-              <div className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 rounded-xl p-4 border border-sidebar-200">
+              <div className={`rounded-xl p-4 ${mutedSurface}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-sidebar-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Category
                   </Label>
-                  <Package className="w-4 h-4 text-sidebar-500" />
+                  <Package className="w-4 h-4 text-[var(--org-primary)]" />
                 </div>
-                <Badge className="bg-sidebar-500 text-white border-0 text-sm font-semibold px-3 py-1">
+                <Badge className="text-sm font-semibold px-3 py-1 bg-[var(--org-primary)]/12 text-[var(--org-primary)] border border-[var(--org-primary)]/25">
                   {formatCategory(consumable.consumableCategory)}
                 </Badge>
               </div>
 
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
+              <div className={`rounded-xl p-4 ${mutedSurface}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-gray-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Unit
                   </Label>
                   <div className="w-4 h-4 bg-gray-500 rounded"></div>
                 </div>
-                <Badge className="bg-gray-500 text-white border-0 text-sm font-semibold px-3 py-1">
+                <Badge className="bg-slate-100 text-slate-800 border border-slate-200 text-sm font-semibold px-3 py-1">
                   {formatCategory(consumable.unit)}
                 </Badge>
               </div>
 
-              <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-4 border border-primary-200">
+              <div className={`rounded-xl p-4 ${mutedSurface}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm font-semibold text-primary-700">
+                  <Label className="text-sm font-semibold text-gray-800">
                     Current Stock
                   </Label>
                   <div className="w-4 h-4 bg-primary-500 rounded-full"></div>
                 </div>
-                <div className="text-2xl font-bold text-primary-700">
+                <div className="text-2xl font-bold text-[var(--org-primary)]">
                   {consumable.currentStock}
                 </div>
               </div>
@@ -515,22 +511,19 @@ export default function EditConsumable() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Enhanced Basic Information */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 p-6">
+          <div className={`rounded-2xl shadow-xl overflow-hidden ${mutedSurface}`}>
+            <div className={`bg-gradient-to-r ${secondaryGradient} p-6`}>
               <h3 className="text-xl font-bold text-white flex items-center">
                 <Package className="w-5 h-5 mr-3" />
                 Basic Information
               </h3>
-              <p className="text-sidebar-100 text-sm mt-1">
+              <p className="text-white/80 text-sm mt-1">
                 Core consumable details
               </p>
             </div>
             <div className="p-6 space-y-6">
               <div className="space-y-3">
-                <Label
-                  htmlFor="name"
-                  className="text-sm font-semibold text-gray-700"
-                >
+                <Label htmlFor="name" className="text-sm font-semibold text-gray-800">
                   Consumable Name *
                 </Label>
                 <Input
@@ -547,7 +540,7 @@ export default function EditConsumable() {
               <div className="space-y-3">
                 <Label
                   htmlFor="consumableCategory"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-gray-800"
                 >
                   Category
                 </Label>
@@ -574,12 +567,37 @@ export default function EditConsumable() {
                 </Select>
               </div>
 
+              {isNrepOrg && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold text-gray-800">
+                    Project <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={consumable.projectId || ""}
+                    onValueChange={(value) =>
+                      setConsumable({ ...consumable, projectId: value })
+                    }
+                  >
+                    <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl">
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-2 border-gray-200 shadow-xl">
+                      {projects.map((project) => (
+                        <SelectItem key={project.$id} value={project.$id}>
+                          {project.name || project.title || project.code || project.$id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="space-y-3">
                 <Label
                   htmlFor="unit"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-gray-800"
                 >
-                  Unit
+                  Unit of Measure
                 </Label>
                 <Select
                   value={consumable.unit}
@@ -607,9 +625,9 @@ export default function EditConsumable() {
               <div className="space-y-3">
                 <Label
                   htmlFor="publicSummary"
-                  className="text-sm font-semibold text-gray-700"
+                  className="text-sm font-semibold text-gray-800"
                 >
-                  Public Summary
+                  Guest Portal Summary
                 </Label>
                 <Textarea
                   id="publicSummary"
@@ -629,46 +647,46 @@ export default function EditConsumable() {
           </div>
 
           {/* Enhanced Stock Management */}
-          <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-6">
+          <div className={`rounded-2xl shadow-xl overflow-hidden ${mutedSurface}`}>
+            <div className={`bg-gradient-to-r ${primaryGradient} p-6`}>
               <h3 className="text-xl font-bold text-white flex items-center">
                 <CheckCircle className="w-5 h-5 mr-3" />
-                Stock Management
+                Stock & Thresholds
               </h3>
-              <p className="text-primary-100 text-sm mt-1">
-                Inventory and stock levels
+              <p className="text-white/80 text-sm mt-1">
+                Manage availability levels
               </p>
             </div>
             <div className="p-6 space-y-6">
-              <div className="space-y-3">
-                <Label
-                  htmlFor="currentStock"
-                  className="text-sm font-semibold text-gray-700"
-                >
-                  Current Stock *
-                </Label>
-                <Input
-                  id="currentStock"
-                  type="number"
-                  value={consumable.currentStock}
-                  onChange={(e) =>
-                    setConsumable({
-                      ...consumable,
-                      currentStock: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  className="h-12 border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl text-lg font-semibold"
-                  placeholder="Enter current stock"
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <Label
+                    htmlFor="currentStock"
+                    className="text-sm font-semibold text-gray-800"
+                  >
+                    Current Stock
+                  </Label>
+                  <Input
+                    id="currentStock"
+                    type="number"
+                    value={consumable.currentStock}
+                    onChange={(e) =>
+                      setConsumable({
+                        ...consumable,
+                        currentStock: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    className="h-12 border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl text-lg font-semibold"
+                    placeholder="Enter current stock"
+                  />
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <Label
                     htmlFor="minStock"
-                    className="text-sm font-semibold text-gray-700"
+                    className="text-sm font-semibold text-gray-800"
                   >
-                    Minimum Stock
+                    Minimum Stock Threshold
                   </Label>
                   <Input
                     id="minStock"
@@ -688,9 +706,9 @@ export default function EditConsumable() {
                 <div className="space-y-3">
                   <Label
                     htmlFor="maxStock"
-                    className="text-sm font-semibold text-gray-700"
+                    className="text-sm font-semibold text-gray-800"
                   >
-                    Maximum Stock
+                    Maximum Stock Capacity
                   </Label>
                   <Input
                     id="maxStock"
@@ -721,15 +739,15 @@ export default function EditConsumable() {
                     setConsumable({ ...consumable, status: value })
                   }
                 >
-                  <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl">
+                  <SelectTrigger className="h-12 border-2 border-gray-200 focus:border-[var(--org-primary)] focus:ring-4 focus:ring-[var(--org-primary)]/20 transition-all duration-200 rounded-xl bg-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-2 border-gray-200 shadow-xl">
+                  <SelectContent className="z-[999] rounded-xl border-2 border-gray-200 shadow-2xl bg-white">
                     {Object.values(ENUMS.CONSUMABLE_STATUS).map((status) => (
                       <SelectItem
                         key={status}
                         value={status}
-                        className="rounded-lg"
+                        className="rounded-lg text-gray-800 focus:text-white focus:bg-[var(--org-primary)]"
                       >
                         {status.replace(/_/g, " ")}
                       </SelectItem>
@@ -742,21 +760,21 @@ export default function EditConsumable() {
         </div>
 
         {/* Enhanced Location Information */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 p-6">
+        <div className={`rounded-2xl shadow-xl overflow-hidden ${mutedSurface}`}>
+          <div className={`bg-gradient-to-r ${secondaryGradient} p-6`}>
             <h3 className="text-xl font-bold text-white flex items-center">
               <Package className="w-5 h-5 mr-3" />
-              Location Information
+              Location & Visibility
             </h3>
-            <p className="text-sidebar-100 text-sm mt-1">
-              Storage and visibility settings
+            <p className="text-white/80 text-sm mt-1">
+              Control where the consumable appears
             </p>
           </div>
           <div className="p-6 space-y-6">
             <div className="space-y-3">
               <Label
                 htmlFor="locationName"
-                className="text-sm font-semibold text-gray-700"
+                className="text-sm font-semibold text-gray-800"
               >
                 Location Name
               </Label>
@@ -777,9 +795,9 @@ export default function EditConsumable() {
             <div className="space-y-3">
               <Label
                 htmlFor="roomOrArea"
-                className="text-sm font-semibold text-gray-700"
+                className="text-sm font-semibold text-gray-800"
               >
-                Room/Area
+                Room / Area
               </Label>
               <Input
                 id="roomOrArea"
@@ -843,29 +861,6 @@ export default function EditConsumable() {
               rows={4}
               placeholder="Add internal notes and comments..."
               className="border-2 border-gray-200 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20 transition-all duration-200 rounded-xl resize-none"
-            />
-          </div>
-        </div>
-
-        {/* Consumable Images Section */}
-        <div className="bg-white rounded-2xl shadow-xl border border-white/20 backdrop-blur-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6">
-            <h3 className="text-xl font-bold text-white flex items-center">
-              <Image className="w-5 h-5 mr-3" />
-              Consumable Images
-            </h3>
-            <p className="text-orange-100 text-sm mt-1">
-              Upload images for this consumable item
-            </p>
-          </div>
-          <div className="p-6">
-            <ImageUpload
-              assetId={consumable.assetTag || consumableId}
-              existingImages={consumable.publicImages || []}
-              onImagesChange={(newImages) => {
-                setConsumable({ ...consumable, publicImages: newImages });
-              }}
-              maxImages={10}
             />
           </div>
         </div>
@@ -938,7 +933,7 @@ export default function EditConsumable() {
                 <div className="flex items-center space-x-3 w-full pt-4">
                   <Button
                     onClick={cancelDeleteConsumable}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
+                    className="flex-1 bg-org-gradient hover:from-[var(--org-primary-dark)] hover:to-[var(--org-primary)] text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
                   >
                     Cancel
                   </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -62,8 +62,13 @@ import {
   CheckCircle,
   Clock,
   Image,
+  List,
+  Grid3X3,
 } from "lucide-react";
-import { assetsService } from "../../../lib/appwrite/provider.js";
+import {
+  assetsService,
+  projectsService,
+} from "../../../lib/appwrite/provider.js";
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
 import { useConfirmation } from "../../../components/ui/confirmation-dialog";
@@ -73,11 +78,14 @@ import {
   getStatusBadgeColor,
   getConditionBadgeColor,
 } from "../../../lib/utils/mappings.js";
+import { useOrgTheme } from "../../../components/providers/org-theme-provider";
+import { PageLoading } from "../../../components/ui/loading";
 
 export default function AdminAssetManagement() {
   const router = useRouter();
   const toast = useToastContext();
   const { confirm } = useConfirmation();
+  const { theme, orgCode } = useOrgTheme();
   const [staff, setStaff] = useState(null);
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -85,15 +93,18 @@ export default function AdminAssetManagement() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCondition, setFilterCondition] = useState("all");
+  const [projectFilter, setProjectFilter] = useState("all");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState(null);
+  const [viewMode, setViewMode] = useState("table");
 
   // Export functionality state
   const [exporting, setExporting] = useState(false);
 
   // Manual ID assignment state
   const [manualIdAssignment, setManualIdAssignment] = useState(false);
+  const [projects, setProjects] = useState([]);
 
   // New asset form state - matching Appwrite collection attributes
   const [newAsset, setNewAsset] = useState({
@@ -129,6 +140,111 @@ export default function AdminAssetManagement() {
     checkPermissionsAndLoadData();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedMode = window.localStorage.getItem("assetViewMode");
+    if (storedMode === "table" || storedMode === "grid") {
+      setViewMode(storedMode);
+    }
+  }, []);
+
+  const isNrepOrg = orgCode === "NREP";
+
+  const allowedProjectIds = useMemo(() => {
+    const ids = theme?.projects?.allowedIds;
+    return Array.isArray(ids)
+      ? ids
+          .map((id) => id?.toString().toLowerCase())
+          .filter((id) => typeof id === "string" && id.length > 0)
+      : [];
+  }, [theme?.projects?.allowedIds]);
+  const defaultProjectId = theme?.projects?.defaultId;
+
+  const filterGridClasses = isNrepOrg
+    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
+    : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6";
+
+  const loadProjects = useCallback(async () => {
+    if (!isNrepOrg) return;
+    try {
+      const result = await projectsService.list();
+      let docs = Array.isArray(result?.documents) ? result.documents : [];
+      docs = docs.map((project) => ({
+        ...project,
+        $id: project?.$id || project?.id || "",
+      }));
+      if (allowedProjectIds.length > 0) {
+        docs = docs.filter((project) =>
+          allowedProjectIds.includes((project.$id || "").toLowerCase())
+        );
+      }
+      setProjects(docs);
+      if (
+        defaultProjectId &&
+        docs.some((project) => project.$id === defaultProjectId)
+      ) {
+        setProjectFilter((prev) =>
+          prev === "all" ? defaultProjectId : prev
+        );
+      }
+    } catch (error) {
+      console.warn("Failed to load projects", error);
+      setProjects([]);
+    }
+  }, [allowedProjectIds, defaultProjectId, isNrepOrg]);
+
+  const projectLookup = useMemo(() => {
+    const map = new Map();
+    (projects || []).forEach((project) => {
+      if (!project || !project.$id) return;
+      const label = project.name || project.title || project.code || project.$id;
+      map.set(project.$id, label);
+      map.set(project.$id.toLowerCase(), label);
+    });
+    return map;
+  }, [projects]);
+
+  const extractProjectId = (asset) => {
+    if (!asset) return "";
+    if (typeof asset.projectId === "string" && asset.projectId.trim()) {
+      // Filter out RETC placeholder value
+      if (asset.projectId === "RETC_NO_PROJECT") return "";
+      return asset.projectId;
+    }
+    if (asset.projectId && typeof asset.projectId === "object") {
+      if (typeof asset.projectId.$id === "string") {
+        return asset.projectId.$id;
+      }
+    }
+    if (asset.project && typeof asset.project === "object") {
+      if (typeof asset.project.$id === "string") {
+        return asset.project.$id;
+      }
+      if (typeof asset.project.id === "string") {
+        return asset.project.id;
+      }
+    }
+    if (typeof asset.project === "string") {
+      return asset.project;
+    }
+    return "";
+  };
+
+  const resolveProjectName = (asset) => {
+    if (!isNrepOrg) return "-";
+    const explicitName =
+      asset?.projectName || asset?.project?.name || asset?.project?.title;
+    const projectId = extractProjectId(asset);
+    if (explicitName) return explicitName;
+    if (projectId) {
+      const lookupName =
+        projectLookup.get(projectId) ||
+        projectLookup.get(projectId.toLowerCase());
+      if (lookupName) return lookupName;
+    }
+    return "Unassigned";
+  };
+
   const checkPermissionsAndLoadData = async () => {
     try {
       const currentStaff = await getCurrentStaff();
@@ -138,6 +254,7 @@ export default function AdminAssetManagement() {
       }
       setStaff(currentStaff);
       await loadAssets();
+      await loadProjects();
     } catch (error) {
       // Silent fail for data loading
     } finally {
@@ -254,6 +371,12 @@ export default function AdminAssetManagement() {
     setShowDeleteDialog(true);
   };
 
+  const handleViewModeChange = (mode) => {
+    if (mode === "table" || mode === "grid") {
+      setViewMode(mode);
+    }
+  };
+
   const confirmDeleteAsset = async () => {
     if (!assetToDelete) return;
 
@@ -324,6 +447,12 @@ export default function AdminAssetManagement() {
             category: filterCategory !== "all" ? filterCategory : null,
             status: filterStatus !== "all" ? filterStatus : null,
             condition: filterCondition !== "all" ? filterCondition : null,
+            project:
+              isNrepOrg && projectFilter !== "all"
+                ? projectFilter === "unassigned"
+                  ? "UNASSIGNED"
+                  : projectFilter
+                : null,
           },
         },
         assets: dataToExport,
@@ -357,11 +486,12 @@ export default function AdminAssetManagement() {
   };
 
   // Filter assets based on search and filters
-  const filteredAssets = assets.filter((asset) => {
+  const filteredAssets = (assets || []).filter((asset) => {
     const matchesSearch =
       asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asset.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase());
+      asset.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      asset.assetTag?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesCategory =
       filterCategory === "all" || asset.category === filterCategory;
@@ -370,18 +500,100 @@ export default function AdminAssetManagement() {
     const matchesCondition =
       filterCondition === "all" || asset.currentCondition === filterCondition;
 
+    const assetProjectId = extractProjectId(asset);
+    const normalizedAssetProjectId = assetProjectId
+      ? assetProjectId.toLowerCase()
+      : "";
+    const normalizedProjectFilter = projectFilter
+      ? projectFilter.toLowerCase()
+      : "";
+    const matchesProject =
+      !isNrepOrg ||
+      projectFilter === "all" ||
+      (projectFilter === "unassigned" && !assetProjectId) ||
+      assetProjectId === projectFilter ||
+      normalizedAssetProjectId === normalizedProjectFilter;
+
     return (
-      matchesSearch && matchesCategory && matchesStatus && matchesCondition
+      matchesSearch &&
+      matchesCategory &&
+      matchesStatus &&
+      matchesCondition &&
+      matchesProject
     );
   });
 
+  const clearFilters = () => {
+    setSearchTerm("");
+    setFilterCategory("all");
+    setFilterStatus("all");
+    setFilterCondition("all");
+    setProjectFilter(defaultProjectId && isNrepOrg ? defaultProjectId : "all");
+  };
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoading message="Loading assets..." />;
   }
+
+  const metricCardClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-highlight)]/10 to-white"
+    : "bg-gradient-to-br from-sidebar-50 to-sidebar-100";
+  const metricIconClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-primary)] to-[var(--org-primary-dark)]"
+    : "bg-gradient-to-br from-sidebar-500 to-sidebar-600";
+  const metricSubtextClass = isNrepOrg
+    ? "text-[var(--org-primary)]/80"
+    : "text-sidebar-600";
+  const primaryCardClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-primary)]/10 to-white"
+    : "bg-gradient-to-br from-primary-50 to-primary-100";
+  const primaryIconClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-primary)] to-[var(--org-primary-dark)]"
+    : "bg-gradient-to-br from-primary-500 to-primary-600";
+  const primaryBadgeClass = isNrepOrg
+    ? "bg-[var(--org-primary)]/20 text-[var(--org-primary)] border-[var(--org-primary)]/25"
+    : "bg-primary-500/20 text-primary-600 border-primary-500/30";
+  const highlightCardClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-highlight)]/14 via-[var(--org-primary)]/10 to-white"
+    : "bg-gradient-to-br from-orange-50 to-orange-100";
+  const highlightIconClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-highlight)] to-[var(--org-primary)]"
+    : "bg-gradient-to-br from-orange-500 to-orange-600";
+  const highlightBadgeClass = isNrepOrg
+    ? "bg-[var(--org-highlight)]/20 text-[var(--org-highlight)] border-[var(--org-highlight)]/25"
+    : "bg-orange-500/20 text-orange-600 border-orange-500/30";
+
+  const categoryBadgeClass = isNrepOrg
+    ? "bg-[var(--org-highlight)]/15 text-[var(--org-highlight)] border-[var(--org-highlight)]/25"
+    : "bg-sidebar-50 text-sidebar-700 border-sidebar-200";
+  const headerBadgeClass = isNrepOrg
+    ? "bg-[var(--org-primary)]/18 text-[var(--org-primary)] border-[var(--org-primary)]/25"
+    : "bg-sidebar-500/20 text-sidebar-600 border-sidebar-500/30";
+  const actionButtonClass = isNrepOrg
+    ? "bg-[var(--org-primary)]/12 text-[var(--org-primary)] border border-[var(--org-primary)]/30 hover:bg-[var(--org-primary)]/18 hover:text-white hover:shadow-lg"
+    : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-900";
+  const actionEditButtonClass = isNrepOrg
+    ? "bg-[var(--org-highlight)]/14 text-[var(--org-highlight)] border border-[var(--org-highlight)]/30 hover:bg-[var(--org-highlight)]/20 hover:text-white hover:shadow-lg"
+    : "bg-primary-50 text-primary-600 border border-primary-100 hover:bg-primary-100 hover:text-primary-800";
+
+  const rowHoverClass = isNrepOrg
+    ? "hover:bg-[var(--org-primary)]/7"
+    : "hover:bg-gray-50/50";
+
+  const iconBackgroundClass = isNrepOrg
+    ? "bg-gradient-to-br from-[var(--org-primary)]/16 via-[var(--org-highlight)]/12 to-[var(--org-primary-dark)]/10"
+    : "bg-gradient-to-br from-sidebar-100 to-sidebar-200";
+
+  const nameHoverClass = isNrepOrg
+    ? "group-hover:text-[var(--org-primary)]"
+    : "group-hover:text-sidebar-700";
+
+  const locationIconClass = isNrepOrg
+    ? "text-[var(--org-primary)]/70"
+    : "text-slate-400";
+  const locationTextClass = isNrepOrg
+    ? "text-[var(--org-primary-dark)]"
+    : "text-slate-700";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
@@ -405,9 +617,9 @@ export default function AdminAssetManagement() {
               <Button
                 onClick={() => exportAssetsData("Assets")}
                 disabled={exporting}
-                variant="outline"
                 title="Export all assets from the database as JSON file"
-                className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="outline"
+                className="relative border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft transition-all duration-300 ease-out group overflow-hidden hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center justify-center relative z-10">
                   <Download
@@ -419,8 +631,6 @@ export default function AdminAssetManagement() {
                     {exporting ? "Exporting..." : "Export All"}
                   </span>
                 </div>
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-gray-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </Button>
 
               {/* Export Filtered Results Button - Only show if filters are applied */}
@@ -431,9 +641,9 @@ export default function AdminAssetManagement() {
                 <Button
                   onClick={() => exportAssetsData("FilteredAssets")}
                   disabled={exporting}
-                  variant="outline"
                   title="Export only the currently filtered/displayed assets as JSON file"
-                  className="relative bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 hover:bg-blue-100 hover:border-blue-300 text-blue-700 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  variant="outline"
+                  className="relative border-[var(--org-primary)] text-org-primary hover:bg-org-primary-soft transition-all duration-300 ease-out group overflow-hidden hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center relative z-10">
                     <Download
@@ -445,14 +655,12 @@ export default function AdminAssetManagement() {
                       {exporting ? "Exporting..." : "Export Filtered"}
                     </span>
                   </div>
-                  {/* Ripple effect */}
-                  <div className="absolute inset-0 bg-blue-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
                 </Button>
               )}
 
               <Button
                 onClick={() => router.push("/admin/assets/new")}
-                className="relative bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+                className="relative bg-org-gradient text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:-translate-y-0.5"
               >
                 <div className="flex items-center justify-center relative z-10">
                   <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 group-hover:scale-110 transition-all duration-300" />
@@ -460,12 +668,6 @@ export default function AdminAssetManagement() {
                     Add Asset
                   </span>
                 </div>
-                {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
-                {/* Shimmer effect */}
-                <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
               </Button>
 
               {/* Removed Dialog - Now using dedicated page at /admin/assets/new */}
@@ -1042,13 +1244,13 @@ export default function AdminAssetManagement() {
           {/* Modern Key Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             {/* Total Assets Card */}
-            <Card className="bg-gradient-to-br from-sidebar-50 to-sidebar-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <Card className={`${metricCardClass} border-0 shadow-lg hover:shadow-xl transition-all duration-300 group`}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-sidebar-500 to-sidebar-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <div className={`p-3 ${metricIconClass} rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
                     <Package className="h-6 w-6 text-white" />
                   </div>
-                  <Badge className="bg-sidebar-500/20 text-sidebar-600 border-sidebar-500/30">
+                  <Badge className={headerBadgeClass}>
                     Total
                   </Badge>
                 </div>
@@ -1059,7 +1261,7 @@ export default function AdminAssetManagement() {
                   <p className="text-sm font-medium text-slate-600">
                     Total Assets
                   </p>
-                  <p className="text-xs text-sidebar-600">
+                  <p className={`text-xs ${metricSubtextClass}`}>
                     {
                       assets.filter(
                         (a) =>
@@ -1080,13 +1282,13 @@ export default function AdminAssetManagement() {
             </Card>
 
             {/* Available Assets Card */}
-            <Card className="bg-gradient-to-br from-primary-50 to-primary-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <Card className={`${primaryCardClass} border-0 shadow-lg hover:shadow-xl transition-all duration-300 group`}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <div className={`p-3 ${primaryIconClass} rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
                     <CheckCircle className="h-6 w-6 text-white" />
                   </div>
-                  <Badge className="bg-primary-500/20 text-primary-600 border-primary-500/30">
+                  <Badge className={primaryBadgeClass}>
                     Ready
                   </Badge>
                 </div>
@@ -1102,7 +1304,11 @@ export default function AdminAssetManagement() {
                   <p className="text-sm font-medium text-slate-600">
                     Available
                   </p>
-                  <p className="text-xs text-primary-600">
+                  <p
+                    className={`text-xs ${
+                      isNrepOrg ? "text-[var(--org-primary)]/80" : "text-primary-600"
+                    }`}
+                  >
                     Ready for deployment
                   </p>
                 </div>
@@ -1110,13 +1316,13 @@ export default function AdminAssetManagement() {
             </Card>
 
             {/* In Use Assets Card */}
-            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
+            <Card className={`${highlightCardClass} border-0 shadow-lg hover:shadow-xl transition-all duration-300 group`}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <div className={`p-3 ${highlightIconClass} rounded-xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
                     <Clock className="h-6 w-6 text-white" />
                   </div>
-                  <Badge className="bg-orange-500/20 text-orange-600 border-orange-500/30">
+                  <Badge className={highlightBadgeClass}>
                     Active
                   </Badge>
                 </div>
@@ -1130,7 +1336,15 @@ export default function AdminAssetManagement() {
                     }
                   </div>
                   <p className="text-sm font-medium text-slate-600">In Use</p>
-                  <p className="text-xs text-orange-600">Currently assigned</p>
+                  <p
+                    className={`text-xs ${
+                      isNrepOrg
+                        ? "text-[var(--org-highlight)]/80"
+                        : "text-orange-600"
+                    }`}
+                  >
+                    Currently assigned
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -1195,7 +1409,7 @@ export default function AdminAssetManagement() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className={filterGridClasses}>
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-slate-700">
                   Search Assets
@@ -1273,6 +1487,31 @@ export default function AdminAssetManagement() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {isNrepOrg && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium text-slate-700">
+                    Project
+                  </Label>
+                  <Select
+                    value={projectFilter}
+                    onValueChange={setProjectFilter}
+                  >
+                    <SelectTrigger className="h-11 border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 transition-all duration-200">
+                      <SelectValue placeholder="Project" />
+                    </SelectTrigger>
+                    <SelectContent className="z-30">
+                      <SelectItem value="all">All Projects</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.$id} value={project.$id}>
+                          {project.name || project.title || project.code || project.$id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1293,39 +1532,68 @@ export default function AdminAssetManagement() {
                     </p>
                   </div>
                 </div>
-                <Badge className="bg-sidebar-500/20 text-sidebar-600 border-sidebar-500/30 px-3 py-1">
-                  {filteredAssets.length}{" "}
-                  {filteredAssets.length === 1 ? "Asset" : "Assets"}
-                </Badge>
+                <div className="flex items-center gap-3">
+                  <Badge className={`${headerBadgeClass} px-3 py-1`}>
+                    {filteredAssets.length}{" "}
+                    {filteredAssets.length === 1 ? "Asset" : "Assets"}
+                  </Badge>
+                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-1.5 py-1 shadow-sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewModeChange("table")}
+                      className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
+                        viewMode === "table"
+                          ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      }`}
+                    >
+                      <List className="w-4 h-4" />
+                      <span className="hidden sm:inline">Table</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewModeChange("grid")}
+                      className={`h-8 px-3 rounded-full flex items-center gap-2 transition-all font-medium ${
+                        viewMode === "grid"
+                          ? "bg-[var(--org-primary)] text-white shadow-sm hover:bg-[var(--org-primary)]/90"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Grid3X3 className="w-4 h-4" />
+                      <span className="hidden sm:inline">Cards</span>
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <Table>
+              <Table className={viewMode === "grid" ? "hidden" : ""}>
                 <TableHeader>
-                  <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
                       Asset
                     </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
-                      Images
-                    </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
+                    <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
                       Category
                     </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
+                    <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
                       Status
                     </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
+                    <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
                       Condition
                     </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
+                    {isNrepOrg && (
+                      <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
+                        Project
+                      </TableHead>
+                    )}
+                    <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700">
                       Location
                     </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6">
-                      Value
-                    </TableHead>
-                    <TableHead className="font-semibold text-slate-700 py-4 px-6 text-center">
+                    <TableHead className="py-4 px-6 text-sm font-semibold text-gray-700 text-right">
                       Actions
                     </TableHead>
                   </TableRow>
@@ -1335,15 +1603,25 @@ export default function AdminAssetManagement() {
                     filteredAssets.map((asset, index) => (
                       <TableRow
                         key={asset.$id}
-                        className="hover:bg-gray-50/50 transition-colors duration-200 group border-b border-gray-100/50"
+                        className={`${rowHoverClass} transition-colors duration-200 group border-b border-gray-100/50`}
                       >
                         <TableCell className="py-4 px-6">
                           <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-gradient-to-br from-sidebar-100 to-sidebar-200 rounded-lg group-hover:from-sidebar-200 group-hover:to-sidebar-300 transition-all duration-200">
-                              <Package className="h-4 w-4 text-sidebar-600" />
+                            <div
+                              className={`p-2 rounded-lg transition-all duration-200 ${iconBackgroundClass}`}
+                            >
+                              <Package
+                                className={`h-4 w-4 ${
+                                  isNrepOrg
+                                    ? "text-[var(--org-primary)]"
+                                    : "text-sidebar-600"
+                                }`}
+                              />
                             </div>
                             <div>
-                              <p className="font-medium text-slate-900 group-hover:text-sidebar-700 transition-colors duration-200">
+                              <p
+                                className={`font-medium text-slate-900 ${nameHoverClass} transition-colors duration-200`}
+                              >
                                 {asset.name}
                               </p>
                               {asset.serialNumber && (
@@ -1355,42 +1633,9 @@ export default function AdminAssetManagement() {
                           </div>
                         </TableCell>
                         <TableCell className="py-4 px-6">
-                          {(() => {
-                            const imageUrls =
-                              assetImageService.getAssetImageUrls(
-                                asset.publicImages
-                              );
-                            return imageUrls.length > 0 ? (
-                              <div className="flex items-center space-x-1">
-                                <img
-                                  src={imageUrls[0]}
-                                  alt={asset.name}
-                                  className="w-8 h-8 rounded object-cover border border-gray-200"
-                                  onError={(e) => {
-                                    e.target.style.display = "none";
-                                    e.target.nextSibling.style.display = "flex";
-                                  }}
-                                />
-                                <div className="hidden w-8 h-8 bg-gray-100 rounded border border-gray-200 items-center justify-center">
-                                  <Image className="w-4 h-4 text-gray-400" />
-                                </div>
-                                {imageUrls.length > 1 && (
-                                  <span className="text-xs text-gray-500 bg-gray-100 px-1 rounded">
-                                    +{imageUrls.length - 1}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="w-8 h-8 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                                <Image className="w-4 h-4 text-gray-400" />
-                              </div>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell className="py-4 px-6">
                           <Badge
                             variant="outline"
-                            className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100 transition-colors duration-200"
+                            className={`${categoryBadgeClass} hover:brightness-110 transition-colors duration-200`}
                           >
                             {formatCategory(asset.category)}
                           </Badge>
@@ -1413,20 +1658,21 @@ export default function AdminAssetManagement() {
                             {asset.currentCondition.replace(/_/g, " ")}
                           </Badge>
                         </TableCell>
+                        {isNrepOrg && (
+                          <TableCell className="py-4 px-6">
+                            <Badge className="bg-[var(--org-highlight)]/15 text-[var(--org-highlight)] border-[var(--org-highlight)]/25">
+                              {resolveProjectName(asset)}
+                            </Badge>
+                          </TableCell>
+                        )}
                         <TableCell className="py-4 px-6">
                           <div className="flex items-center space-x-2">
-                            <MapPin className="h-4 w-4 text-slate-400" />
-                            <span className="text-slate-700">
+                            <MapPin className={`h-4 w-4 ${locationIconClass}`} />
+                            <span className={locationTextClass}>
                               {asset.locationName ||
                                 asset.roomOrArea ||
                                 "Not specified"}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4 px-6">
-                          <div className="flex items-center space-x-2">
-                            <DollarSign className="h-4 w-4 text-slate-400" />
-                            <span className="text-slate-500">-</span>
                           </div>
                         </TableCell>
                         <TableCell className="py-4 px-6">
@@ -1435,20 +1681,20 @@ export default function AdminAssetManagement() {
                               asChild
                               variant="ghost"
                               size="sm"
-                              className="h-10 w-10 p-0 hover:bg-sidebar-100 hover:text-sidebar-700 transition-all duration-200 group/btn"
+                              className={`h-10 w-10 p-0 transition-all duration-200 group/btn ${actionButtonClass}`}
                             >
                               <Link href={`/assets/${asset.$id}`}>
-                                <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                <Eye className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
                               </Link>
                             </Button>
                             <Button
                               asChild
                               variant="ghost"
                               size="sm"
-                              className="h-10 w-10 p-0 hover:bg-primary-100 hover:text-primary-700 transition-all duration-200 group/btn"
+                              className={`h-10 w-10 p-0 transition-all duration-200 group/btn ${actionEditButtonClass}`}
                             >
                               <Link href={`/admin/assets/${asset.$id}/edit`}>
-                                <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                <Edit className="h-5 w-5 group-hover/btn:scale-110 group-hover/btn:text-white transition-all duration-200" />
                               </Link>
                             </Button>
                             <Button
@@ -1480,7 +1726,7 @@ export default function AdminAssetManagement() {
                           </div>
                           <Button
                             onClick={() => setShowAddDialog(true)}
-                            className="mt-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white"
+                            className="mt-4 bg-org-gradient text-white shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5"
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             Add First Asset
@@ -1492,6 +1738,165 @@ export default function AdminAssetManagement() {
                 </TableBody>
               </Table>
             </div>
+            {viewMode === "grid" && (
+              <div className="p-6">
+                {filteredAssets.length > 0 ? (
+                  <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    {filteredAssets.map((asset) => {
+                      const imageUrls = assetImageService.getAssetImageUrls(
+                        asset.publicImages
+                      );
+                      const updatedAtLabel = asset.$updatedAt
+                        ? new Date(asset.$updatedAt).toLocaleDateString()
+                        : "–";
+                      return (
+                        <div
+                          key={`${asset.$id}-card`}
+                          className="group relative overflow-hidden rounded-2xl border border-gray-200/70 bg-white/95 shadow-lg hover:shadow-xl transition-all duration-300"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-br from-[var(--org-primary)]/12 via-[var(--org-highlight)]/8 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                          <div className="relative z-10 p-6 space-y-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`p-3 rounded-xl shadow-sm ${iconBackgroundClass}`}
+                                >
+                                  <Package
+                                    className={`h-5 w-5 ${
+                                      isNrepOrg
+                                        ? "text-[var(--org-primary)]"
+                                        : "text-sidebar-600"
+                                    }`}
+                                  />
+                                </div>
+                                <div>
+                                  <h3
+                                    className={`text-lg font-semibold text-slate-900 ${nameHoverClass}`}
+                                  >
+                                    {asset.name}
+                                  </h3>
+                                  {asset.serialNumber && (
+                                    <p className="text-sm text-slate-500">
+                                      S/N: {asset.serialNumber}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <Badge className={`${categoryBadgeClass} px-3 py-1`}>
+                                {formatCategory(asset.category)}
+                              </Badge>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              {imageUrls.length > 0 ? (
+                                <img
+                                  src={imageUrls[0]}
+                                  alt={asset.name}
+                                  className="w-14 h-14 rounded-xl object-cover border border-gray-200 shadow-sm"
+                                />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                  <Image className="w-6 h-6 text-gray-400" />
+                                </div>
+                              )}
+                              <div className="flex flex-wrap gap-2">
+                                <Badge
+                                  className={`${getStatusBadgeColor(
+                                    asset.availableStatus
+                                  )} shadow-sm`}
+                                >
+                                  {asset.availableStatus.replace(/_/g, " ")}
+                                </Badge>
+                                <Badge
+                                  className={`${getConditionBadgeColor(
+                                    asset.currentCondition
+                                  )} shadow-sm`}
+                                >
+                                  {asset.currentCondition.replace(/_/g, " ")}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600 mb-3">
+                              <div className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4 text-gray-400" />
+                                <span>
+                                  {asset.locationName ||
+                                    asset.roomOrArea ||
+                                    "Not specified"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-gray-400" />
+                                <span>
+                                  Updated{" "}
+                                  <span className="font-medium text-gray-800">
+                                    {asset.$updatedAt
+                                      ? new Date(
+                                          asset.$updatedAt
+                                        ).toLocaleDateString()
+                                      : "–"}
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+
+                            {isNrepOrg && (
+                              <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+                                <Badge className="bg-[var(--org-highlight)]/15 text-[var(--org-highlight)] border-[var(--org-highlight)]/25">
+                                  Project
+                                </Badge>
+                                <span>{resolveProjectName(asset)}</span>
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs uppercase tracking-wide text-slate-400">
+                                Asset ID: {asset.assetTag || "—"}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  asChild
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionButtonClass}`}
+                                >
+                                  <Link href={`/assets/${asset.$id}`}>
+                                    <Eye className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                  </Link>
+                                </Button>
+                                <Button
+                                  asChild
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`h-11 w-11 p-0 transition-all duration-200 group/btn rounded-lg ${actionEditButtonClass}`}
+                                >
+                                  <Link href={`/admin/assets/${asset.$id}/edit`}>
+                                    <Edit className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                  </Link>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteAsset(asset)}
+                                  className="h-11 w-11 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200 group/btn rounded-lg"
+                                >
+                                  <Trash2 className="h-5 w-5 group-hover/btn:scale-110 transition-transform duration-200" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    No assets found. Try adjusting your filters.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1572,7 +1977,8 @@ export default function AdminAssetManagement() {
                   </Button>
                   <Button
                     onClick={confirmDeleteAsset}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200"
+                    variant="destructive"
+                    className="flex-1 shadow-md hover:shadow-lg transition-all duration-200"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Asset

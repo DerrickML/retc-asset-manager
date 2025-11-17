@@ -1,13 +1,47 @@
 "use client";
 
+import { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { RequestForm } from "../../../components/requests/request-form";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { Button } from "../../../components/ui/button";
+import { ENUMS } from "../../../lib/appwrite/config";
+import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 
 export default function NewRequestPage() {
+  const searchParams = useSearchParams();
+  const typeParam = searchParams.get("type")?.toLowerCase() || "asset";
+  const { theme } = useOrgTheme();
+
+  const { itemType, title, subtitle, icon: Icon } = useMemo(() => {
+    if (typeParam === "consumable") {
+      return {
+        itemType: ENUMS.ITEM_TYPE.CONSUMABLE,
+        title: "New Consumable Request",
+        subtitle: "Request consumables you need for upcoming work",
+        icon: ShoppingCart,
+      };
+    }
+    return {
+      itemType: ENUMS.ITEM_TYPE.ASSET,
+      title: "New Asset Request",
+      subtitle: "Request assets for your project or work needs",
+      icon: FileText,
+    };
+  }, [typeParam]);
+
+  const backgroundColor = theme?.colors?.background || "#f3f4f6";
+  const headerAccentFrom = theme?.colors?.primary || "#0E6370";
+  const headerAccentTo = theme?.colors?.accent || headerAccentFrom;
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div
+      className="min-h-screen"
+      style={{
+        background: `linear-gradient(180deg, ${backgroundColor} 0%, #ffffff 65%)`,
+      }}
+    >
       {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -27,21 +61,25 @@ export default function NewRequestPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-primary-100 to-primary-200 rounded-xl">
-              <FileText className="w-8 h-8 text-primary-600" />
+            <div
+              className="p-3 rounded-xl shadow-inner"
+              style={{
+                background: `linear-gradient(145deg, ${headerAccentFrom}1A, ${headerAccentTo}33)`,
+              }}
+            >
+              <Icon
+                className="w-8 h-8"
+                style={{ color: headerAccentFrom }}
+              />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                New Asset Request
-              </h1>
-              <p className="text-gray-600 text-lg mt-1">
-                Request assets for your project or work needs
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
+              <p className="text-gray-600 text-lg mt-1">{subtitle}</p>
             </div>
           </div>
         </div>
 
-        <RequestForm />
+        <RequestForm itemType={itemType} />
       </div>
     </div>
   );

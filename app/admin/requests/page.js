@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -88,6 +88,7 @@ import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
 import Link from "next/link";
+import { PageLoading, SectionLoading } from "../../../components/ui/loading";
 
 // Helper function to format date
 const formatDate = (dateString) => {
@@ -145,10 +146,64 @@ export default function RequestQueue() {
   const [dateRange, setDateRange] = useState("all");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [decisionLoading, setDecisionLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("asset");
+  const [showDenialDialog, setShowDenialDialog] = useState(false);
+  const [requestToDeny, setRequestToDeny] = useState(null);
+  const [denialReason, setDenialReason] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedTab = window.localStorage.getItem("adminRequestsTab");
+    if (storedTab === "asset" || storedTab === "consumable") {
+      setActiveTab(storedTab);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("adminRequestsTab", activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     initializeData();
   }, []);
+
+  const assetMap = useMemo(() => {
+    const map = new Map();
+    (assets || []).forEach((asset) => {
+      if (!asset?.$id) return;
+      map.set(asset.$id, asset);
+    });
+    return map;
+  }, [assets]);
+
+  const enrichedRequests = useMemo(() => {
+    return (requests || []).map((request) => {
+      const resolvedItems = (request.requestedItems || [])
+        .map((itemId) => assetMap.get(itemId))
+        .filter(Boolean);
+
+      const fallbackItems =
+        request.assets && request.assets.length ? request.assets : [];
+
+      const combinedItems =
+        resolvedItems.length > 0 ? resolvedItems : fallbackItems;
+
+      const requestType =
+        combinedItems.length > 0 &&
+        combinedItems.every(
+          (item) => item?.itemType === ENUMS.ITEM_TYPE.CONSUMABLE
+        )
+          ? "consumable"
+          : "asset";
+
+      return {
+        ...request,
+        resolvedItems: combinedItems,
+        requestType,
+      };
+    });
+  }, [requests, assetMap]);
 
   // Load requester names when both requests and staff data are available
   useEffect(() => {
@@ -189,8 +244,13 @@ export default function RequestQueue() {
       const response = await assetRequestsService.list(queries);
       const requests = response.documents || [];
       setRequests(requests);
+      setError("");
     } catch (error) {
-      throw error;
+      console.error("Failed to load admin requests", error);
+      setError(
+        error?.message ||
+          "Unable to load requests right now. Please check your connection and try again."
+      );
     }
   };
 
@@ -223,12 +283,12 @@ export default function RequestQueue() {
     }
   };
 
-  const handleDecision = async (requestId, status) => {
+  const handleDecision = async (requestId, status, denialReason = null) => {
     setDecisionLoading(true);
     setError(null); // Clear any existing errors
     try {
-      // Get the request details first
-      const request = requests.find((r) => r.$id === requestId);
+      // Get the request details first (with resolved assets)
+      const request = enrichedRequests.find((r) => r.$id === requestId);
       if (!request) {
         throw new Error("Request not found");
       }
@@ -241,32 +301,33 @@ export default function RequestQueue() {
 
       // Get asset details (assuming request has assets array)
       const asset =
-        request.assets && request.assets[0] ? request.assets[0] : null;
+        request.resolvedItems && request.resolvedItems[0]
+          ? request.resolvedItems[0]
+          : null;
 
       // Update the request status - use only fields that exist in the schema
       const updateData = {
         status,
       };
 
+      // Add denial reason if denying
+      if (status === ENUMS.REQUEST_STATUS.DENIED) {
+        if (!denialReason || denialReason.trim() === "") {
+          throw new Error("Please provide a reason for denying this request.");
+        }
+        // Store denial reason by appending to purpose field (no dedicated field exists in schema)
+        const existingPurpose = request.purpose || "";
+        updateData.purpose = existingPurpose 
+          ? `${existingPurpose}\n\n[Denial Reason: ${denialReason.trim()}]`
+          : `[Denial Reason: ${denialReason.trim()}]`;
+      }
+
       // For consumables, automatically issue them when approved
       if (status === ENUMS.REQUEST_STATUS.APPROVED) {
-        // Check if this request contains consumables
-        const requestedItems = request.requestedItems || [];
-        const consumableItems = [];
+        const consumableItems = (request.resolvedItems || []).filter(
+          (item) => item?.itemType === ENUMS.ITEM_TYPE.CONSUMABLE
+        );
 
-        // Load each requested item to check if it's a consumable
-        for (const itemId of requestedItems) {
-          try {
-            const item = await assetsService.get(itemId);
-            if (item.itemType === ENUMS.ITEM_TYPE.CONSUMABLE) {
-              consumableItems.push(item);
-            }
-          } catch (error) {
-            // Failed to load item, skip
-          }
-        }
-
-        // If there are consumables, automatically issue them
         if (consumableItems.length > 0) {
           for (const consumable of consumableItems) {
             try {
@@ -306,12 +367,33 @@ export default function RequestQueue() {
 
       await loadRequests();
       setSelectedRequest(null);
+      // Close denial dialog if it was open
+      if (status === ENUMS.REQUEST_STATUS.DENIED) {
+        setShowDenialDialog(false);
+        setDenialReason("");
+        setRequestToDeny(null);
+      }
     } catch (error) {
-      setError("Failed to update request. Please try again.");
+      setError(error.message || "Failed to update request. Please try again.");
       console.error("Decision error:", error);
     } finally {
       setDecisionLoading(false);
     }
+  };
+
+  const handleDenyClick = (request) => {
+    setRequestToDeny(request);
+    setDenialReason("");
+    setShowDenialDialog(true);
+  };
+
+  const handleConfirmDenial = async () => {
+    if (!requestToDeny) return;
+    if (!denialReason || denialReason.trim() === "") {
+      setError("Please provide a reason for denying this request.");
+      return;
+    }
+    await handleDecision(requestToDeny.$id, ENUMS.REQUEST_STATUS.DENIED, denialReason);
   };
 
   const getRequesterName = (requesterStaffId) => {
@@ -326,86 +408,87 @@ export default function RequestQueue() {
     return dept ? dept.name : "Unknown Department";
   };
 
-  // Filter requests based on all filters
-  const filteredRequests = requests.filter((request) => {
-    // Search term filter
-    const matchesSearch =
-      !searchTerm ||
-      request.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getRequesterName(request.requesterStaffId)
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      request.assets?.some((asset) =>
-        asset.name?.toLowerCase().includes(searchTerm.toLowerCase())
-      ) ||
-      request.$id.toLowerCase().includes(searchTerm.toLowerCase());
-
-    // Status filter
-    const matchesStatus =
-      selectedStatus === "all" || request.status === selectedStatus;
-
-    // Requester filter
-    const matchesRequester =
-      selectedRequester === "all" ||
-      request.requesterStaffId === selectedRequester;
-
-    // Priority filter (assuming priority is stored in request.priority)
-    const matchesPriority =
-      selectedPriority === "all" || request.priority === selectedPriority;
-
-    // Date range filter
-    const matchesDateRange = (() => {
-      if (dateRange === "all") return true;
-
-      const requestDate = new Date(request.$createdAt);
-      const now = new Date();
-
-      switch (dateRange) {
-        case "today":
-          return requestDate.toDateString() === now.toDateString();
-        case "week":
-          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          return requestDate >= weekAgo;
-        case "month":
-          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          return requestDate >= monthAgo;
-        case "quarter":
-          const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-          return requestDate >= quarterAgo;
-        case "year":
-          const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-          return requestDate >= yearAgo;
-        default:
-          return true;
-      }
-    })();
-
-    return (
-      matchesSearch &&
-      matchesStatus &&
-      matchesRequester &&
-      matchesPriority &&
-      matchesDateRange
+  // Filter requests based on all filters and active tab
+  const filteredRequests = useMemo(() => {
+    const requestsByTab = enrichedRequests.filter((request) =>
+      activeTab === "asset"
+        ? request.requestType !== "consumable"
+        : request.requestType === "consumable"
     );
-  });
+
+    return requestsByTab.filter((request) => {
+      const resolvedItems = request.resolvedItems || [];
+
+      const matchesSearch =
+        !searchTerm ||
+        request.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getRequesterName(request.requesterStaffId)
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        resolvedItems.some((item) =>
+          item?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        ) ||
+        request.$id.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus =
+        selectedStatus === "all" || request.status === selectedStatus;
+
+      const matchesRequester =
+        selectedRequester === "all" ||
+        request.requesterStaffId === selectedRequester;
+
+      const matchesPriority =
+        selectedPriority === "all" || request.priority === selectedPriority;
+
+      const matchesDateRange = (() => {
+        if (dateRange === "all") return true;
+
+        const requestDate = new Date(request.$createdAt);
+        const now = new Date();
+
+        switch (dateRange) {
+          case "today":
+            return requestDate.toDateString() === now.toDateString();
+          case "week":
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return requestDate >= weekAgo;
+          case "month":
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return requestDate >= monthAgo;
+          case "quarter":
+            const quarterAgo = new Date(
+              now.getTime() - 90 * 24 * 60 * 60 * 1000
+            );
+            return requestDate >= quarterAgo;
+          case "year":
+            const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            return requestDate >= yearAgo;
+          default:
+            return true;
+        }
+      })();
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesRequester &&
+        matchesPriority &&
+        matchesDateRange
+      );
+    });
+  }, [
+    enrichedRequests,
+    activeTab,
+    searchTerm,
+    selectedStatus,
+    selectedRequester,
+    selectedPriority,
+    dateRange,
+    staff,
+  ]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="flex flex-col items-center space-y-6">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200"></div>
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-500 border-t-transparent absolute top-0 left-0"></div>
-            </div>
-            <div className="text-center">
-              <p className="text-slate-700 font-medium">Loading Requests</p>
-              <p className="text-slate-500 text-sm">Fetching request data...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoading message="Loading requests..." />;
   }
 
   if (error) {
@@ -432,7 +515,7 @@ export default function RequestQueue() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-sidebar-50/40">
+    <div className="min-h-screen" style={{ background: "var(--org-background)" }}>
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div
@@ -450,11 +533,11 @@ export default function RequestQueue() {
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
             <div className="space-y-2">
               <div className="flex items-center space-x-4">
-                <div className="p-3 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
-                  <Clock className="w-7 h-7 text-white" />
+                <div className="p-3 rounded-xl shadow-lg bg-[var(--org-primary)]/15">
+                  <Clock className="w-7 h-7 text-[var(--org-primary)]" />
                 </div>
                 <div>
-                  <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-primary-700 to-sidebar-700 bg-clip-text text-transparent">
+                  <h1 className="text-4xl font-bold text-gray-900">
                     Request Queue
                   </h1>
                   <p className="text-gray-700 font-medium text-lg">
@@ -469,7 +552,7 @@ export default function RequestQueue() {
                 onClick={() => loadRequests()}
                 variant="outline"
                 disabled={loading}
-                className="bg-white/90 border-2 border-gray-300 hover:bg-gradient-to-r hover:from-gray-50 hover:to-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all duration-300 disabled:opacity-60 rounded-xl shadow-sm hover:shadow-md"
+                className="bg-white/80 border border-[var(--org-primary)]/30 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10 hover:border-[var(--org-primary)]/60 transition-all duration-300 disabled:opacity-60 rounded-xl shadow-sm hover:shadow-md"
               >
                 <RefreshCw
                   className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
@@ -478,14 +561,41 @@ export default function RequestQueue() {
               </Button>
             </div>
           </div>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            <div className="inline-flex items-center bg-white/80 border border-[var(--org-primary)]/20 rounded-full p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setActiveTab("asset")}
+                className={`request-tab ${
+                  activeTab === "asset"
+                    ? "request-tab-active"
+                    : "request-tab-inactive"
+                }`}
+              >
+                Asset Requests
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("consumable")}
+                className={`request-tab ${
+                  activeTab === "consumable"
+                    ? "request-tab-active"
+                    : "request-tab-inactive"
+                }`}
+              >
+                Consumable Requests
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Enhanced Filters */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-20">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
-                <Filter className="w-5 h-5 text-white" />
+              <div className="p-2 rounded-xl shadow-lg bg-[var(--org-primary)]/15">
+                <Filter className="w-5 h-5 text-[var(--org-primary)]" />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900">
@@ -503,7 +613,7 @@ export default function RequestQueue() {
                 setSelectedPriority("all");
               }}
               variant="outline"
-              className="text-slate-600 hover:text-slate-800 hover:bg-slate-50 border-slate-200"
+              className="text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10 border-[var(--org-primary)]/30"
             >
               <X className="w-4 h-4 mr-2" />
               Clear All
@@ -523,7 +633,7 @@ export default function RequestQueue() {
                   placeholder="Search by ID, purpose, or requester..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm"
+                  className="pl-10 h-12 border-gray-300 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg shadow-sm"
                 />
               </div>
             </div>
@@ -534,7 +644,7 @@ export default function RequestQueue() {
                 Status
               </Label>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
+                <SelectTrigger className="h-12 border-gray-300 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg shadow-sm">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent className="z-30">
@@ -576,7 +686,7 @@ export default function RequestQueue() {
                 value={selectedPriority}
                 onValueChange={setSelectedPriority}
               >
-                <SelectTrigger className="h-12 border-gray-300 focus:border-primary-500 focus:ring-primary-500/20 rounded-lg shadow-sm">
+                <SelectTrigger className="h-12 border-gray-300 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20 rounded-lg shadow-sm">
                   <SelectValue placeholder="All Priority" />
                 </SelectTrigger>
                 <SelectContent className="z-30">
@@ -625,22 +735,22 @@ export default function RequestQueue() {
                   </Badge>
                 )}
                 {selectedStatus !== "all" && (
-                  <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                  <Badge className="bg-[var(--org-primary)]/15 text-[var(--org-primary)] border-[var(--org-primary)]/30">
                     Status: {selectedStatus}
                     <button
                       onClick={() => setSelectedStatus("all")}
-                      className="ml-2 hover:bg-orange-200 rounded-full p-0.5"
+                      className="ml-2 hover:bg-[var(--org-primary)]/20 rounded-full p-0.5"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </Badge>
                 )}
                 {selectedPriority !== "all" && (
-                  <Badge className="bg-purple-100 text-purple-700 border-purple-200">
+                  <Badge className="bg-[var(--org-primary)]/15 text-[var(--org-primary)] border-[var(--org-primary)]/30">
                     Priority: {selectedPriority}
                     <button
                       onClick={() => setSelectedPriority("all")}
-                      className="ml-2 hover:bg-purple-200 rounded-full p-0.5"
+                      className="ml-2 hover:bg-[var(--org-primary)]/20 rounded-full p-0.5"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -671,11 +781,8 @@ export default function RequestQueue() {
 
         {/* Loading Staff State */}
         {!loading && staff.length === 0 && (
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto mb-4"></div>
-              <p className="text-slate-600">Loading staff data...</p>
-            </div>
+          <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl">
+            <SectionLoading message="Loading staff data..." className="py-12" />
           </div>
         )}
 
@@ -710,10 +817,22 @@ export default function RequestQueue() {
                       {/* Request Header */}
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="text-lg font-semibold bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
+                          <h3
+                            className="text-lg font-semibold tracking-tight"
+                            style={{
+                              color: "color-mix(in srgb, var(--org-primary) 82%, #0f172a 18%)",
+                              textShadow: "0 8px 18px rgba(14, 99, 112, 0.18)",
+                            }}
+                          >
                             Request #{request.$id.slice(-8).toUpperCase()}
                           </h3>
-                          <p className="text-sm bg-gradient-to-r from-sidebar-600 to-sidebar-700 bg-clip-text text-transparent font-medium">
+                          <p
+                            className="text-sm font-medium flex items-center gap-2"
+                            style={{
+                              color: "color-mix(in srgb, var(--org-primary) 70%, #1f2937 30%)",
+                            }}
+                          >
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--org-primary)]"></span>
                             by {getRequesterName(request.requesterStaffId)}
                           </p>
                         </div>
@@ -746,29 +865,22 @@ export default function RequestQueue() {
                       {/* Requested Assets */}
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-slate-700 mb-2">
-                          Requested Assets
+                          Requested Items
                         </h4>
                         <div className="flex flex-wrap gap-2">
-                          {request.assets?.map((asset) => (
+                          {(request.resolvedItems || []).map((item, idx) => (
                             <Badge
-                              key={asset.$id}
+                              key={`${item?.$id || item?.assetTag || "item"}-${idx}`}
                               className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
                             >
-                              {asset.name}
+                              {item?.name || "Unknown Item"}
                             </Badge>
-                          )) ||
-                            request.requestedItems?.map((assetId, index) => (
-                              <Badge
-                                key={assetId}
-                                className="bg-sidebar-50 text-sidebar-700 border-sidebar-200 hover:bg-sidebar-100"
-                              >
-                                Asset {index + 1}
-                              </Badge>
-                            )) || (
-                              <span className="text-sm text-gray-500">
-                                No assets specified
-                              </span>
-                            )}
+                          ))}
+                          {(request.resolvedItems || []).length === 0 && (
+                            <span className="text-sm text-gray-500">
+                              No items specified
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -779,7 +891,7 @@ export default function RequestQueue() {
                         asChild
                         variant="outline"
                         size="sm"
-                        className="hover:bg-sidebar-100 hover:text-sidebar-700"
+                        className="border-[var(--org-primary)]/30 text-[var(--org-primary)] hover:bg-[var(--org-primary)]/10"
                       >
                         <Link href={`/requests/${request.$id}`}>
                           View Details
@@ -797,7 +909,7 @@ export default function RequestQueue() {
                                 ENUMS.REQUEST_STATUS.APPROVED
                               )
                             }
-                            className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                            className="bg-org-gradient text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
                           >
                             {decisionLoading ? (
                               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -809,29 +921,21 @@ export default function RequestQueue() {
                           <Button
                             size="sm"
                             disabled={decisionLoading}
-                            onClick={() =>
-                              handleDecision(
-                                request.$id,
-                                ENUMS.REQUEST_STATUS.DENIED
-                              )
-                            }
+                            onClick={() => handleDenyClick(request)}
                             className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
                           >
-                            {decisionLoading ? (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <XCircle className="w-4 h-4 mr-2" />
-                            )}
+                            <XCircle className="w-4 h-4 mr-2" />
                             Deny
                           </Button>
                         </>
                       )}
 
-                      {request.status === ENUMS.REQUEST_STATUS.APPROVED && (
+                      {request.status === ENUMS.REQUEST_STATUS.APPROVED &&
+                        request.requestType !== "consumable" && (
                         <Button
                           asChild
                           size="sm"
-                          className="bg-gradient-to-r from-sidebar-500 to-sidebar-600 hover:from-sidebar-600 hover:to-sidebar-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
+                          className="bg-org-gradient text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200"
                         >
                           <Link href={`/admin/issue/${request.$id}`}>
                             <Zap className="w-4 h-4 mr-2" />
@@ -847,6 +951,88 @@ export default function RequestQueue() {
           </div>
         )}
       </div>
+
+      {/* Denial Reason Dialog */}
+      <Dialog open={showDenialDialog} onOpenChange={setShowDenialDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <XCircle className="w-5 h-5" />
+              Deny Request
+            </DialogTitle>
+            <DialogDescription>
+              Please provide a reason for denying this request. The requester will be notified with this reason.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {requestToDeny && (
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-sm font-medium text-gray-700">Request Details:</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Request ID: <span className="font-mono">{requestToDeny.$id.slice(-8)}</span>
+                </p>
+                {requestToDeny.resolvedItems && requestToDeny.resolvedItems.length > 0 && (
+                  <p className="text-sm text-gray-600">
+                    Item: {requestToDeny.resolvedItems[0].name}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="denialReason" className="text-sm font-medium text-gray-700">
+                Denial Reason <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="denialReason"
+                placeholder="Please explain why this request is being denied..."
+                value={denialReason}
+                onChange={(e) => setDenialReason(e.target.value)}
+                className="min-h-[120px] resize-none"
+                required
+              />
+              <p className="text-xs text-gray-500">
+                This reason will be visible to the requester and included in the notification email.
+              </p>
+            </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDenialDialog(false);
+                setDenialReason("");
+                setRequestToDeny(null);
+                setError("");
+              }}
+              disabled={decisionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmDenial}
+              disabled={decisionLoading || !denialReason || denialReason.trim() === ""}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {decisionLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Denying...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Confirm Denial
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

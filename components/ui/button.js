@@ -2,35 +2,39 @@ import React from "react"
 import Link from "next/link"
 
 const buttonVariants = {
-  default: "bg-blue-600 text-white hover:bg-blue-700",
-  destructive: "bg-red-600 text-white hover:bg-red-700",
-  outline: "border border-gray-300 bg-white hover:bg-gray-50 text-gray-900",
-  secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
-  ghost: "hover:bg-gray-100 text-gray-900",
-  link: "text-blue-600 underline-offset-4 hover:underline"
+  default: "org-button--default",
+  destructive: "org-button--destructive",
+  outline: "org-button--outline",
+  secondary: "org-button--secondary",
+  ghost: "org-button--ghost",
+  link: "org-button--link",
+  accent: "org-button--accent",
+  highlight: "org-button--highlight",
 }
 
 const buttonSizes = {
-  default: "h-10 px-4 py-2",
-  sm: "h-9 rounded-md px-3",
-  lg: "h-11 rounded-md px-8",
-  icon: "h-10 w-10"
+  default: "org-button--size-default",
+  sm: "org-button--size-sm",
+  lg: "org-button--size-lg",
+  icon: "org-button--size-icon",
 }
 
-export function Button({ 
-  className = "", 
-  variant = "default", 
-  size = "default", 
+export function Button({
+  className = "",
+  variant = "default",
+  size = "default",
   asChild = false,
-  children, 
-  ...props 
+  children,
+  ...props
 }) {
-  const classes = `inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${buttonVariants[variant]} ${buttonSizes[size]} ${className}`
+  const variantClass = buttonVariants[variant] || buttonVariants.default
+  const sizeClass = buttonSizes[size] || buttonSizes.default
+  const classes = `org-button ${variantClass} ${sizeClass} ${className}`.trim()
 
   if (asChild && React.Children.count(children) === 1) {
     return React.cloneElement(React.Children.only(children), {
-      className: classes,
-      ...props
+      className: `${classes} ${(children.props?.className || "").trim()}`.trim(),
+      ...props,
     })
   }
 
@@ -38,5 +42,24 @@ export function Button({
     <button className={classes} {...props}>
       {children}
     </button>
+  )
+}
+
+export function ButtonLink({
+  href,
+  children,
+  className = "",
+  variant = "default",
+  size = "default",
+  ...props
+}) {
+  const variantClass = buttonVariants[variant] || buttonVariants.default
+  const sizeClass = buttonSizes[size] || buttonSizes.default
+  const classes = `org-button ${variantClass} ${sizeClass} ${className}`.trim()
+
+  return (
+    <Link href={href} className={classes} {...props}>
+      {children}
+    </Link>
   )
 }

@@ -15,6 +15,7 @@ import { Badge } from "../../../components/ui/badge";
 import { DataTable } from "../../../components/ui/data-table";
 import { EmptyUsers } from "../../../components/ui/empty-state";
 import { PageLoading } from "../../../components/ui/loading";
+import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import {
   Dialog,
   DialogClose,
@@ -81,14 +82,27 @@ const formatRole = (role) => {
   return USER_ROLES[role] || role;
 };
 
-// Helper function to get role badge color
 const getRoleBadgeColor = (role) => {
-  if (!role) return "bg-gray-100 text-gray-800";
+  switch (role) {
+    case "SYSTEM_ADMIN":
+      return "bg-[var(--org-highlight)] text-white border-[var(--org-highlight-dark)]/40 shadow-sm";
+    case "ASSET_ADMIN":
+      return "bg-white text-[var(--org-highlight-dark)] border-[var(--org-highlight)]/45 shadow-sm";
+    case "CONSUMABLE_ADMIN":
+      return "bg-[var(--org-highlight)]/20 text-[var(--org-highlight-dark)] border-[var(--org-highlight)]/35 shadow-sm";
+    case "STAFF":
+      return "bg-[var(--org-muted)] text-[var(--org-primary)] border-[var(--org-primary)]/20";
+    default:
+      return "bg-slate-100 text-slate-700 border-slate-200";
+  }
+};
 
-  if (role === "SYSTEM_ADMIN") return "bg-red-100 text-red-800 border-red-200";
-  if (role === "ASSET_ADMIN")
-    return "bg-sidebar-100 text-sidebar-800 border-sidebar-200";
-  return "bg-primary-100 text-primary-800 border-primary-200";
+const getStatusBadgeClass = (active) => {
+  if (active) {
+    return "bg-[var(--org-accent)] text-white border-[var(--org-primary-dark)]/35 shadow-sm";
+  }
+
+  return "bg-[var(--org-highlight)] text-white border-[var(--org-highlight-dark)]/35 shadow-sm";
 };
 
 export default function UserManagement() {
@@ -118,6 +132,19 @@ export default function UserManagement() {
   });
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState("");
+
+  const { orgCode, theme } = useOrgTheme();
+  const colors = theme?.colors || {};
+  const primaryColor = colors.primary || "#059669";
+  const accentColor = colors.accent || "#2563eb";
+  const backgroundColor = colors.background || "#f1f5f9";
+  const mutedColor = colors.muted || "rgba(226, 232, 240, 0.35)";
+  const primaryDark = colors.primaryDark || primaryColor;
+  const accentDark = colors.accentDark || accentColor;
+  const highlightColor = "var(--org-highlight)";
+  const highlightDark = "var(--org-highlight-dark)";
+  const patternFill = encodeURIComponent((primaryColor || "#0E6370").replace("#", ""));
+
 
   // Delete dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -550,32 +577,23 @@ export default function UserManagement() {
   });
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="flex flex-col items-center space-y-6">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200"></div>
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary-500 border-t-transparent absolute top-0 left-0"></div>
-            </div>
-            <div className="text-center">
-              <p className="text-slate-700 font-medium">Loading Users</p>
-              <p className="text-slate-500 text-sm">Fetching user data...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoading message="Loading users..." />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50/30 to-primary-100/40">
+    <div
+      className="relative min-h-screen"
+      style={{
+        backgroundColor,
+        backgroundImage: `radial-gradient(circle at 20% 20%, ${primaryColor}24, transparent 55%), radial-gradient(circle at 80% 80%, ${accentColor}18, transparent 60%)`,
+      }}
+    >
       {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
+      <div className="absolute inset-0 opacity-25 pointer-events-none mix-blend-multiply">
         <div
           className="w-full h-full"
           style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.3'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23${patternFill}' fill-opacity='0.12'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
             backgroundSize: "60px 60px",
           }}
         ></div>
@@ -587,18 +605,35 @@ export default function UserManagement() {
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
             <div className="space-y-1">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+                <div
+                  className="p-2 rounded-xl shadow-lg"
+                  style={{
+                    backgroundImage: `linear-gradient(135deg, ${primaryColor}, ${accentDark})`,
+                  }}
+                >
                   <Users className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sidebar-900 to-sidebar-900 bg-clip-text text-transparent">
+                  <h1
+                    className="text-3xl font-bold bg-clip-text text-transparent"
+                    style={{
+                      backgroundImage: `linear-gradient(90deg, ${primaryDark}, ${accentColor})`,
+                    }}
+                  >
                     User Management
                   </h1>
                   <p className="text-slate-600 font-medium">
                     Manage system users and permissions
                   </p>
                   <div className="mt-2">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gradient-to-r from-primary-100 to-primary-200 text-primary-800 border border-primary-300">
+                    <span
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border"
+                      style={{
+                        color: primaryDark,
+                        borderColor: `${primaryColor}40`,
+                        backgroundImage: `linear-gradient(135deg, ${primaryColor}22, ${accentColor}18)`,
+                      }}
+                    >
                       {users.length} {users.length === 1 ? "User" : "Users"}
                     </span>
                   </div>
@@ -611,7 +646,7 @@ export default function UserManagement() {
                 onClick={() => loadUsers()}
                 variant="outline"
                 disabled={loading}
-                className="relative bg-white/90 border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:hover:scale-100 disabled:opacity-60"
+                className="relative bg-white/90 border border-[var(--org-primary)]/30 hover:border-[var(--org-primary)]/50 hover:bg-[var(--org-muted)]/50 transition-all duration-300 ease-out group overflow-hidden hover:scale-105 disabled:hover:scale-100 disabled:opacity-60"
               >
                 <div className="flex items-center justify-center relative z-10">
                   <RefreshCw
@@ -624,11 +659,14 @@ export default function UserManagement() {
                   </span>
                 </div>
                 {/* Ripple effect */}
-                <div className="absolute inset-0 bg-gray-100/50 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                <div className="absolute inset-0 bg-[var(--org-muted)]/60 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
               </Button>
               <Button
                 onClick={() => setIsCreateDialogOpen(true)}
-                className="relative bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+                className="relative text-white border-0 shadow-lg hover:shadow-2xl transition-all duration-300 ease-out group overflow-hidden hover:scale-105"
+                style={{
+                  backgroundImage: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
+                }}
               >
                 <div className="flex items-center justify-center relative z-10">
                   <Plus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform duration-200" />
@@ -637,9 +675,14 @@ export default function UserManagement() {
                   </span>
                 </div>
                 {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-r from-primary-400 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{
+                    backgroundImage: `linear-gradient(135deg, ${accentColor}, ${accentDark})`,
+                  }}
+                />
                 {/* Ripple effect */}
-                <div className="absolute inset-0 bg-white/20 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
+                <div className="absolute inset-0 bg-white/25 rounded-md scale-0 group-hover:scale-100 transition-transform duration-300 origin-center" />
                 {/* Shimmer effect */}
                 <div className="absolute inset-0 -top-1 -left-1 w-0 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:w-full transition-all duration-500 ease-out" />
               </Button>
@@ -1192,7 +1235,12 @@ export default function UserManagement() {
         {/* Modern Filters */}
         <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/60 shadow-xl p-6 relative z-10 overflow-visible">
           <div className="flex items-center space-x-3 mb-4">
-            <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl shadow-lg">
+            <div
+              className="p-2 rounded-xl shadow-lg"
+              style={{
+                backgroundImage: `linear-gradient(135deg, ${primaryColor}, ${accentDark})`,
+              }}
+            >
               <Filter className="w-5 h-5 text-white" />
             </div>
             <h2 className="text-lg font-semibold text-slate-900">
@@ -1202,17 +1250,17 @@ export default function UserManagement() {
           <div className="flex gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-[var(--org-primary)]/50" />
                 <Input
                   placeholder="Search users..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20"
+                  className="pl-10 h-11 border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20"
                 />
               </div>
             </div>
             <Select value={selectedRole} onValueChange={setSelectedRole}>
-              <SelectTrigger className="w-48 h-11 border-gray-200 focus:border-primary-500 focus:ring-primary-500/20">
+              <SelectTrigger className="w-48 h-11 border-gray-200 focus:border-[var(--org-primary)] focus:ring-[var(--org-primary)]/20">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent
@@ -1222,9 +1270,9 @@ export default function UserManagement() {
                 style={{ position: "fixed" }}
               >
                 <SelectItem value="all">All Roles</SelectItem>
-                {Object.entries(USER_ROLES).map(([key, value]) => (
-                  <SelectItem key={key} value={value}>
-                    {value}
+                {Object.keys(USER_ROLES).map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {USER_ROLES[role]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1304,12 +1352,7 @@ export default function UserManagement() {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={user.active ? "default" : "secondary"}
-                        className={
-                          user.active
-                            ? "bg-primary-100 text-primary-800"
-                            : "bg-gray-100 text-gray-800"
-                        }
+                        className={`border ${getStatusBadgeClass(user.active)}`}
                       >
                         {user.active ? "Active" : "Inactive"}
                       </Badge>
@@ -1320,7 +1363,7 @@ export default function UserManagement() {
                           variant="outline"
                           size="sm"
                           onClick={() => toggleUserStatus(user)}
-                          className="h-10 w-10 hover:bg-sidebar-100 hover:text-sidebar-700 transition-all duration-200"
+                          className="h-10 w-10 border-[var(--org-primary)]/20 hover:border-[var(--org-primary)]/40 hover:bg-[var(--org-muted)]/60 text-[var(--org-primary)] transition-all duration-200"
                         >
                           {user.active ? (
                             <UserX className="w-5 h-5" />
@@ -1332,7 +1375,7 @@ export default function UserManagement() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleEditUser(user)}
-                          className="h-10 w-10 hover:bg-primary-100 hover:text-primary-700 transition-all duration-200"
+                          className="h-10 w-10 border-[var(--org-primary)]/20 hover:border-[var(--org-primary)]/40 hover:bg-[var(--org-muted)]/60 text-[var(--org-primary)] transition-all duration-200"
                         >
                           <Edit className="w-5 h-5" />
                         </Button>
@@ -1340,7 +1383,7 @@ export default function UserManagement() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeleteUser(user)}
-                          className="h-10 w-10 text-red-500 hover:text-red-700 hover:bg-red-50 transition-all duration-200"
+                          className="h-10 w-10 text-red-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 border-red-200"
                         >
                           <Trash2 className="w-5 h-5" />
                         </Button>
