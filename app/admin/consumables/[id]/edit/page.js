@@ -118,12 +118,14 @@ export default function EditConsumable() {
       setConsumableId(params.id);
       checkPermissionsAndLoadConsumable(params.id);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
   useEffect(() => {
     if (isNrepOrg) {
       loadProjects();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNrepOrg, allowedProjectIds]);
 
   const checkPermissionsAndLoadConsumable = async (id) => {

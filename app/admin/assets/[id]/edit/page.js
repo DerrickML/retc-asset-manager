@@ -83,6 +83,7 @@ export default function EditAsset() {
       setAssetId(params.id);
       checkPermissionsAndLoadAsset(params.id);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   const checkPermissionsAndLoadAsset = async (id) => {

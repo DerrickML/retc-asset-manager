@@ -35,6 +35,7 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
 
   useEffect(() => {
     loadRelatedData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consumable]);
 
   const loadRelatedData = async () => {

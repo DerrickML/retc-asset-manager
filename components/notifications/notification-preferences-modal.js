@@ -73,6 +73,7 @@ export default function NotificationPreferencesModal({
     if (open && staffId) {
       loadPreferences();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, staffId]);
 
   const loadFromLocalStorage = () => {

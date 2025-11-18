@@ -28,6 +28,7 @@ export default function NotificationBell() {
       loadNotifications();
       loadUnreadCount();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadNotifications = async () => {

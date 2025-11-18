@@ -492,6 +492,7 @@ export default function GuestHomePage() {
     if (allItems.length > 0) {
       applyFilters();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, activeTab, categoryFilter, statusFilter, sortBy, allItems]);
 
   // Reset to page 1 when filters change

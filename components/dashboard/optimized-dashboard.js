@@ -274,6 +274,7 @@ export default function OptimizedDashboard() {
     } catch (error) {
       console.error("Download error:", error);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Tab change handler

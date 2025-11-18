@@ -140,6 +140,7 @@ export default function AdminAssetManagement() {
 
   useEffect(() => {
     checkPermissionsAndLoadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1254,7 +1255,8 @@ export default function AdminAssetManagement() {
                     {/* Asset Images Section */}
                     <div className="bg-gradient-to-br from-primary-50 to-sidebar-50 p-6 rounded-lg space-y-6">
                       <div className="flex items-center space-x-2">
-                        <Image className="h-5 w-5 text-primary-600" />
+                        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                        <Image className="h-5 w-5 text-primary-600" aria-hidden="true" />
                         <h3 className="text-lg font-semibold text-gray-900">
                           Asset Images
                         </h3>
@@ -1857,7 +1859,8 @@ export default function AdminAssetManagement() {
                                 />
                               ) : (
                                 <div className="w-14 h-14 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
-                                  <Image className="w-6 h-6 text-gray-400" />
+                                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                                  <Image className="w-6 h-6 text-gray-400" aria-hidden="true" />
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-2">

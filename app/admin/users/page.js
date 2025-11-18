@@ -166,6 +166,7 @@ export default function UserManagement() {
 
   useEffect(() => {
     initializeData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializeData = async () => {

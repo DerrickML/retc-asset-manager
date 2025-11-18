@@ -114,6 +114,7 @@ export default function LayoutProvider({ children }) {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

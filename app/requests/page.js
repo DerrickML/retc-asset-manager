@@ -69,6 +69,7 @@ export default function MyRequestsPage() {
     if (staff) {
       loadRequests();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staff, statusFilter, searchTerm, dateFilter]);
 
   const loadData = async () => {

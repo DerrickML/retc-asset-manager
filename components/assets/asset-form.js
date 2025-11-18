@@ -120,6 +120,7 @@ export function AssetForm({ asset, onSuccess }) {
 
   useEffect(() => {
     loadInitialData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNrepOrg, activeOrgId])
 
   useEffect(() => {

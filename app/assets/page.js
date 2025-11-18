@@ -115,6 +115,7 @@ export default function AssetsPage() {
 
   useEffect(() => {
     loadAssets();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, categoryFilter, statusFilter, departmentFilter, currentPage]);
 
   const handleViewModeChange = (mode) => {

@@ -45,6 +45,7 @@ export default function AssetDetailPage() {
 
   useEffect(() => {
     loadAssetData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   const loadAssetData = async () => {

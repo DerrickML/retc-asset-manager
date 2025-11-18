@@ -312,6 +312,7 @@ export default function AdminConsumablesPage() {
 
   useEffect(() => {
     checkPermissionsAndLoadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkPermissionsAndLoadData = async () => {

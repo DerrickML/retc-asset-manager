@@ -376,6 +376,7 @@ export function RequestForm({ itemType = ENUMS.ITEM_TYPE.ASSET }) {
           return a.name.localeCompare(b.name);
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     availableItems,
     categoryFilter,

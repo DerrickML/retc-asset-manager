@@ -90,6 +90,7 @@ export default function ConsumablesPage() {
   useEffect(() => {
     if (!orgCode) return;
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgCode]);
 
   const handleViewModeChange = (mode) => {

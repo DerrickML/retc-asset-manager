@@ -16,6 +16,7 @@ export function AssetCustody({ assetId }) {
 
   useEffect(() => {
     loadCustodyHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetId]);
 
   const loadCustodyHistory = async () => {

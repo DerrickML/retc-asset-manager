@@ -82,6 +82,7 @@ export default function AdminSettings() {
 
   useEffect(() => {
     checkPermissionsAndLoadSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkPermissionsAndLoadSettings = async () => {

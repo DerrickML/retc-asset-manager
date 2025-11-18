@@ -80,6 +80,7 @@ export default function EditRequestPage() {
 
   useEffect(() => {
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.requestId]);
 
   const loadData = async () => {
@@ -228,6 +229,7 @@ export default function EditRequestPage() {
     if (currentStaff && !loading) {
       loadAvailableAssets();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, categoryFilter, currentStaff, loading]);
 
   const handleInputChange = (field, value) => {

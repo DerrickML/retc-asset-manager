@@ -26,6 +26,7 @@ export function AssetOverview({ asset, onUpdate }) {
 
   useEffect(() => {
     loadRelatedData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asset]);
 
   const loadRelatedData = async () => {

@@ -101,12 +101,14 @@ export default function AdminReports() {
 
   useEffect(() => {
     checkPermissionsAndLoadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (reportData.assets.length > 0 || reportData.requests.length > 0) {
       calculateAnalytics();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportData, dateRange, categoryFilter, statusFilter]);
 
   const checkPermissionsAndLoadData = async () => {

@@ -166,6 +166,7 @@ export default function RequestQueue() {
 
   useEffect(() => {
     initializeData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const assetMap = useMemo(() => {
@@ -476,6 +477,7 @@ export default function RequestQueue() {
         matchesDateRange
       );
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     enrichedRequests,
     activeTab,

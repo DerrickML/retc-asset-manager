@@ -103,6 +103,7 @@ export default function Sidebar() {
     }
 
     return () => window.removeEventListener("resize", handleResize);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refresh pending requests count every 30 seconds for admins

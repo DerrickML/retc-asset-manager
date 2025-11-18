@@ -69,6 +69,7 @@ export default function GuestAssetsPage() {
     if (settings) {
       loadAssets();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     settings,
     search,
