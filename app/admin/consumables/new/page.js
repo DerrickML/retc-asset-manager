@@ -36,6 +36,7 @@ import { ENUMS } from "../../../../lib/appwrite/config.js";
 import { formatCategory } from "../../../../lib/utils/mappings.js";
 import { useOrgTheme } from "../../../../components/providers/org-theme-provider";
 import { getConsumableCategoriesForOrg } from "../../../../lib/constants/consumable-categories.js";
+import { getCurrentOrgId } from "../../../../lib/utils/org.js";
 
 export default function NewConsumablePage() {
   const router = useRouter();
@@ -265,6 +266,14 @@ export default function NewConsumablePage() {
             : ADMIN_PLACEHOLDER_PROJECT_ID
           : null,
       };
+
+      // Explicitly ensure orgId is included - critical for production
+      // This fixes the "Missing required attribute orgId" error in production
+      const currentOrgId = getCurrentOrgId();
+      if (!currentOrgId) {
+        throw new Error("Unable to determine organization. Please refresh the page and try again.");
+      }
+      consumableData.orgId = currentOrgId;
 
       await assetsService.create(consumableData, currentStaff.$id);
 

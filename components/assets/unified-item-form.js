@@ -208,6 +208,15 @@ export function UnifiedItemForm({ item, onSuccess, itemType = "asset" }) {
         }
       });
 
+      // Explicitly ensure orgId is included - critical for production
+      // This fixes the "Missing required attribute orgId" error in production
+      const { getCurrentOrgId } = await import("../../lib/utils/org.js");
+      const currentOrgId = getCurrentOrgId();
+      if (!currentOrgId) {
+        throw new Error("Unable to determine organization. Please refresh the page and try again.");
+      }
+      submitData.orgId = currentOrgId;
+
       if (item) {
         // Update existing item
         if (itemType === "asset") {

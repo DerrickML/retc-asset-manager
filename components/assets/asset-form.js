@@ -274,6 +274,14 @@ export function AssetForm({ asset, onSuccess }) {
         submitData.projectId = "RETC_NO_PROJECT";
       }
 
+      // Explicitly ensure orgId is included - critical for production
+      // This fixes the "Missing required attribute orgId" error in production
+      const currentOrgId = getCurrentOrgId();
+      if (!currentOrgId) {
+        throw new Error("Unable to determine organization. Please refresh the page and try again.");
+      }
+      submitData.orgId = currentOrgId;
+
       if (asset) {
         // Update existing asset
         await assetsService.update(asset.$id, submitData, currentStaff?.$id, "Asset updated via form")
