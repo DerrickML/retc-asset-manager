@@ -83,6 +83,7 @@ import {
 } from "../../../lib/utils/mappings.js";
 import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import { getConsumableCategoriesForOrg } from "../../../lib/constants/consumable-categories.js";
+import { getCurrentOrgId } from "../../../lib/utils/org.js";
 import { PageLoading } from "../../../components/ui/loading";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -380,9 +381,18 @@ export default function AdminConsumablesPage() {
         return;
       }
 
+      // Get current organization ID - ensure it's always included
+      const currentOrgId = getCurrentOrgId();
+      if (!currentOrgId) {
+        toast.error("Unable to determine organization. Please refresh the page.");
+        return;
+      }
+
       // Prepare consumable data matching Appwrite collection schema
       // Note: Consumables do not have images - they are internal inventory items
       const consumableData = {
+        // Explicitly set orgId to ensure it's always included
+        orgId: currentOrgId,
         // Basic information - use existing ASSETS collection fields
         assetTag: manualIdAssignment && newConsumable.assetTag
           ? newConsumable.assetTag

@@ -252,14 +252,9 @@ export default function RequestDetailsPage() {
     setActionLoading(true);
     setError("");
     try {
-      console.log("Cancelling request:", request.$id);
-      console.log("Cancel reason:", cancelReason);
-
       const updateData = {
         status: ENUMS.REQUEST_STATUS.CANCELLED,
       };
-
-      console.log("Update data:", updateData);
 
       await assetRequestsService.update(request.$id, updateData);
 
