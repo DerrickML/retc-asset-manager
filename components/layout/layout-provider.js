@@ -171,53 +171,12 @@ export default function LayoutProvider({ children }) {
       window.removeEventListener("session-warning", handleSessionWarning);
   }, [toast]);
 
-  // Define routes that don't need any layout
-  const noLayoutRoutes = ["/login", "/setup", "/select-org"];
-
-  // Define routes that only need top navigation (like guest portal)
-  const topNavOnlyRoutes = ["/guest"];
-
-  // Define routes that need full sidebar layout (authenticated users)
-  const sidebarRoutes = [
-    "/dashboard",
-    "/admin",
-    "/assets",
-    "/consumables",
-    "/requests",
-  ];
-
-  // Re-check route types now that we have data loaded
-  const finalIsNoLayout = noLayoutRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const finalIsTopNavOnly = topNavOnlyRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const isSidebarRoute = sidebarRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  // Only redirect to login if:
-  // 1. Not loading (we've finished trying to load)
-  // 2. No staff (user is not authenticated)
-  // 3. Not on a public route
-  // 4. We've given enough time for session to be recognized (at least 2 seconds)
-  const [minWaitElapsed, setMinWaitElapsed] = useState(false);
-  
-  useEffect(() => {
-    // Give at least 2 seconds for session to be recognized after redirect
-    const timer = setTimeout(() => {
-      setMinWaitElapsed(true);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
+  // Handle redirect to login if not authenticated
   const shouldRedirectToLogin =
     !loading &&
-    minWaitElapsed &&
     !staff &&
-    !finalIsNoLayout &&
-    !finalIsTopNavOnly &&
+    !isNoLayout &&
+    !isTopNavOnly &&
     !pathname.startsWith("/login") &&
     !pathname.startsWith("/unauthorized");
 
@@ -227,8 +186,7 @@ export default function LayoutProvider({ children }) {
     }
   }, [shouldRedirectToLogin, router]);
 
-  // Don't show loading forever - if it takes too long, show the page anyway
-  if (loading && !maxLoadingReached) {
+  if (loading) {
     return <PageLoading message="Loading workspace..." />;
   }
 
