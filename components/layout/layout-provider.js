@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Sidebar from "./sidebar";
 import { Navbar } from "./navbar";
 import { GuestNavbar } from "./guest-navbar";
@@ -142,12 +142,42 @@ export default function LayoutProvider({ children }) {
       window.removeEventListener("session-warning", handleSessionWarning);
   }, [toast]);
 
+  // Define routes that don't need any layout
+  const noLayoutRoutes = ["/login", "/setup", "/select-org"];
+
+  // Define routes that only need top navigation (like guest portal)
+  const topNavOnlyRoutes = ["/guest"];
+
+  // Define routes that need full sidebar layout (authenticated users)
+  const sidebarRoutes = [
+    "/dashboard",
+    "/admin",
+    "/assets",
+    "/consumables",
+    "/requests",
+  ];
+
+  // Calculate route types using useMemo - MUST be before any conditional returns
+  // This ensures hooks are always called in the same order
+  const finalIsNoLayout = useMemo(() => 
+    noLayoutRoutes.some((route) => pathname.startsWith(route)),
+    [pathname]
+  );
+  const finalIsTopNavOnly = useMemo(() =>
+    topNavOnlyRoutes.some((route) => pathname.startsWith(route)),
+    [pathname]
+  );
+  const isSidebarRoute = useMemo(() =>
+    sidebarRoutes.some((route) => pathname.startsWith(route)),
+    [pathname]
+  );
+
   // Handle redirect to login if not authenticated
   const shouldRedirectToLogin =
     !loading &&
     !staff &&
-    !isNoLayout &&
-    !isTopNavOnly &&
+    !finalIsNoLayout &&
+    !finalIsTopNavOnly &&
     !pathname.startsWith("/login") &&
     !pathname.startsWith("/unauthorized");
 
@@ -181,7 +211,7 @@ export default function LayoutProvider({ children }) {
             <LoadingSpinner size="lg" className="h-16 w-16" thickness={4} />
           </div>
           <h2 className="text-xl font-semibold text-slate-900 mb-2">
-            We couldn’t load the application
+            We couldn't load the application
           </h2>
           <p className="text-slate-600 mb-6">
             {error || "Something went wrong while preparing your workspace."}
@@ -207,32 +237,6 @@ export default function LayoutProvider({ children }) {
       </div>
     );
   }
-
-  // Define routes that don't need any layout
-  const noLayoutRoutes = ["/login", "/setup", "/select-org"];
-
-  // Define routes that only need top navigation (like guest portal)
-  const topNavOnlyRoutes = ["/guest"];
-
-  // Define routes that need full sidebar layout (authenticated users)
-  const sidebarRoutes = [
-    "/dashboard",
-    "/admin",
-    "/assets",
-    "/consumables",
-    "/requests",
-  ];
-
-  // Re-check route types now that we have data loaded
-  const finalIsNoLayout = noLayoutRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const finalIsTopNavOnly = topNavOnlyRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const isSidebarRoute = sidebarRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
 
   // No layout for login/setup pages
   if (finalIsNoLayout) {

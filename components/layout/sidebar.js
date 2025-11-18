@@ -37,11 +37,27 @@ import { assetRequestsService } from "../../lib/appwrite/provider.js";
 import { Query } from "appwrite";
 import { ENUMS } from "../../lib/appwrite/config.js";
 import { useOrgTheme } from "../providers/org-theme-provider";
+import { setCurrentOrgCode, listSupportedOrgCodes } from "../../lib/utils/org";
+import { resolveOrgTheme } from "../../lib/constants/org-branding";
+import { useToastContext } from "../providers/toast-provider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 export default function Sidebar() {
   const [staff, setStaff] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  // Initialize with all supported orgs so switcher is always available
+  const [availableOrgs, setAvailableOrgs] = useState(() => {
+    if (typeof window !== "undefined") {
+      return listSupportedOrgCodes();
+    }
+    return [];
+  });
   const [viewMode, setViewMode] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("viewMode") || "user";
@@ -57,7 +73,8 @@ export default function Sidebar() {
     requests: false,
   });
   const pathname = usePathname();
-  const { theme } = useOrgTheme();
+  const { theme, orgCode, setOrgCode } = useOrgTheme();
+  const toast = useToastContext();
   const orgLogo =
     theme?.branding?.logoProxy ||
     theme?.branding?.logo ||
@@ -65,7 +82,6 @@ export default function Sidebar() {
   const orgName = theme?.name || "Asset Manager";
   const orgTagline = theme?.branding?.tagline || "Asset Management";
   const systemName = "Assets Manager";
-  const orgCode = theme?.code || "RETC";
   const isAdminView = viewMode === "admin";
 
   // Function to update view mode and persist it
@@ -123,6 +139,13 @@ export default function Sidebar() {
       localStorage.setItem("sidebar-collapsed", JSON.stringify(isCollapsed));
     }
   }, [isCollapsed]);
+
+  // Initialize available orgs on mount
+  useEffect(() => {
+    // Always show all supported organizations for switching
+    const allSupportedOrgs = listSupportedOrgCodes();
+    setAvailableOrgs(allSupportedOrgs);
+  }, []);
 
   const loadStaffData = async () => {
     try {
@@ -504,25 +527,86 @@ export default function Sidebar() {
           {/* User Info */}
           <div className="px-4 pb-6">
             {isCollapsed ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex justify-center">
-                      <Avatar className="w-10 h-10 ring-2 ring-gray-700">
-                        <AvatarFallback className="bg-gradient-to-br from-sidebar-500 to-sidebar-600 text-white font-semibold">
-                          {staff.name?.charAt(0)?.toUpperCase() || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <div>
-                      <p className="font-medium">{staff.name}</p>
-                      <p className="text-xs text-orange-400">{staff.email}</p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <>
+                {/* Organization Switcher for Collapsed Sidebar */}
+                {availableOrgs.length > 0 && (
+                  <div className="mb-3 flex justify-center">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-10 h-10 p-0 bg-white/5 border-white/20 hover:bg-white/10 text-white hover:text-white"
+                              >
+                                <Globe className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-56 bg-gray-800 border-gray-700">
+                              {availableOrgs.map((code) => {
+                                const orgTheme = resolveOrgTheme(code);
+                                const isActive = (orgCode || "RETC").toUpperCase() === code.toUpperCase();
+                                return (
+                                  <DropdownMenuItem
+                                    key={code}
+                                    onClick={() => {
+                                      setCurrentOrgCode(code);
+                                      setOrgCode(code);
+                                      toast.success(`Switched to ${orgTheme.name}`);
+                                      window.location.reload();
+                                    }}
+                                    className={`cursor-pointer ${
+                                      isActive
+                                        ? "bg-gray-700 text-white"
+                                        : "text-gray-300"
+                                    }`}
+                                  >
+                                    <div className="flex items-center space-x-2 w-full">
+                                      <img
+                                        src={orgTheme.branding.logoProxy || orgTheme.branding.logo}
+                                        alt={orgTheme.name}
+                                        className="w-4 h-4 object-contain"
+                                      />
+                                      <span className="flex-1">{orgTheme.name}</span>
+                                      {isActive && (
+                                        <span className="text-xs text-green-400">●</span>
+                                      )}
+                                    </div>
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          <p>Switch Organization</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex justify-center">
+                        <Avatar className="w-10 h-10 ring-2 ring-gray-700">
+                          <AvatarFallback className="bg-gradient-to-br from-sidebar-500 to-sidebar-600 text-white font-semibold">
+                            {staff.name?.charAt(0)?.toUpperCase() || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <div>
+                        <p className="font-medium">{staff.name}</p>
+                        <p className="text-xs text-orange-400">{staff.email}</p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
             ) : (
               <div className="bg-gray-800/30 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50">
                 <div className="flex items-center space-x-3 mb-4">
@@ -543,6 +627,64 @@ export default function Sidebar() {
                     </p>
                   </div>
                 </div>
+
+                {/* Organization Switcher - Always show if we have org data */}
+                {availableOrgs.length > 0 && (
+                  <div className="mb-3">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-between text-xs h-9 bg-white/5 border-white/20 hover:bg-white/10 text-white hover:text-white"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <Globe className="w-3 h-3" />
+                            <span className="truncate">
+                              {resolveOrgTheme(orgCode || "RETC").code}
+                            </span>
+                          </div>
+                          <ChevronDown className="w-3 h-3 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-56 bg-gray-800 border-gray-700">
+                        {availableOrgs.map((code) => {
+                          const orgTheme = resolveOrgTheme(code);
+                          const isActive = (orgCode || "RETC").toUpperCase() === code.toUpperCase();
+                          return (
+                            <DropdownMenuItem
+                              key={code}
+                              onClick={() => {
+                                setCurrentOrgCode(code);
+                                setOrgCode(code);
+                                toast.success(`Switched to ${orgTheme.name}`);
+                                // Reload page to apply new organization theme
+                                window.location.reload();
+                              }}
+                              className={`cursor-pointer ${
+                                isActive
+                                  ? "bg-gray-700 text-white"
+                                  : "text-gray-300"
+                              }`}
+                            >
+                              <div className="flex items-center space-x-2 w-full">
+                                <img
+                                  src={orgTheme.branding.logoProxy || orgTheme.branding.logo}
+                                  alt={orgTheme.name}
+                                  className="w-4 h-4 object-contain"
+                                />
+                                <span className="flex-1">{orgTheme.name}</span>
+                                {isActive && (
+                                  <span className="text-xs text-green-400">●</span>
+                                )}
+                              </div>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
 
                 {/* Role Switch for Admins */}
                 {isAdmin && (

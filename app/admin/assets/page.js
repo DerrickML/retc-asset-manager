@@ -290,8 +290,18 @@ export default function AdminAssetManagement() {
         ? newAsset.assetTag
         : `RETC-${Date.now()}`;
 
+      // Get current organization ID - ensure it's always included
+      const { getCurrentOrgId } = await import("../../../lib/utils/org.js");
+      const currentOrgId = getCurrentOrgId();
+      if (!currentOrgId) {
+        toast.error("Unable to determine organization. Please refresh the page.");
+        return;
+      }
+
       // Prepare asset data matching Appwrite collection schema
       const assetData = {
+        // Explicitly set orgId to ensure it's always included
+        orgId: currentOrgId,
         assetTag,
         serialNumber: newAsset.serialNumber || "",
         name: newAsset.name,
