@@ -208,9 +208,12 @@ export function UnifiedItemForm({ item, onSuccess, itemType = "asset" }) {
         }
       });
 
-      // Explicitly ensure orgId is included - critical for production
+      // Explicitly ensure orgId is included - use currentStaff.orgId first (most reliable), then fallback
       const { getCurrentOrgId } = await import("../../lib/utils/org.js");
-      const currentOrgId = getCurrentOrgId();
+      let currentOrgId = currentStaff?.orgId;
+      if (!currentOrgId) {
+        currentOrgId = getCurrentOrgId();
+      }
       if (!currentOrgId) {
         throw new Error("Unable to determine organization. Please refresh the page and try again.");
       }

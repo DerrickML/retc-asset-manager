@@ -290,9 +290,12 @@ export default function AdminAssetManagement() {
         ? newAsset.assetTag
         : `RETC-${Date.now()}`;
 
-      // Get current organization ID - ensure it's always included
+      // Get current organization ID - use staff.orgId first (most reliable), then fallback
       const { getCurrentOrgId } = await import("../../../lib/utils/org.js");
-      const currentOrgId = getCurrentOrgId();
+      let currentOrgId = staff?.orgId;
+      if (!currentOrgId) {
+        currentOrgId = getCurrentOrgId();
+      }
       if (!currentOrgId) {
         toast.error("Unable to determine organization. Please refresh the page.");
         return;

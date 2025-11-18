@@ -275,8 +275,11 @@ export function AssetForm({ asset, onSuccess }) {
         submitData.projectId = "RETC_NO_PROJECT";
       }
 
-      // Explicitly ensure orgId is included - critical for production
-      const currentOrgId = getCurrentOrgId();
+      // Explicitly ensure orgId is included - use currentStaff.orgId first (most reliable), then fallback
+      let currentOrgId = currentStaff?.orgId;
+      if (!currentOrgId) {
+        currentOrgId = getCurrentOrgId();
+      }
       if (!currentOrgId) {
         throw new Error("Unable to determine organization. Please refresh the page and try again.");
       }
