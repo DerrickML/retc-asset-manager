@@ -290,16 +290,30 @@ export default function AdminAssetManagement() {
         ? newAsset.assetTag
         : `RETC-${Date.now()}`;
 
-      // Get current organization ID - use staff.orgId first (most reliable), then fallback
-      const { getCurrentOrgId } = await import("../../../lib/utils/org.js");
-      let currentOrgId = staff?.orgId;
-      if (!currentOrgId) {
+      // Get current organization ID - try multiple sources in order of reliability
+      const { getCurrentOrgId, getCurrentOrgIdAsync } = await import("../../../lib/utils/org.js");
+      let currentOrgId = 
+        staff?.orgId ||                  // First: staff record (most reliable)
+        theme?.appwriteOrgId;            // Second: theme from useOrgTheme (available immediately)
+      
+      // Third: Try API endpoint (works in production - server-side reads env vars at runtime)
+      if (!currentOrgId || currentOrgId.trim() === "") {
+        const apiOrgId = await getCurrentOrgIdAsync();
+        if (apiOrgId) {
+          currentOrgId = apiOrgId;
+        }
+      }
+      
+      // Fourth: Fallback to sync function (may not work in production if env vars weren't in build)
+      if (!currentOrgId || currentOrgId.trim() === "") {
         currentOrgId = getCurrentOrgId();
       }
-      if (!currentOrgId) {
+      
+      if (!currentOrgId || currentOrgId.trim() === "") {
         toast.error("Unable to determine organization. Please refresh the page.");
         return;
       }
+      currentOrgId = currentOrgId.trim();
 
       // Prepare asset data matching Appwrite collection schema
       const assetData = {

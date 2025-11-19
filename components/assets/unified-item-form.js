@@ -208,16 +208,29 @@ export function UnifiedItemForm({ item, onSuccess, itemType = "asset" }) {
         }
       });
 
-      // Explicitly ensure orgId is included - use currentStaff.orgId first (most reliable), then fallback
-      const { getCurrentOrgId } = await import("../../lib/utils/org.js");
-      let currentOrgId = currentStaff?.orgId;
-      if (!currentOrgId) {
+      // Explicitly ensure orgId is included - try multiple sources in order of reliability
+      const { getCurrentOrgId, getCurrentOrgIdAsync } = await import("../../lib/utils/org.js");
+      let currentOrgId = 
+        currentStaff?.orgId ||           // First: staff record (most reliable)
+        theme?.appwriteOrgId;            // Second: theme from useOrgTheme (available immediately)
+      
+      // Third: Try API endpoint (works in production - server-side reads env vars at runtime)
+      if (!currentOrgId || currentOrgId.trim() === "") {
+        const apiOrgId = await getCurrentOrgIdAsync();
+        if (apiOrgId) {
+          currentOrgId = apiOrgId;
+        }
+      }
+      
+      // Fourth: Fallback to sync function (may not work in production if env vars weren't in build)
+      if (!currentOrgId || currentOrgId.trim() === "") {
         currentOrgId = getCurrentOrgId();
       }
-      if (!currentOrgId) {
+      
+      if (!currentOrgId || currentOrgId.trim() === "") {
         throw new Error("Unable to determine organization. Please refresh the page and try again.");
       }
-      submitData.orgId = currentOrgId;
+      submitData.orgId = currentOrgId.trim();
 
       if (item) {
         // Update existing item
