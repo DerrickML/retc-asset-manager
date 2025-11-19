@@ -381,8 +381,11 @@ export default function AdminConsumablesPage() {
         return;
       }
 
-      // Get current organization ID - ensure it's always included
-      const currentOrgId = getCurrentOrgId();
+      // Get current organization ID - use staff.orgId first (most reliable), then fallback
+      let currentOrgId = staff?.orgId;
+      if (!currentOrgId) {
+        currentOrgId = getCurrentOrgId();
+      }
       if (!currentOrgId) {
         toast.error("Unable to determine organization. Please refresh the page.");
         return;
