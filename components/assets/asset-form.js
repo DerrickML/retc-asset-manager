@@ -275,15 +275,29 @@ export function AssetForm({ asset, onSuccess }) {
         submitData.projectId = "RETC_NO_PROJECT";
       }
 
-      // Explicitly ensure orgId is included - use currentStaff.orgId first (most reliable), then fallback
-      let currentOrgId = currentStaff?.orgId;
-      if (!currentOrgId) {
+      // Explicitly ensure orgId is included - try multiple sources in order of reliability
+      let currentOrgId = 
+        currentStaff?.orgId ||           // First: staff record (most reliable)
+        theme?.appwriteOrgId;            // Second: theme from useOrgTheme (available immediately)
+      
+      // Third: Try API endpoint (works in production - server-side reads env vars at runtime)
+      if (!currentOrgId || currentOrgId.trim() === "") {
+        const { getCurrentOrgIdAsync } = await import("../../lib/utils/org.js");
+        const apiOrgId = await getCurrentOrgIdAsync();
+        if (apiOrgId) {
+          currentOrgId = apiOrgId;
+        }
+      }
+      
+      // Fourth: Fallback to sync function (may not work in production if env vars weren't in build)
+      if (!currentOrgId || currentOrgId.trim() === "") {
         currentOrgId = getCurrentOrgId();
       }
-      if (!currentOrgId) {
+      
+      if (!currentOrgId || currentOrgId.trim() === "") {
         throw new Error("Unable to determine organization. Please refresh the page and try again.");
       }
-      submitData.orgId = currentOrgId;
+      submitData.orgId = currentOrgId.trim();
 
       if (asset) {
         // Update existing asset

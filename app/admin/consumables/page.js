@@ -381,18 +381,32 @@ export default function AdminConsumablesPage() {
         return;
       }
 
-      // Get current organization ID - use staff.orgId first (most reliable), then fallback
-      let currentOrgId = staff?.orgId;
-      if (!currentOrgId) {
+      // Get current organization ID - try multiple sources in order of reliability
+      let currentOrgId = 
+        staff?.orgId ||                  // First: staff record (most reliable)
+        theme?.appwriteOrgId;            // Second: theme from useOrgTheme (available immediately)
+      
+      // Third: Try API endpoint (works in production - server-side reads env vars at runtime)
+      if (!currentOrgId || currentOrgId.trim() === "") {
+        const { getCurrentOrgIdAsync } = await import("../../../lib/utils/org.js");
+        const apiOrgId = await getCurrentOrgIdAsync();
+        if (apiOrgId) {
+          currentOrgId = apiOrgId;
+        }
+      }
+      
+      // Fourth: Fallback to sync function (may not work in production if env vars weren't in build)
+      if (!currentOrgId || currentOrgId.trim() === "") {
         currentOrgId = getCurrentOrgId();
       }
-      if (!currentOrgId) {
+      
+      if (!currentOrgId || currentOrgId.trim() === "") {
         toast.error("Unable to determine organization. Please refresh the page.");
         return;
       }
+      currentOrgId = currentOrgId.trim();
 
-      // Prepare consumable data matching Appwrite collection schema
-      // Note: Consumables do not have images - they are internal inventory items
+      //Consumables do not have images - they are internal inventory items
       const consumableData = {
         // Explicitly set orgId to ensure it's always included
         orgId: currentOrgId,
