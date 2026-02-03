@@ -313,10 +313,12 @@ export function AssetForm({ asset, onSuccess }) {
         router.push("/assets")
       }
     } catch (err) {
+      console.error("Asset save failed:", err);
       if (err?.code === "asset_tag_conflict") {
         setError("An asset with this tag already exists for this organisation. Please choose a different tag.")
       } else {
-        setError(err.message || "Failed to save asset")
+        const msg = err?.message || err?.toString?.() || "Failed to save asset";
+        setError(msg);
       }
     } finally {
       setLoading(false)
@@ -348,7 +350,7 @@ export function AssetForm({ asset, onSuccess }) {
                 id="assetTag"
                 value={formData.assetTag}
                 onChange={(e) => updateField("assetTag", e.target.value)}
-                placeholder={isNrepOrg ? "NREP-LAP-001" : "RETC-LAP-001"}
+                placeholder={isNrepOrg ? "NREP-MECS-LAPTOP-001" : "RETC-LAPTOP-001"}
                 required
                 disabled={loading}
               />

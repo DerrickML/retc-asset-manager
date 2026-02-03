@@ -464,7 +464,7 @@ export function UnifiedItemForm({ item, onSuccess, itemType = "asset" }) {
                           onChange={(e) =>
                             handleInputChange("assetTag", e.target.value)
                           }
-                          placeholder="Enter asset tag"
+                          placeholder="e.g. NREP-MECS-LAPTOP-001 or RETC-LAPTOP-001"
                           required
                         />
                       </div>

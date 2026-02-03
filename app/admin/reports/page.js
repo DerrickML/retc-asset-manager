@@ -58,6 +58,7 @@ import {
   assetsService,
   assetRequestsService,
   staffService,
+  departmentsService,
 } from "../../../lib/appwrite/provider.js";
 import { ENUMS } from "../../../lib/appwrite/config.js";
 import {
@@ -65,10 +66,12 @@ import {
   getStatusBadgeColor,
   getConditionBadgeColor,
   getConsumableStatus,
+  getConsumableStatusEnum,
   getCurrentStock,
   getMinStock,
   getMaxStock,
   getConsumableUnit,
+  USER_ROLES,
 } from "../../../lib/utils/mappings.js";
 
 export default function AdminReports() {
@@ -78,6 +81,7 @@ export default function AdminReports() {
     assets: [],
     requests: [],
     users: [],
+    departments: [],
   });
   const [analytics, setAnalytics] = useState({
     totalAssets: 0,
@@ -129,20 +133,30 @@ export default function AdminReports() {
 
   const loadReportData = async () => {
     try {
-      const [assetsResult, requestsResult, usersResult] = await Promise.all([
-        assetsService.list(),
-        assetRequestsService.list(),
-        staffService.list(),
-      ]);
+      const [assetsResult, requestsResult, usersResult, departmentsResult] =
+        await Promise.all([
+          assetsService.list(),
+          assetRequestsService.list(),
+          staffService.list(),
+          departmentsService.list(),
+        ]);
 
       setReportData({
         assets: assetsResult.documents || [],
         requests: requestsResult.documents || [],
         users: usersResult.documents || [],
+        departments: departmentsResult.documents || [],
       });
     } catch (error) {
       console.error("Failed to load report data:", error);
     }
+  };
+
+  const getDepartmentName = (departmentId) => {
+    if (!departmentId) return "Unassigned";
+    const departments = reportData.departments || [];
+    const dept = departments.find((d) => d.$id === departmentId);
+    return dept?.name ?? "Unassigned";
   };
 
   const calculateAnalytics = () => {
@@ -414,7 +428,7 @@ export default function AdminReports() {
       Status: asset.availableStatus || "",
       Condition: asset.currentCondition || "",
       Value: asset.currentValue || 0,
-      Location: asset.location || "",
+      Location: asset.locationName || asset.location || "",
       Department: asset.departmentId || "",
       "Created Date": asset.$createdAt
         ? new Date(asset.$createdAt).toLocaleDateString()
@@ -462,8 +476,11 @@ export default function AdminReports() {
     return users.map((user) => ({
       Name: user.name || "",
       Email: user.email || "",
-      Role: user.role || "",
-      Department: user.department_id || "",
+      Role:
+        user.roles?.length > 0
+          ? user.roles.map((r) => USER_ROLES[r] || r).join(", ")
+          : "",
+      Department: getDepartmentName(user.departmentId) || "Unassigned",
       Status: user.active ? "Active" : "Inactive",
       "Created Date": user.$createdAt
         ? new Date(user.$createdAt).toLocaleDateString()
@@ -512,13 +529,13 @@ export default function AdminReports() {
       0
     );
     const inStock = consumables.filter(
-      (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+      (c) => getConsumableStatusEnum(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
     ).length;
     const lowStock = consumables.filter(
-      (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+      (c) => getConsumableStatusEnum(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
     ).length;
     const outOfStock = consumables.filter(
-      (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+      (c) => getConsumableStatusEnum(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
     ).length;
 
     const consumablesByCategory = {};
@@ -529,8 +546,9 @@ export default function AdminReports() {
       consumablesByCategory[category] =
         (consumablesByCategory[category] || 0) + 1;
 
-      const status = getConsumableStatus(consumable);
-      consumablesByStatus[status] = (consumablesByStatus[status] || 0) + 1;
+      const status = getConsumableStatusEnum(consumable);
+      const statusLabel = getConsumableStatus(consumable);
+      consumablesByStatus[statusLabel] = (consumablesByStatus[statusLabel] || 0) + 1;
     });
 
     return {
@@ -1073,7 +1091,7 @@ export default function AdminReports() {
                           assetSummary.breakdowns
                         );
                       }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-orange-600 hover:bg-orange-700 text-white"
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Download PDF
@@ -1106,7 +1124,15 @@ export default function AdminReports() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {reportData.assets.slice(0, 50).map((asset) => (
+                        {reportData.assets
+                          .filter(
+                            (item) =>
+                              item.itemType === "ASSET" ||
+                              !item.itemType ||
+                              item.itemType === undefined
+                          )
+                          .slice(0, 50)
+                          .map((asset) => (
                           <TableRow
                             key={asset.$id}
                             className="hover:bg-slate-50 border-b border-slate-100"
@@ -1141,18 +1167,29 @@ export default function AdminReports() {
                               {formatCurrency(asset.currentValue || 0)}
                             </TableCell>
                             <TableCell className="text-slate-600">
-                              {asset.location || "Not specified"}
+                              {asset.locationName || asset.location || "Not specified"}
                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
-                  {reportData.assets.length > 50 && (
+                  {reportData.assets.filter(
+                    (item) =>
+                      item.itemType === "ASSET" ||
+                      !item.itemType ||
+                      item.itemType === undefined
+                  ).length > 50 && (
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-sm font-medium text-slate-700 text-center">
-                        Showing first 50 of {reportData.assets.length} assets.
-                        Download for full report.
+                        Showing first 50 of{" "}
+                        {reportData.assets.filter(
+                          (item) =>
+                            item.itemType === "ASSET" ||
+                            !item.itemType ||
+                            item.itemType === undefined
+                        ).length}{" "}
+                        assets. Download for full report.
                       </p>
                     </div>
                   )}
@@ -1235,7 +1272,7 @@ export default function AdminReports() {
                               )
                               .filter((consumable) => {
                                 return (
-                                  getConsumableStatus(consumable) ===
+                                  getConsumableStatusEnum(consumable) ===
                                   ENUMS.CONSUMABLE_STATUS.IN_STOCK
                                 );
                               }).length
@@ -1264,7 +1301,7 @@ export default function AdminReports() {
                               )
                               .filter((consumable) => {
                                 return (
-                                  getConsumableStatus(consumable) ===
+                                  getConsumableStatusEnum(consumable) ===
                                   ENUMS.CONSUMABLE_STATUS.LOW_STOCK
                                 );
                               }).length
@@ -1360,6 +1397,9 @@ export default function AdminReports() {
                           <TableHead className="font-semibold text-slate-700">
                             Unit
                           </TableHead>
+                          <TableHead className="font-semibold text-slate-700">
+                            Location
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1370,7 +1410,8 @@ export default function AdminReports() {
                             const currentStock = getCurrentStock(consumable);
                             const minStock = getMinStock(consumable);
                             const maxStock = getMaxStock(consumable);
-                            const status = getConsumableStatus(consumable);
+                            const statusEnum = getConsumableStatusEnum(consumable);
+                            const statusLabel = getConsumableStatus(consumable);
                             const unit = getConsumableUnit(consumable);
                             const isLowStock = currentStock <= minStock;
 
@@ -1410,18 +1451,21 @@ export default function AdminReports() {
                                 <TableCell>
                                   <Badge
                                     className={
-                                      status === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+                                      statusEnum === ENUMS.CONSUMABLE_STATUS.IN_STOCK
                                         ? "bg-green-100 text-green-700"
-                                        : status === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+                                        : statusEnum === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
                                         ? "bg-orange-100 text-orange-700"
                                         : "bg-red-100 text-red-700"
                                     }
                                   >
-                                    {status}
+                                    {statusLabel}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-slate-600">
                                   {unit}
+                                </TableCell>
+                                <TableCell className="text-slate-600">
+                                  {consumable.locationName || consumable.roomOrArea || "Not specified"}
                                 </TableCell>
                               </TableRow>
                             );
@@ -1635,12 +1679,24 @@ export default function AdminReports() {
                                 {user.email}
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline" className="text-indigo-600 border-indigo-200">
-                                  {user.role}
-                                </Badge>
+                                <div className="flex flex-wrap gap-1">
+                                  {user.roles?.length > 0 ? (
+                                    user.roles.map((role) => (
+                                      <Badge
+                                        key={role}
+                                        variant="outline"
+                                        className="text-indigo-600 border-indigo-200"
+                                      >
+                                        {USER_ROLES[role] || role}
+                                      </Badge>
+                                    ))
+                                  ) : (
+                                    <span className="text-slate-500">—</span>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-slate-600">
-                                {user.department_id || "Unassigned"}
+                                {getDepartmentName(user.departmentId)}
                               </TableCell>
                               <TableCell>
                                 <Badge

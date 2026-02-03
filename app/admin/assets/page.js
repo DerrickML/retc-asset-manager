@@ -80,6 +80,7 @@ import {
 } from "../../../lib/utils/mappings.js";
 import { useOrgTheme } from "../../../components/providers/org-theme-provider";
 import { PageLoading } from "../../../components/ui/loading";
+import { buildAssetTag } from "../../../lib/utils/asset-tag.js";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -267,28 +268,26 @@ export default function AdminAssetManagement() {
 
   const loadAssets = async () => {
     try {
-      const result = await assetsService.list();
-
-      // Filter to only show assets (not consumables)
-      const assetsOnly = result.documents.filter(
-        (item) =>
-          item.itemType === ENUMS.ITEM_TYPE.ASSET ||
-          !item.itemType ||
-          item.itemType === undefined
-      );
-
-      setAssets(assetsOnly);
+      // Same pattern as consumables: getAssets() sends limit + itemType (avoids 400 from server)
+      const result = await assetsService.getAssets();
+      setAssets(result?.documents ?? []);
     } catch (error) {
-      // Silent fail for assets loading
+      console.error("Failed to load assets:", error?.message || error);
+      setAssets([]);
     }
   };
 
   const handleCreateAsset = async () => {
     try {
-      // Generate asset tag if not manually provided
+      // Generate asset tag if not manually provided (format: NREP-MECS-LAPTOP-001 or RETC-LAPTOP-001)
+      const orgCodeForTag = (orgCode || theme?.code || "RETC").toUpperCase();
+      const selectedProject = isNrepOrg && (defaultProjectId || projects[0])
+        ? (projects.find((p) => p.$id === defaultProjectId) || projects[0] || null)
+        : null;
+      const autoTag = buildAssetTag(orgCodeForTag, selectedProject, newAsset.category, newAsset.name);
       const assetTag = manualIdAssignment && newAsset.assetTag
         ? newAsset.assetTag
-        : `RETC-${Date.now()}`;
+        : (autoTag || `${orgCodeForTag}-${Date.now()}`);
 
       // Get current organization ID - try multiple sources in order of reliability
       const { getCurrentOrgId, getCurrentOrgIdAsync } = await import("../../../lib/utils/org.js");
@@ -319,6 +318,8 @@ export default function AdminAssetManagement() {
       const assetData = {
         // Explicitly set orgId to ensure it's always included
         orgId: currentOrgId,
+        // NREP requires projectId; RETC omits (provider will delete)
+        projectId: isNrepOrg ? (defaultProjectId || projects[0]?.$id || "") : null,
         assetTag,
         serialNumber: newAsset.serialNumber || "",
         name: newAsset.name,
@@ -392,7 +393,9 @@ export default function AdminAssetManagement() {
       await loadAssets();
       toast.success("Asset created successfully!");
     } catch (error) {
-      toast.error("Failed to create asset. Please try again.");
+      console.error("Asset create failed:", error);
+      const msg = error?.message || error?.toString?.() || "Please try again.";
+      toast.error(`Failed to create asset: ${msg}`);
     }
   };
 
@@ -442,8 +445,8 @@ export default function AdminAssetManagement() {
       if (type === "FilteredAssets") {
         dataToExport = filteredAssets;
       } else {
-        const result = await assetsService.list();
-        dataToExport = result.documents;
+        const result = await assetsService.getAssets();
+        dataToExport = result?.documents ?? [];
       }
 
       if (!Array.isArray(dataToExport) || dataToExport.length === 0) {
@@ -851,8 +854,8 @@ export default function AdminAssetManagement() {
                             }
                             placeholder={
                               manualIdAssignment
-                                ? "Enter custom asset tag (e.g., RETC-LAP-001)"
-                                : "Auto-generated (e.g., RETC-1234567890)"
+                                ? "e.g. NREP-MECS-LAPTOP-001 or RETC-LAPTOP-001"
+                                : "Auto-generated (e.g. NREP-MECS-LAPTOP-001)"
                             }
                             className="h-11"
                             disabled={!manualIdAssignment}
@@ -1815,7 +1818,7 @@ export default function AdminAssetManagement() {
                             </p>
                           </div>
                           <Button
-                            onClick={() => setShowAddDialog(true)}
+                            onClick={() => router.push("/admin/assets/new")}
                             className="mt-4 bg-org-gradient text-white shadow-md hover:shadow-lg transition-transform hover:-translate-y-0.5"
                           >
                             <Plus className="w-4 h-4 mr-2" />
