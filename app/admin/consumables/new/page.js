@@ -90,19 +90,27 @@ export default function NewConsumablePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep projectId in sync with available projects but DO NOT auto-select a project.
+  // This forces the user to explicitly choose a project for project-scope consumables.
   useEffect(() => {
-    if (isNrepOrg) {
-      setConsumable((prev) => ({
-        ...prev,
-        projectId:
-          prev.projectId || defaultProjectId || projects[0]?.$id || "",
-      }));
-    } else {
-      setConsumable((prev) => ({
-        ...prev,
-        projectId: "",
-      }));
+    if (!isNrepOrg) {
+      // Non-NREP orgs don't use projects
+      setConsumable((prev) => ({ ...prev, projectId: "" }));
+      return;
     }
+
+    setConsumable((prev) => {
+      if (!prev.projectId) {
+        // No project selected yet – leave it empty
+        return prev;
+      }
+
+      const stillExists = projects.some((p) => p.$id === prev.projectId);
+      if (stillExists) return prev;
+
+      // Previously selected project no longer exists – clear selection
+      return { ...prev, projectId: "" };
+    });
   }, [defaultProjectId, isNrepOrg, projects]);
 
   const formCategoryOptions = useMemo(() => {
@@ -128,8 +136,8 @@ export default function NewConsumablePage() {
       }
 
       if (prev.consumableScope === ENUMS.CONSUMABLE_SCOPE.PROJECT) {
-        nextProjectId =
-          prev.projectId || defaultProjectId || projects[0]?.$id || "";
+        // For project-scope consumables, require explicit selection – do not auto-fill
+        nextProjectId = prev.projectId || "";
       } else {
         nextProjectId = ADMIN_PLACEHOLDER_PROJECT_ID;
       }
@@ -263,7 +271,7 @@ export default function NewConsumablePage() {
         attachmentFileIds: [],
         projectId: isNrepOrg
           ? isProjectScope
-            ? consumable.projectId || defaultProjectId || projects[0]?.$id || ""
+            ? consumable.projectId // must be explicitly selected for project scope
             : ADMIN_PLACEHOLDER_PROJECT_ID
           : null,
       };
@@ -481,8 +489,8 @@ export default function NewConsumablePage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {formCategoryOptions.map((category) => (
-                        <SelectItem key={category} value={category}>
+                      {formCategoryOptions.map((category, index) => (
+                        <SelectItem key={`${category}-${index}`} value={category}>
                           {formatCategory(category)}
                         </SelectItem>
                       ))}

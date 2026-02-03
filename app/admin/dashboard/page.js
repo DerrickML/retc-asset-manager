@@ -64,6 +64,7 @@ import { ENUMS } from "../../../lib/appwrite/config.js";
 import { Query } from "appwrite";
 import {
   getConsumableStatus,
+  getConsumableStatusEnum,
   getCurrentStock,
   getMinStock,
 } from "../../../lib/utils/mappings.js";
@@ -205,13 +206,13 @@ export default function AdminDashboard() {
         ).length,
         totalConsumables: consumables.length,
         inStockConsumables: consumables.filter(
-          (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
+          (c) => getConsumableStatusEnum(c) === ENUMS.CONSUMABLE_STATUS.IN_STOCK
         ).length,
         lowStockConsumables: consumables.filter(
-          (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
+          (c) => getConsumableStatusEnum(c) === ENUMS.CONSUMABLE_STATUS.LOW_STOCK
         ).length,
         outOfStockConsumables: consumables.filter(
-          (c) => getConsumableStatus(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
+          (c) => getConsumableStatusEnum(c) === ENUMS.CONSUMABLE_STATUS.OUT_OF_STOCK
         ).length,
         pendingRequests: requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.PENDING).length,
         approvedRequests: requests.filter((r) => r.status === ENUMS.REQUEST_STATUS.APPROVED).length,
@@ -358,7 +359,7 @@ export default function AdminDashboard() {
       const consumableStatusMap = {};
       Object.values(ENUMS.CONSUMABLE_STATUS).forEach((status) => {
         consumableStatusMap[status] = consumables.filter(
-          (c) => getConsumableStatus(c) === status
+          (c) => getConsumableStatusEnum(c) === status
         ).length;
       });
 
@@ -763,53 +764,63 @@ export default function AdminDashboard() {
 
         {/* Key Metrics with Enhanced Design - Row 1: Unified Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Total Assets */}
-          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Package className="h-6 w-6 text-blue-600" />
+          {/* Total Assets - clickable */}
+          <Link href="/admin/assets">
+            <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300 h-full group">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <Package className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="bg-blue-100 text-blue-700">Assets</Badge>
+                    <ArrowUpRight className="h-4 w-4 text-blue-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </div>
                 </div>
-                <Badge className="bg-blue-100 text-blue-700">Assets</Badge>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-3xl font-bold text-slate-900">
-                  {dashboardData.metrics.totalAssets}
-                </h3>
-                <p className="text-sm font-medium text-slate-600">Total Assets</p>
-                <div className="flex items-center space-x-2 text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  <span className="text-slate-600">
-                    {dashboardData.metrics.availableAssets} available
-                  </span>
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-bold text-slate-900">
+                    {dashboardData.metrics.totalAssets}
+                  </h3>
+                  <p className="text-sm font-medium text-slate-600">Total Assets</p>
+                  <div className="flex items-center space-x-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="text-slate-600">
+                      {dashboardData.metrics.availableAssets} available
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
 
-          {/* Total Consumables */}
-          <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-orange-100 rounded-lg">
-                  <ShoppingCart className="h-6 w-6 text-orange-600" />
+          {/* Total Consumables - clickable */}
+          <Link href="/admin/consumables">
+            <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:border-orange-300 h-full group">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-3 bg-orange-100 rounded-lg">
+                    <ShoppingCart className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="bg-orange-100 text-orange-700">Consumables</Badge>
+                    <ArrowUpRight className="h-4 w-4 text-orange-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </div>
                 </div>
-                <Badge className="bg-orange-100 text-orange-700">Consumables</Badge>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-3xl font-bold text-slate-900">
-                  {dashboardData.metrics.totalConsumables}
-                </h3>
-                <p className="text-sm font-medium text-slate-600">Total Consumables</p>
-                <div className="flex items-center space-x-2 text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  <span className="text-slate-600">
-                    {dashboardData.metrics.inStockConsumables} in stock
-                  </span>
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-bold text-slate-900">
+                    {dashboardData.metrics.totalConsumables}
+                  </h3>
+                  <p className="text-sm font-medium text-slate-600">Total Consumables</p>
+                  <div className="flex items-center space-x-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="text-slate-600">
+                      {dashboardData.metrics.inStockConsumables} in stock
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
 
           {/* Total Inventory Items */}
           <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -1071,7 +1082,7 @@ export default function AdminDashboard() {
               <div className="flex items-center space-x-2">
                 <ShoppingCart className="w-5 h-5 text-orange-600" />
                 <CardTitle className="text-lg font-semibold text-slate-900">
-                  Stock Status
+                  Consumable Status
                 </CardTitle>
               </div>
             </CardHeader>
