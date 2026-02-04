@@ -9,6 +9,7 @@ import {
   departmentsService,
   staffService,
 } from "../../lib/appwrite/provider.js";
+import { APPWRITE_CONFIG, BUCKETS } from "../../lib/appwrite/config.js";
 import {
   getStatusBadgeColor,
   formatCategory,
@@ -99,10 +100,7 @@ export function ConsumableOverview({ consumable, onUpdate, onStockUpdated }) {
                   className="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-200 hover:border-orange-400 transition-colors"
                 >
                   <img
-                    src={`https://appwrite.nrep.ug/v1/storage/buckets/68a2fbbc002e7db3db22/files/${imageId}/view?project=${
-                      process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID ||
-                      "6745fd58001e7fcbf850"
-                    }`}
+                    src={`${APPWRITE_CONFIG.endpoint}/storage/buckets/${BUCKETS.PUBLIC_IMAGES}/files/${imageId}/view?project=${APPWRITE_CONFIG.projectId}`}
                     alt={`${consumable.name} - Image ${index + 1}`}
                     className="w-full h-full object-cover"
                   />
