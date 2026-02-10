@@ -40,7 +40,7 @@ import {
 import { getCurrentStaff, permissions } from "../../../../../lib/utils/auth.js";
 import { useToastContext } from "../../../../../components/providers/toast-provider";
 // Removed useConfirmation import - using custom dialog instead
-import { ENUMS } from "../../../../../lib/appwrite/config.js";
+import { ENUMS, OPTIONAL_ASSET_IMAGE_PLACEHOLDER } from "../../../../../lib/appwrite/config.js";
 import {
   formatCategory,
   getStatusBadgeColor,
@@ -179,7 +179,11 @@ export default function EditAsset() {
         publicImages: asset.publicImages || "[]",
         publicConditionLabel:
           asset.publicConditionLabel || ENUMS.PUBLIC_CONDITION_LABEL.NEW,
-        assetImage: asset.assetImage || "",
+        // Asset image is optional; use placeholder when none so Appwrite URL attribute is valid
+        assetImage:
+          asset.assetImage && asset.assetImage.trim() !== ""
+            ? asset.assetImage
+            : OPTIONAL_ASSET_IMAGE_PLACEHOLDER,
 
         // Maintenance fields (from asset creation schema)
         lastMaintenanceDate: asset.lastMaintenanceDate || null,

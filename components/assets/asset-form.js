@@ -11,6 +11,7 @@ import { Textarea } from "../ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Checkbox } from "../ui/checkbox"
 import { Alert, AlertDescription } from "../ui/alert"
+import { ImageUpload } from "../ui/image-upload"
 import { assetsService, departmentsService, staffService, projectsService } from "../../lib/appwrite/provider.js"
 import { ENUMS } from "../../lib/appwrite/config.js"
 import { getCurrentStaff } from "../../lib/utils/auth.js"
@@ -18,7 +19,6 @@ import { validateAssetTag } from "../../lib/utils/validation.js"
 import { formatCategory, mapToPublicCondition } from "../../lib/utils/mappings.js"
 import { useOrgTheme } from "../providers/org-theme-provider"
 import { getCurrentOrgId } from "../../lib/utils/org"
-import { ImageUpload } from "../ui/image-upload"
 import { assetImageService } from "../../lib/appwrite/image-service.js"
 
 
@@ -230,6 +230,12 @@ export function AssetForm({ asset, onSuccess }) {
         (img) => typeof img === "string" && img.startsWith("http")
       )
 
+      // Decide primary asset image (optional)
+      const resolvedAssetImage =
+        firstImageUrl ||
+        sanitiseAssetImage(asset?.assetImage) ||
+        (firstUploadId ? assetImageService.getPublicImageUrl(firstUploadId) : "")
+
       // Build submitData, explicitly handling projectId based on organization
       // RETC doesn't use projects - only NREP requires projectId
       const { projectId: formProjectId, ...formDataWithoutProjectId } = formData;
@@ -237,10 +243,7 @@ export function AssetForm({ asset, onSuccess }) {
       const submitData = {
         ...formDataWithoutProjectId,
         publicImages: JSON.stringify(mergedPublicImages || []),
-        assetImage:
-          firstImageUrl ||
-          sanitiseAssetImage(asset?.assetImage) ||
-          (firstUploadId ? assetImageService.getPublicImageUrl(firstUploadId) : ""),
+        ...(resolvedAssetImage ? { assetImage: resolvedAssetImage } : {}),
         itemType: asset?.itemType || ENUMS.ITEM_TYPE.ASSET,
         // Convert dates to ISO strings
         purchaseDate: formData.purchaseDate ? new Date(formData.purchaseDate).toISOString() : null,
@@ -624,7 +627,7 @@ export function AssetForm({ asset, onSuccess }) {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="publicConditionLabel">Public Condition</Label>
+              <Label htmlFor="publicConditionLabel">Public Condition</Label>
                       <Select
                         value={formData.publicConditionLabel}
                         onValueChange={(value) => updateField("publicConditionLabel", value)}
@@ -644,15 +647,23 @@ export function AssetForm({ asset, onSuccess }) {
                   </div>
                 </>
               )}
-
-              <ImageUpload
-                assetId={asset?.$id || "new"}
-                existingImages={publicImages}
-                onImagesChange={setPublicImages}
-                maxImages={10}
-              />
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      {/* Asset Images (optional) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Asset Images (optional)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ImageUpload
+            assetId={asset?.$id || "new"}
+            existingImages={publicImages}
+            onImagesChange={setPublicImages}
+            maxImages={10}
+          />
         </CardContent>
       </Card>
 

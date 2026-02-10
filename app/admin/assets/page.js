@@ -40,8 +40,6 @@ import {
 } from "../../../components/ui/dialog";
 import { Label } from "../../../components/ui/label";
 import { Textarea } from "../../../components/ui/textarea";
-import { ImageUpload } from "../../../components/ui/image-upload";
-import { assetImageService } from "../../../lib/appwrite/image-service";
 import {
   Plus,
   Search,
@@ -72,7 +70,7 @@ import {
 import { getCurrentStaff, permissions } from "../../../lib/utils/auth.js";
 import { useToastContext } from "../../../components/providers/toast-provider";
 import { useConfirmation } from "../../../components/ui/confirmation-dialog";
-import { ENUMS } from "../../../lib/appwrite/config.js";
+import { ENUMS, OPTIONAL_ASSET_IMAGE_PLACEHOLDER } from "../../../lib/appwrite/config.js";
 import {
   formatCategory,
   getStatusBadgeColor,
@@ -347,11 +345,11 @@ export default function AdminAssetManagement() {
         publicLocationLabel: newAsset.publicLocationLabel || "",
         publicConditionLabel:
           newAsset.publicConditionLabel || ENUMS.PUBLIC_CONDITION_LABEL.NEW,
-        // Add required assetImage field - use first image URL or empty string
+        // Asset image is optional; use placeholder when none so Appwrite URL attribute is valid
         assetImage:
           newAsset.publicImages && newAsset.publicImages.length > 0
             ? assetImageService.getPublicImageUrl(newAsset.publicImages[0])
-            : "",
+            : OPTIONAL_ASSET_IMAGE_PLACEHOLDER,
         // Mark as asset type
         itemType: ENUMS.ITEM_TYPE.ASSET,
       };
@@ -1282,25 +1280,7 @@ export default function AdminAssetManagement() {
                       </div>
                     </div>
 
-                    {/* Asset Images Section */}
-                    <div className="bg-gradient-to-br from-primary-50 to-sidebar-50 p-6 rounded-lg space-y-6">
-                      <div className="flex items-center space-x-2">
-                        {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                        <Image className="h-5 w-5 text-primary-600" aria-hidden="true" />
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Asset Images
-                        </h3>
-                      </div>
-
-                      <ImageUpload
-                        assetId={newAsset.assetTag || "new_asset"}
-                        existingImages={newAsset.publicImages || []}
-                        onImagesChange={(newImages) => {
-                          setNewAsset({ ...newAsset, publicImages: newImages });
-                        }}
-                        maxImages={10}
-                      />
-                    </div>
+                    {/* Asset Images Section removed: assets no longer use images */}
                   </div>
 
                   <DialogFooter className="sticky bottom-0 bg-white border-t pt-4 mt-6">
@@ -1836,9 +1816,6 @@ export default function AdminAssetManagement() {
                 {filteredAssets.length > 0 ? (
                   <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                     {filteredAssets.map((asset) => {
-                      const imageUrls = assetImageService.getAssetImageUrls(
-                        asset.publicImages
-                      );
                       const updatedAtLabel = asset.$updatedAt
                         ? new Date(asset.$updatedAt).toLocaleDateString()
                         : "–";
@@ -1881,18 +1858,9 @@ export default function AdminAssetManagement() {
                             </div>
 
                             <div className="flex items-center gap-4">
-                              {imageUrls.length > 0 ? (
-                                <img
-                                  src={imageUrls[0]}
-                                  alt={asset.name}
-                                  className="w-14 h-14 rounded-xl object-cover border border-gray-200 shadow-sm"
-                                />
-                              ) : (
-                                <div className="w-14 h-14 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
-                                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                                  <Image className="w-6 h-6 text-gray-400" aria-hidden="true" />
-                                </div>
-                              )}
+                              <div className="w-14 h-14 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                <Image className="w-6 h-6 text-gray-400" aria-hidden="true" />
+                              </div>
                               <div className="flex flex-wrap gap-2">
                                 <Badge
                                   className={`${getStatusBadgeColor(
